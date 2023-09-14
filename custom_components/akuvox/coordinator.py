@@ -1,7 +1,6 @@
 """DataUpdateCoordinator for akuvox."""
 from __future__ import annotations
 
-from datetime import timedelta
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -36,13 +35,13 @@ class AkuvoxDataUpdateCoordinator(DataUpdateCoordinator):
             hass=hass,
             logger=LOGGER,
             name=DOMAIN,
-            update_interval=timedelta(minutes=5),
+            update_interval=None,
         )
 
     async def _async_update_data(self):
         """Update data via library."""
         try:
-            return await self.client.async_get_data()
+            return await self.client.async_init_api_data()
         except AkuvoxApiClientAuthenticationError as exception:
             raise ConfigEntryAuthFailed(exception) from exception
         except AkuvoxApiClientError as exception:

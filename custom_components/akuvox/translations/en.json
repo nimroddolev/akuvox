@@ -2,29 +2,48 @@
     "config": {
         "step": {
             "user": {
-                "title": "Akuvox Integration Setup",
+            "manual": {
+                "title": "Akuvox SmartPlus Setup",
                 "description": "Please enter your country code and mobile phone number.",
-                "next": "Next",
+                "data": {
+                    "country_code": "Country Code",
+                    "phone_number": "Phone Number"
+                },
                 "error": {
-                    "invalid_phone_number": "Invalid phone number format. Please enter a valid phone number.",
                     "sms_send_failure": "Failed to send SMS code. Please check your phone number and try again."
                 }
             },
             "verify_sms_code": {
                 "title": "SMS Code Verification",
                 "description": "Please enter the SMS code you received.",
-                "next": "Verify",
+                "data": {
+                    "sms_code": "SMS Code"
+                },
+                "data_description": {
+                    "sms_code": "It may take up to 60 seconds to receive the SMS."
+                },
                 "error": {
-                    "invalid_phone_number": "Invalid phone number format. Please enter a valid phone number.",
-                    "sms_send_failure": "Failed to send SMS code. Please check your phone number and try again.",
                     "invalid_code": "Invalid SMS code. Please enter the correct code."
                 }
-            },
-            "verification_result": {
-                "title": "Verification Result",
-                "verification_passed": "Verification Passed",
-                "verification_failed": "Verification failed. Please try again."
             }
+        }
+    },
+    "options": {
+        "step": {
+            "init": {
+                "title": "Replace User Token",
+                "description": "Enter your SmartPlus app user's token to allow Home Assistant to communicate with Akuvox's servers whilst remaining signed in on your device.\n\nRefer to the documentation for instructions on how to extract your token string.",
+                "data": {
+                    "override": "Use your device's user token?",
+                    "token": "Token from SmartPlus app"
+                },
+                "error": {
+                    "token": "Ba bow!!!"
+                }
+            }
+        },
+        "errors": {
+            "base": "Unable to retreive device list with the specified token."
         }
     }
 }
