@@ -1,18 +1,21 @@
-"""Custom integration to integrate integration_blueprint with Home Assistant.
+"""Custom integration to integrate akuvox with Home Assistant.
 
 For more details about this integration, please refer to
-https://github.com/ludeeus/integration_blueprint
+https://github.com/nimroddolev/akuvox
 """
 from __future__ import annotations
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_PASSWORD, CONF_USERNAME, Platform
+# from homeassistant.const import CONF_PASSWORD, CONF_USERNAME, Platform
+from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .api import IntegrationBlueprintApiClient
+from .api import AkuvoxApiClient
 from .const import DOMAIN
-from .coordinator import BlueprintDataUpdateCoordinator
+from .coordinator import AkuvoxDataUpdateCoordinator
+
+from .camera import AkuvoxCameraEntity
 
 PLATFORMS: list[Platform] = [
     Platform.SENSOR,
@@ -25,11 +28,11 @@ PLATFORMS: list[Platform] = [
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up this integration using UI."""
     hass.data.setdefault(DOMAIN, {})
-    hass.data[DOMAIN][entry.entry_id] = coordinator = BlueprintDataUpdateCoordinator(
+    hass.data[DOMAIN][entry.entry_id] = coordinator = AkuvoxDataUpdateCoordinator(
         hass=hass,
-        client=IntegrationBlueprintApiClient(
-            username=entry.data[CONF_USERNAME],
-            password=entry.data[CONF_PASSWORD],
+        client=AkuvoxApiClient(
+            # username=entry.data[CONF_USERNAME],
+            # password=entry.data[CONF_PASSWORD],
             session=async_get_clientsession(hass),
         ),
     )
@@ -39,6 +42,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
 
+    # Initialize and set up entities here based on the data retrieved from the HTTP request.
+    data = entry.data
+    cameras_data = data.get("cameras", [])
+    for camera_data in cameras_data:
+        camera_id = camera_data.get("id")
+        hass.async_create_task(
+            hass.helpers.entity_platform.async_add_entities(
+                [AkuvoxCameraEntity(data, camera_id)]
+            )
+        )
     return True
 
 

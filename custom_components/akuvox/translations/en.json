@@ -1,0 +1,30 @@
+{
+    "config": {
+        "step": {
+            "user": {
+                "title": "Akuvox Integration Setup",
+                "description": "Please enter your country code and mobile phone number.",
+                "next": "Next",
+                "error": {
+                    "invalid_phone_number": "Invalid phone number format. Please enter a valid phone number.",
+                    "sms_send_failure": "Failed to send SMS code. Please check your phone number and try again."
+                }
+            },
+            "verify_sms_code": {
+                "title": "SMS Code Verification",
+                "description": "Please enter the SMS code you received.",
+                "next": "Verify",
+                "error": {
+                    "invalid_phone_number": "Invalid phone number format. Please enter a valid phone number.",
+                    "sms_send_failure": "Failed to send SMS code. Please check your phone number and try again.",
+                    "invalid_code": "Invalid SMS code. Please enter the correct code."
+                }
+            },
+            "verification_result": {
+                "title": "Verification Result",
+                "verification_passed": "Verification Passed",
+                "verification_failed": "Verification failed. Please try again."
+            }
+        }
+    }
+}

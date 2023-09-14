@@ -1,0 +1,12 @@
+{
+  "domain": "akuvox",
+  "name": "Akuvox",
+  "codeowners": [
+    "@nimroddolev"
+  ],
+  "config_flow": true,
+  "documentation": "https://github.com/nimroddolev/akuvox",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/nimroddolev/akuvox/issues",
+  "version": "0.0.0"
+}
