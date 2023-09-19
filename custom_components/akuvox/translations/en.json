@@ -47,9 +47,6 @@
                 "data": {
                     "override": "Use your device's user token?",
                     "token": "Token from SmartPlus app"
-                },
-                "error": {
-                    "token": "Ba bow!!!"
                 }
             }
         }
