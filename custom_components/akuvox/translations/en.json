@@ -2,15 +2,35 @@
     "config": {
         "step": {
             "user": {
-            "manual": {
                 "title": "Akuvox SmartPlus Setup",
-                "description": "Please enter your country code and mobile phone number.",
+                "description": "Select a sign-in method to connect to your SmartPlus Account:",
+                "menu_options": {
+                    "sms_sign_in": "SMS Verification (you will be signed out from your mobile app)",
+                    "app_tokens": "App Token (you will remain signed in, but requires advanced steps)"
+                }
+            },
+            "sms_sign_in": {
+                "title": "SMS Verification",
+                "description": "Please enter your mobile phone number to receive a verification SMS:",
                 "data": {
                     "country_code": "Country Code",
                     "phone_number": "Phone Number"
                 },
                 "error": {
                     "sms_send_failure": "Failed to send SMS code. Please check your phone number and try again."
+                }
+            },
+            "app_tokens": {
+                "title": "Sign In via App Tokens",
+                "description": "Please enter in the following (review the documentation for guidance):",
+                "data": {
+                    "country_code": "Country Code",
+                    "phone_number": "Phone Number",
+                    "token": "Token",
+                    "auth_token": "Auth Token"
+                },
+                "error": {
+                    "sign_in_failure": "Failed to sign in. Please check your details and try again."
                 }
             },
             "verify_sms_code": {

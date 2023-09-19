@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 import asyncio
 import socket
+import json
 
 from homeassistant.core import HomeAssistant
 
@@ -18,6 +19,7 @@ from .const import (
     AKUVOX_API_SEND_SMS,
     AKUVOV_SMS_LOGIN_API_VERSION,
     AKUVOX_API_SMS_LOGIN,
+    AKUVOX_API_SERVERS_LIST,
     AKUVOV_REST_SERVER_API_VERSION,
     AKUVOX_API_REST_SERVER_DATA,
     AKUVOX_USERCONF_API_VERSION,
@@ -60,9 +62,12 @@ class AkuvoxData:
     def parse_sms_login_response(self, json_data: dict):
         """Parse the sms_login API response."""
         if json_data is not None:
-            self.auth_token = json_data["auth_token"]
-            self.token = json_data["token"]
-            self.rtsp_ip = json_data["access_server"].split(':')[0]
+            if "auth_token" in json_data:
+                self.auth_token = json_data["auth_token"]
+            if "token" in json_data:
+                self.token = json_data["token"]
+            if "access_server" in json_data:
+                self.rtsp_ip = json_data["access_server"].split(':')[0]
 
     def parse_userconf_data(self, json_data: dict):
         """Parse the userconf API response."""
@@ -186,6 +191,49 @@ class AkuvoxApiClient:
         LOGGER.debug("❌ SMS code request unsuccessful")
         return False
 
+    async def async_make_servers_list_request(self, auth_token: str, token: str, phone_number: str) -> bool:
+        """Request SMS code to user's device."""
+
+        # Store tokens
+        self._data.auth_token = auth_token
+        self._data.token = token
+
+        url = f"https://{AKUVOX_REST_SERVER_ADDR}:{AKUVOX_REST_SERVER_PORT}/{AKUVOX_API_SERVERS_LIST}"
+        headers = {
+            "accept": "*/*",
+            "content-type": "application/json",
+            "x-auth-token": token,
+            "api-version": "6.6",
+            "x-cloud-lang": "en",
+            "user-agent": "VBell/6.61.2 (iPhone; iOS 16.6; Scale/3.00)",
+            "accept-language": "en-AU;q=1, he-AU;q=0.9, ru-RU;q=0.8"
+        }
+        obfuscated_number = str(self.get_obfuscated_phone_number(phone_number))
+        data = json.dumps({
+            "token": token,
+            "auth_token": auth_token,
+            "user": obfuscated_number,
+        })
+        LOGGER.debug("📡 Requesting server list...")
+        json_data = await self._api_wrapper(
+            method="post",
+            url=url,
+            headers=headers,
+            data=data,
+        )
+        if json_data is not None:
+            LOGGER.debug("✅ User's device list retrieved successfully")
+
+            self._data.parse_sms_login_response(json_data)
+
+            # Retrieve connected device data
+            device_data_success = await self.async_retrieve_device_data()
+            if device_data_success is True:
+                return True
+
+        LOGGER.error("❌ Unable to retrieve user's device list.")
+        return False
+
     async def async_sign_in(self, phone_number, country_code, sms_code) -> bool:
         """Sign user in with their phone number and SMS code."""
 
@@ -204,18 +252,9 @@ class AkuvoxApiClient:
         """Validate the SMS code received by the user."""
         LOGGER.debug("📡 Logging in user with phone number and SMS code...")
 
-        # Mask phone number
-        num_str = str(phone_number)
-        transformed_str = ""
-        # Iterate through each digit in the input number
-        for digit_char in num_str:
-            digit = int(digit_char)
-            # Add 3 to the digit and take the result modulo 10
-            transformed_digit = (digit + 3) % 10
-            transformed_str += str(transformed_digit)
-        transformed_number = int(transformed_str)
+        obfuscated_number = self.get_obfuscated_phone_number(phone_number)
 
-        url = f"https://{AKUVOX_REST_SERVER_ADDR}:{AKUVOX_REST_SERVER_PORT}/{AKUVOX_API_SMS_LOGIN}?phone={transformed_number}&code={sms_code}&area_code={country_code}"
+        url = f"https://{AKUVOX_REST_SERVER_ADDR}:{AKUVOX_REST_SERVER_PORT}/{AKUVOX_API_SMS_LOGIN}?phone={obfuscated_number}&code={sms_code}&area_code={country_code}"
         data = {}
         headers = {
             'api-version': AKUVOV_SMS_LOGIN_API_VERSION,
@@ -393,3 +432,17 @@ class AkuvoxApiClient:
     def get_devices_json(self) -> dict:
         """Device data dictionary."""
         return self._data.get_device_data()
+
+    def get_obfuscated_phone_number(self, phone_number):
+        """Obfuscate the user's phone number for API requests."""
+        # Mask phone number
+        num_str = str(phone_number)
+        transformed_str = ""
+        # Iterate through each digit in the input number
+        for digit_char in num_str:
+            digit = int(digit_char)
+            # Add 3 to the digit and take the result modulo 10
+            transformed_digit = (digit + 3) % 10
+            transformed_str += str(transformed_digit)
+        return int(transformed_str)
+

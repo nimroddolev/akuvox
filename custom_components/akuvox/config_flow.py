@@ -10,6 +10,8 @@ from .const import (
     DOMAIN,
     DEFAULT_COUNTRY_CODE,
     DEFAULT_PHONE_NUMBER,
+    DEFAULT_TOKEN,
+    DEFAULT_APP_TOKEN,
     LOGGER
 )
 
@@ -27,14 +29,7 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         return AkuvoxOptionsFlowHandler(config_entry)
 
     async def async_step_user(self, user_input=None):
-        """Step 1: User enters their mobile phone country code and number.
-
-        Args:
-            user_input (dict): User-provided input data.
-
-        Returns:
-            dict: A dictionary representing the next step or an entry creation.
-        """
+        """Step 0: User selects sign-in method."""
 
         # Initialize the API client
         if self.akuvox_api_client is None:
@@ -43,6 +38,21 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                 hass=self.hass,
             )
             await self.akuvox_api_client.async_init_api_data()
+
+        return self.async_show_menu(
+            step_id="user",
+            menu_options=["sms_sign_in", "app_tokens"],
+        )
+
+    async def async_step_sms_sign_in(self, user_input=None):
+        """Step 1a: User enters their mobile phone country code and number.
+
+        Args:
+            user_input (dict): User-provided input data.
+
+        Returns:
+            dict: A dictionary representing the next step or an entry creation.
+        """
 
         data_schema = {
             vol.Required(
@@ -66,16 +76,17 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             self.data = {
                 "full_phone_number": f"(+{country_code}) {phone_number}",
                 "country_code": country_code,
-                "phone_number": phone_number
+                "phone_number": phone_number,
             }
 
             if len(country_code) > 0 and len(phone_number) > 0:
+                # Request SMS code for login
                 request_sms_code = await self.akuvox_api_client.send_sms(country_code, phone_number)
                 if request_sms_code:
                     return await self.async_step_verify_sms_code()
                 else:
                     return self.async_show_form(
-                        step_id="user",
+                        step_id="sms_sign_in",
                         data_schema=vol.Schema(data_schema),
                         description_placeholders=user_input,
                         last_step=False,
@@ -83,8 +94,9 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                             "base": "SMS code request failed. Please check your phone number and try again."
                         }
                     )
+
             return self.async_show_form(
-                step_id="user",
+                step_id="sms_sign_in",
                 data_schema=vol.Schema(data_schema),
                 description_placeholders=user_input,
                 last_step=False,
@@ -94,7 +106,113 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             )
 
         return self.async_show_form(
-            step_id="user",
+            step_id="sms_sign_in",
+            data_schema=vol.Schema(data_schema),
+            description_placeholders=user_input,
+            last_step=False,
+        )
+
+
+    async def async_step_app_tokens(self, user_input=None):
+        """Step 1b: User enters app tokens and phone number to sign in."""
+        data_schema = {
+            vol.Required(
+                "country_code",
+                msg=None,
+                default=DEFAULT_COUNTRY_CODE,  # type: ignore
+                description="Your phone's international calling code prefix"): str,
+            vol.Required(
+                "phone_number",
+                msg=None,
+                default=DEFAULT_PHONE_NUMBER,  # type: ignore
+                description="Your phone number"): str,
+            vol.Required(
+                "auth_token",
+                msg=None,
+                default=DEFAULT_APP_TOKEN,  # type: ignore
+                description="Your SmartPlus account's auth_token string"): str,
+            vol.Required(
+                "token",
+                msg=None,
+                default=DEFAULT_TOKEN,  # type: ignore
+                description="Your SmartPlus account's token string"): str,
+        }
+
+        if user_input is not None:
+            country_code = user_input.get(
+                "country_code", "").replace("+", "").replace(" ", "")
+            phone_number = user_input.get(
+                "phone_number", "").replace("-", "").replace(" ", "")
+            token = user_input.get("token", "")
+            auth_token = user_input.get("auth_token", "")
+
+            self.data = {
+                "full_phone_number": f"(+{country_code}) {phone_number}",
+                "country_code": country_code,
+                "phone_number": phone_number,
+                "token": token,
+                "auth_token": auth_token,
+            }
+
+            # Perform login via auth string, auth_token stirng and phone number (no need for SMS code)
+            if len(country_code) > 0 and len(phone_number) > 0 and len(token) > 0 and len(auth_token) > 0:
+                    # Retrieve ervers_list data.
+                    login_successful = await self.akuvox_api_client.async_make_servers_list_request(auth_token, token, phone_number)
+                    if login_successful is True:
+                        devices_json = self.akuvox_api_client.get_devices_json()
+                        self.data.update(devices_json)
+
+                        ################################
+                        ### Create integration entry ###
+                        ################################
+                        return self.async_create_entry(
+                            title=self.akuvox_api_client.get_title(),
+                            data=self.data
+                        )
+
+                    return self.async_show_form(
+                        step_id="app_tokens",
+                        data_schema=vol.Schema({
+                            vol.Required(
+                                "country_code",
+                                msg=None,
+                                default=user_input.get("country_code", DEFAULT_COUNTRY_CODE),  # type: ignore
+                                description="Your phone's international calling code prefix"): str,
+                            vol.Required(
+                                "phone_number",
+                                msg=None,
+                                default=user_input.get("phone_number", DEFAULT_PHONE_NUMBER),  # type: ignore
+                                description="Your phone number"): str,
+                            vol.Required(
+                                "token",
+                                msg=None,
+                                default=user_input.get("token", ""),  # type: ignore
+                                description="Your SmartPlus account's token string"): str,
+                            vol.Required(
+                                "auth_token",
+                                msg=None,
+                                default=user_input.get("auth_token", ""),  # type: ignore
+                                description="Your SmartPlus account's auth_token string"): str,
+                        }),
+                        description_placeholders=user_input,
+                        last_step=False,
+                        errors={
+                            "base": "Sign in failed. Please check the values entered and try again."
+                        }
+                    )
+
+            return self.async_show_form(
+                step_id="app_tokens",
+                data_schema=vol.Schema(data_schema),
+                description_placeholders=user_input,
+                last_step=False,
+                errors={
+                    "base": "Please check the values enterted and try again."
+                }
+            )
+
+        return self.async_show_form(
+            step_id="app_tokens",
             data_schema=vol.Schema(data_schema),
             description_placeholders=user_input,
             last_step=False,
