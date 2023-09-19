@@ -52,9 +52,6 @@
                     "token": "Ba bow!!!"
                 }
             }
-        },
-        "errors": {
-            "base": "Unable to retreive device list with the specified token."
         }
     }
 }
