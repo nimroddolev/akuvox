@@ -14,18 +14,21 @@ import requests
 
 from .const import (
     LOGGER,
-    AKUVOX_REST_SERVER_ADDR,
-    AKUVOX_REST_SERVER_PORT,
-    AKUVOX_API_SEND_SMS,
-    AKUVOV_SMS_LOGIN_API_VERSION,
-    AKUVOX_API_SMS_LOGIN,
-    AKUVOX_API_SERVERS_LIST,
-    AKUVOV_REST_SERVER_API_VERSION,
-    AKUVOX_API_REST_SERVER_DATA,
-    AKUVOX_USERCONF_API_VERSION,
-    AKUVOX_API_USERCONF,
-    AKUVOV_OPENDOOR_API_VERSION,
-    AKUVOX_API_OPENDOOR,
+    REST_SERVER_ADDR,
+    REST_SERVER_PORT,
+    API_SEND_SMS,
+    SMS_LOGIN_API_VERSION,
+    API_SMS_LOGIN,
+    API_SERVERS_LIST,
+    REST_SERVER_API_VERSION,
+    API_REST_SERVER_DATA,
+    USERCONF_API_VERSION,
+    API_USERCONF,
+    OPENDOOR_API_VERSION,
+    API_OPENDOOR,
+    API_TEMP_KEY_LIST_HOST,
+    API_GET_PERSONAL_TEMP_KEY_LIST,
+    TEMP_KEY_QR_HOST,
 )
 
 
@@ -146,9 +149,10 @@ class AkuvoxApiClient:
         LOGGER.debug("📡 Fetching REST server data...")
         json_data = await self._api_wrapper(
             method="get",
-            url=f"https://{AKUVOX_REST_SERVER_ADDR}:{AKUVOX_REST_SERVER_PORT}/{AKUVOX_API_REST_SERVER_DATA}",
+            url=f"https://{REST_SERVER_ADDR}:{REST_SERVER_PORT}/{API_REST_SERVER_DATA}",
+            data=None,
             headers={
-                'api-version': AKUVOV_REST_SERVER_API_VERSION
+                'api-version': REST_SERVER_API_VERSION
             }
         )
         if json_data is not None:
@@ -160,7 +164,7 @@ class AkuvoxApiClient:
 
     async def send_sms(self, country_code, phone_number):
         """Request SMS code to user's device."""
-        url = f"https://{self._data.host}/{AKUVOX_API_SEND_SMS}"
+        url = f"https://{self._data.host}/{API_SEND_SMS}"
         headers = {
             "Host": self._data.host,
             "Content-Type": "application/x-www-form-urlencoded",
@@ -191,14 +195,17 @@ class AkuvoxApiClient:
         LOGGER.debug("❌ SMS code request unsuccessful")
         return False
 
-    async def async_make_servers_list_request(self, auth_token: str, token: str, phone_number: str) -> bool:
+    async def async_make_servers_list_request(self,
+                                              auth_token: str,
+                                              token: str,
+                                              phone_number: str) -> bool:
         """Request SMS code to user's device."""
 
         # Store tokens
         self._data.auth_token = auth_token
         self._data.token = token
 
-        url = f"https://{AKUVOX_REST_SERVER_ADDR}:{AKUVOX_REST_SERVER_PORT}/{AKUVOX_API_SERVERS_LIST}"
+        url = f"https://{REST_SERVER_ADDR}:{REST_SERVER_PORT}/{API_SERVERS_LIST}"
         headers = {
             "accept": "*/*",
             "content-type": "application/json",
@@ -253,11 +260,11 @@ class AkuvoxApiClient:
         LOGGER.debug("📡 Logging in user with phone number and SMS code...")
 
         obfuscated_number = self.get_obfuscated_phone_number(phone_number)
-
-        url = f"https://{AKUVOX_REST_SERVER_ADDR}:{AKUVOX_REST_SERVER_PORT}/{AKUVOX_API_SMS_LOGIN}?phone={obfuscated_number}&code={sms_code}&area_code={country_code}"
+        params = f"phone={obfuscated_number}&code={sms_code}&area_code={country_code}"
+        url = f"https://{REST_SERVER_ADDR}:{REST_SERVER_PORT}/{API_SMS_LOGIN}?{params}"
         data = {}
         headers = {
-            'api-version': AKUVOV_SMS_LOGIN_API_VERSION,
+            'api-version': SMS_LOGIN_API_VERSION,
             'User-Agent': 'VBell/6.61.2 (iPhone; iOS 16.6; Scale/3.00)'
         }
         response = await self._api_wrapper(method="get", url=url, headers=headers, data=data)
@@ -277,21 +284,24 @@ class AkuvoxApiClient:
             return True
         return False
 
-    async def asunc_user_conf_with_token(self, token):
+    async def async_user_conf_with_token(self, token):
         """Request the user's configuration data with an alternate token string."""
         self._data.token = token
-        return await self.async_user_conf()
+        user_conf_data = await self.async_user_conf()
+        if user_conf_data is not None:
+            self._data.parse_userconf_data(user_conf_data)
+        return user_conf_data
 
     async def async_user_conf(self):
         """Request the user's configuration data."""
         LOGGER.debug("📡 Retrieving list of user's devices...")
-        url = f"https://{self._data.host}/{AKUVOX_API_USERCONF}?token={self._data.token}"
+        url = f"https://{self._data.host}/{API_USERCONF}?token={self._data.token}"
         data = {}
         headers = {
             "Host": self._data.host,
             "X-AUTH-TOKEN": self._data.token,
             "Connection": "keep-alive",
-            "api-version": AKUVOX_USERCONF_API_VERSION,
+            "api-version": USERCONF_API_VERSION,
             "Accept": "*/*",
             "User-Agent": "VBell/6.61.2 (iPhone; iOS 16.6; Scale/3.00)",
             "Accept-Language": "en-AU;q=1, he-AU;q=0.9, ru-RU;q=0.8",
@@ -309,12 +319,12 @@ class AkuvoxApiClient:
     def make_opendoor_request(self, name: str, host: str, token: str, data: str):
         """Request the user's configuration data."""
         LOGGER.debug("📡 Sending request to open door '%s'...", name)
-        url = f"https://{host}/{AKUVOX_API_OPENDOOR}?token={token}"
+        url = f"https://{host}/{API_OPENDOOR}?token={token}"
         headers = {
             "Host": host,
             "Content-Type": "application/x-www-form-urlencoded",
             "X-AUTH-TOKEN": token,
-            "api-version": AKUVOV_OPENDOOR_API_VERSION,
+            "api-version": OPENDOOR_API_VERSION,
             "Accept-Encoding": "gzip, deflate, br",
             "Connection": "keep-alive",
             "Accept": "*/*",
@@ -332,13 +342,50 @@ class AkuvoxApiClient:
         LOGGER.error("❌ Request to open door failed.")
         return None
 
-    ###########################
+    async def async_retrieve_temp_key_data(self) -> bool:
+        """Request and parse the user's temporary keys."""
+        json_data = await self.async_get_temp_key_list()
+        if json_data is not None:
+            self._data.parse_temp_keys_data(json_data)
+            return True
+        return False
+
+    async def async_get_temp_key_list(self):
+        """Request the user's configuration data."""
+        LOGGER.debug("📡 Retrieving list of user's devices...")
+        url = f"https://{API_TEMP_KEY_LIST_HOST}/{API_GET_PERSONAL_TEMP_KEY_LIST}"
+        data = {}
+        headers = {
+            "x-cloud-version": "6.4",
+            "accept": "application/json, text/plain, */*",
+            "sec-fetch-site": "same-origin",
+            "accept-language": "en-AU,en;q=0.9",
+            "sec-fetch-mode": "cors",
+            "x-cloud-lang": "en",
+            "user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) SmartPlus/6.2",
+            "referer": f"https://ecloud.akuvox.com/smartplus/TmpKey.html?TOKEN={self._data.token}&USERTYPE=20&VERSION=6.6",
+            "x-auth-token": self._data.token,
+            "sec-fetch-dest": "empty"
+        }
+
+        json_data = await self._api_wrapper(method="get", url=url, headers=headers, data=data)
+
+        if json_data is not None:
+            LOGGER.debug("✅ User's device list retrieved successfully")
+            return json_data
+
+        LOGGER.error("❌ Unable to retrieve user's device list'.")
+        return None
+
+    ###################
+    # Request Methods #
+    ###################
 
     async def _api_wrapper(
         self,
         method: str,
         url: str,
-        data: dict | None = None,
+        data,
         headers: dict | None = None,
     ):
         """Get information from the API."""
@@ -380,10 +427,6 @@ class AkuvoxApiClient:
             LOGGER.debug("Error: HTTP status code %s",
                          response.status_code)
         return None
-
-    ###################
-    # Request Methods #
-    ###################
 
     async def async_make_get_request(self, url, headers, data=None):
         """Make an HTTP get request."""
