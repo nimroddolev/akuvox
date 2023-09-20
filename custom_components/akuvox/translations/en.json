@@ -2,24 +2,28 @@
     "config": {
         "step": {
             "user": {
-                "title": "Akuvox SmartPlus Setup",
-                "description": "Select a sign-in method to connect to your SmartPlus Account:",
+                "title": "Akuvox SmartPlus Sign-In",
+                "description": "Choose a sign-in method to connect to your Akuvox SmartPlus account:",
                 "menu_options": {
-                    "sms_sign_in": "SMS Verification (you will be signed out from your mobile app)",
-                    "app_tokens": "App Token (you will remain signed in, but requires advanced steps)"
+                    "sms_sign_in_warning": "1. SMS Verification (Recommended)",
+                    "app_tokens_sign_in": "2. App Token (Advanced)"
                 }
+            },
+            "sms_sign_in_warning": {
+                "title": "SMS Verification",
+                "description": "⚠️ Warning ⚠️\n\nChoosing this sign-in method will log you out of the SmartPlus app on your phone.\n\nTo stay logged in to the appand use both the app and this integration, please use the `App Token` sign-in method instead."
             },
             "sms_sign_in": {
                 "title": "SMS Verification",
-                "description": "Please enter your mobile phone number to receive a verification SMS:",
+                "description": "Please enter your mobile phone number to receive your verification SMS:",
                 "data": {
                     "country_code": "Country Code",
                     "phone_number": "Phone Number"
                 }
             },
-            "app_tokens": {
+            "app_tokens_sign_in": {
                 "title": "Sign In via App Tokens",
-                "description": "Please enter in the following (review the documentation for guidance):",
+                "description": "Please enter your account details below.\n\nℹ️ To obtain your tokens please review the documentation.",
                 "data": {
                     "country_code": "Country Code",
                     "phone_number": "Phone Number",
