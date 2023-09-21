@@ -322,16 +322,14 @@ class AkuvoxApiClient:
         LOGGER.error("❌ Unable to log in with SMS code.")
         return None
 
-    async def async_retrieve_user_data(self, force_refresh: bool = False) -> bool:
+    async def async_retrieve_user_data(self) -> bool:
         """Retrieve user devices and temp keys data."""
-        if force_refresh is True or self._data.min_duration_exceeded() is True:
-            if await self.async_retrieve_device_data() is False:
-                LOGGER.debug("Unable to retrieve devices data")
-                return False
-            else:
-                if await self.async_retrieve_temp_keys_data() is False:
-                    LOGGER.debug("Unable to retrieve temp keys data")
-                    return False
+        if await self.async_retrieve_device_data() is False:
+            LOGGER.debug("Unable to retrieve devices data")
+            return False
+        if await self.async_retrieve_temp_keys_data() is False:
+            LOGGER.debug("Unable to retrieve temp keys data")
+            return False
         return True
 
     async def async_retrieve_device_data(self) -> bool:
