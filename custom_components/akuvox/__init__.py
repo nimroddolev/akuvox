@@ -36,9 +36,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass=hass,
         client=AkuvoxApiClient(
             session=async_get_clientsession(hass),
-            hass=hass
+            hass=hass,
+            data=entry.data,
         ),
     )
+    await coordinator.client.async_retrieve_user_data()
 
     # https://developers.home-assistant.io/docs/integration_fetching_data#coordinated-single-api-poll-for-data-for-all-entities
     await coordinator.async_config_entry_first_refresh()
@@ -62,7 +64,7 @@ async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     await async_setup_entry(hass, entry)
 
 
-
+# Integration options
 
 async def async_options(self, entry: ConfigEntry):
     """Present current configuration options for modification."""

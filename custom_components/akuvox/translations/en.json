@@ -49,8 +49,9 @@
                 "title": "Replace User Token",
                 "description": "Enter your SmartPlus app user's token to allow Home Assistant to communicate with Akuvox's servers whilst remaining signed in on your device.\n\nRefer to the documentation for instructions on how to extract your token string.",
                 "data": {
-                    "override": "Use your device's user token?",
-                    "token": "Token from SmartPlus app"
+                    "override": "Replace your tokens?",
+                    "auth_token": "New auth_token",
+                    "token": "New token"
                 }
             }
         }

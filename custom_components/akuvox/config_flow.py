@@ -16,10 +16,6 @@ from .const import (
     LOGGER
 )
 
-def async_get_options_flow(config_entry: config_entries.ConfigEntry) -> config_entries.OptionsFlow:
-    """Create the options flow."""
-    return AkuvoxOptionsFlowHandler(config_entry)
-
 class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
     """Config flow for Akuvox."""
 
@@ -27,6 +23,11 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
     data: dict = {}
     rest_server_data: dict = {}
     akuvox_api_client: AkuvoxApiClient = None  # type: ignore
+
+    @staticmethod
+    def async_get_options_flow(config_entry: config_entries.ConfigEntry) -> config_entries.OptionsFlow:
+        """Create the options flow."""
+        return AkuvoxOptionsFlowHandler(config_entry)
 
     async def async_step_user(self, user_input=None):
         """Step 0: User selects sign-in method."""
@@ -36,7 +37,9 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             self.akuvox_api_client = AkuvoxApiClient(
                 session=async_get_clientsession(self.hass),
                 hass=self.hass,
+                data=None,
             )
+            LOGGER.debug("del AkuvoxFlowHandler --> async_step_user() --> AkuvoxAPI: async_init_api_data()")
             await self.akuvox_api_client.async_init_api_data()
 
         return self.async_show_menu(
@@ -178,6 +181,8 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                 login_successful = await self.akuvox_api_client.async_make_servers_list_request(
                     auth_token, token, phone_number)
                 if login_successful is True:
+                    # Retrieve connected device data
+                    await self.akuvox_api_client.async_retrieve_user_data()
                     devices_json = self.akuvox_api_client.get_devices_json()
                     self.data.update(devices_json)
 
@@ -275,7 +280,7 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     def get_sms_sign_in_schema(self):
-        """Schema for sms_sign_in step."""
+        """Get the schema for sms_sign_in step."""
         return {
             vol.Required(
                 "country_code",
@@ -290,7 +295,7 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         }
 
     def get_app_tokens_sign_in_schema(self):
-        """Schema for app_tokens_sign_in step."""
+        """Get the schema for app_tokens_sign_in step."""
         return {
             vol.Required(
                 "country_code",
@@ -314,23 +319,34 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                 description="Your SmartPlus account's token string"): str,
         }
 
-class AkuvoxOptionsFlowHandler(config_entries.OptionsFlow ):
+class AkuvoxOptionsFlowHandler(config_entries.OptionsFlow):
     """Handle options flow for Akuvox integration."""
 
     akuvox_api_client: AkuvoxApiClient = None  # type: ignore
 
     def __init__(self, config_entry: config_entries.ConfigEntry):
         """Initialize options flow."""
+        LOGGER.debug("del In AkuvoxOptionsFlowHandler --> __init__()")
         self.config_entry = config_entry
 
     async def async_step_init(self, user_input=None):
         """Initialize the options flow."""
+        LOGGER.debug("del In AkuvoxOptionsFlowHandler --> async_step_init()")
 
         # Define the options schema
-        current_options = dict(self.config_entry.options)
+        config_options = dict(self.config_entry.options)
+        config_data = dict(self.config_entry.data)
+
         options_schema = vol.Schema({
-            vol.Required("override", default=current_options.get("override", False)): bool,
-            vol.Optional("token", default=current_options.get("token", "")): str,
+            vol.Required("override",
+                         default=self.get_data_key_value("override", False) # type: ignore
+            ): bool,
+            vol.Optional("auth_token",
+                         default=self.get_data_key_value("auth_token", False) # type: ignore
+            ): str,
+            vol.Optional("token",
+                         default=self.get_data_key_value("token", False) # type: ignore
+            ): str,
         })
 
         # Show the form with the current options
@@ -342,25 +358,28 @@ class AkuvoxOptionsFlowHandler(config_entries.OptionsFlow ):
                 last_step=True
             )
 
-        # Use the new token supplied by the user
+        # Use the new tokens supplied by the user
         camera_data = None
         door_relay_data = None
+        door_keys_data = None
         if user_input.get("override", False) is True:
-            LOGGER.debug("New user token set. Refreshing device data...")
+            LOGGER.debug("New user tokens set. Refreshing device data...")
 
             # Initialize the API client
             if self.akuvox_api_client is None:
                 self.akuvox_api_client = AkuvoxApiClient(
                     session=async_get_clientsession(self.hass),
                     hass=self.hass,
+                    data=None
                 )
+            LOGGER.debug("del AkuvoxOptionsFlowHandler --> async_step_init() --> AkuvoxAPI: async_init_api_data()")
             await self.akuvox_api_client.async_init_api_data()
 
             # Retrieve device data
-            device_list_updated = await self.akuvox_api_client.async_user_conf_with_token(
+            user_data_retrieved = await self.akuvox_api_client.async_retrieve_user_data_with_tokens(
+                user_input["auth_token"],
                 user_input["token"])
-            if device_list_updated is True:
-                LOGGER.debug("New device data received.")
+            if user_data_retrieved is True:
                 devices_json = self.akuvox_api_client.get_devices_json()
                 if devices_json is not None and all(key in devices_json for key in (
                     "camera_data",
@@ -369,11 +388,11 @@ class AkuvoxOptionsFlowHandler(config_entries.OptionsFlow ):
                 ):
                     camera_data = devices_json["camera_data"]
                     door_relay_data = devices_json["door_relay_data"]
-                    door_keys_data = devices_json["door_keys_json"]
+                    door_keys_data = devices_json["door_keys_data"]
                     options_schema = vol.Schema({
                         vol.Required("override",
-                                     default=current_options.get("override", None)): bool,
-                        vol.Required("token", default=current_options.get("token", None)): str,
+                                        default=config_options.get("override", None)): bool,
+                        vol.Required("token", default=config_options.get("token", None)): str,
                         vol.Optional("camera_data", default=camera_data): dict,
                         vol.Optional("door_relay_data", default=door_relay_data): dict,
                         vol.Optional("door_keys_data", default=door_keys_data): dict,
@@ -387,15 +406,16 @@ class AkuvoxOptionsFlowHandler(config_entries.OptionsFlow ):
                         data=user_input,
                         description_placeholders=user_input,
                     )
-            else:
-                LOGGER.debug("Unable to retrieve new device data.")
 
             data_schema = {
                 vol.Required(
                     "override",
                     msg=None,
                     default=user_input.get("override", False),
-                    description="Use your SmartPlus user's token?"
+                    description={
+                        "auth_token": f"Current auth_token: {config_data['auth_token']}",
+                        "token": f"Current token: {config_data['token']}",
+                    },
                 ): bool,
                 vol.Optional(
                     "token",
@@ -417,3 +437,13 @@ class AkuvoxOptionsFlowHandler(config_entries.OptionsFlow ):
             data=user_input, # type: ignore
             description_placeholders=user_input,
         )
+
+    def get_data_key_value(self, key, placeholder=None):
+        """Get the value for a given key. Options flow 1st, Config flow 2nd."""
+        config_options = dict(self.config_entry.options)
+        config_data = dict(self.config_entry.data)
+        if key in config_options:
+            return config_options[key]
+        if key in config_data:
+            return config_data[key]
+        return placeholder

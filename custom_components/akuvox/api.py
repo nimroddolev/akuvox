@@ -57,6 +57,17 @@ class AkuvoxData:
     door_relay_data = []
     responses = {}
 
+    def __init__(self, data):
+        """Initialize the Akuvox API client."""
+        if data is None:
+            return
+        if "host" in data:
+            self.host = data["host"]
+        if "auth_token" in data:
+            self.auth_token = data["auth_token"]
+        if "token" in data:
+            self.token = data["token"]
+
     def parse_rest_server_response(self, json_data: dict):
         """Parse the rest_server API response."""
         if json_data is not None and json_data is not {}:
@@ -126,15 +137,15 @@ class AkuvoxApiClient:
         self,
         session: aiohttp.ClientSession,
         hass: HomeAssistant,
+        data,
     ) -> None:
         """Akuvox API Client."""
         self._session = session
         self.hass = hass
-        self._data = AkuvoxData()
-        hass.add_job(self.async_init_api_data)
+        self._data = AkuvoxData(data)
 
     async def async_init_api_data(self) -> None:
-        """Get data from the API."""
+        """Fetch API configuration data."""
         if self._data.host is None or len(self._data.host) == 0:
             self._data.host = "...request in process"
             json_data = await self.async_make_rest_server_request()
@@ -230,13 +241,8 @@ class AkuvoxApiClient:
         )
         if json_data is not None:
             LOGGER.debug("✅ User's device list retrieved successfully")
-
             self._data.parse_sms_login_response(json_data)
-
-            # Retrieve connected device data
-            device_data_success = await self.async_retrieve_device_data()
-            if device_data_success is True:
-                return True
+            return True
 
         LOGGER.error("❌ Unable to retrieve user's device list.")
         return False
@@ -249,9 +255,10 @@ class AkuvoxApiClient:
             self._data.parse_sms_login_response(login_data)
 
             # Retrieve connected device data
-            device_data_success = await self.async_retrieve_device_data()
-            if device_data_success is True:
-                return True
+            await self.async_retrieve_device_data()
+            await self.async_retrieve_temp_keys_data()
+
+            return True
 
         return False
 
@@ -276,6 +283,18 @@ class AkuvoxApiClient:
         LOGGER.error("❌ Unable to log in with SMS code.")
         return None
 
+    async def async_retrieve_user_data(self, force_refresh: bool = False) -> bool:
+        """Retrieve user devices and temp keys data."""
+        if force_refresh is True or self._data.min_duration_exceeded() is True:
+            if await self.async_retrieve_device_data() is False:
+                LOGGER.debug("Unable to retrieve devices data")
+                return False
+            else:
+                if await self.async_retrieve_temp_keys_data() is False:
+                    LOGGER.debug("Unable to retrieve temp keys data")
+                    return False
+        return True
+
     async def async_retrieve_device_data(self) -> bool:
         """Request and parse the user's device data."""
         user_conf_data = await self.async_user_conf()
@@ -284,13 +303,11 @@ class AkuvoxApiClient:
             return True
         return False
 
-    async def async_user_conf_with_token(self, token):
-        """Request the user's configuration data with an alternate token string."""
+    async def async_retrieve_user_data_with_tokens(self, auth_token, token) -> bool:
+        """Retrieve user devices and temp keys data with an alternate token string."""
+        self._data.auth_token = auth_token
         self._data.token = token
-        user_conf_data = await self.async_user_conf()
-        if user_conf_data is not None:
-            self._data.parse_userconf_data(user_conf_data)
-        return user_conf_data
+        return await self.async_retrieve_user_data()
 
     async def async_user_conf(self):
         """Request the user's configuration data."""

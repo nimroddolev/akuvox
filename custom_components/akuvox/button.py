@@ -11,16 +11,16 @@ from .const import (
     VERSION
 )
 
-
 async def async_setup_entry(hass, entry, async_add_devices):
     """Set up the door relay platform."""
     host = entry.data.get("host", "")
     override = entry.options.get("override", False)
-    token = entry.options.get("token", entry.data["token"]) if override is True else entry.data["token"]
-    door_relay_data = entry.options.get("door_relay_data", entry.data["door_relay_data"]) if override is True else entry.data["door_relay_data"]
+    token = get_saved_value(entry, override, "token")
+    door_relay_data = get_saved_value(entry, override, "door_relay_data")
     client = AkuvoxApiClient(
         session=async_get_clientsession(hass),
-        hass=hass
+        hass=hass,
+        data=entry.data
     )
 
     entities = []
@@ -83,3 +83,7 @@ class AkuvoxDoorRelayEntity(ButtonEntity):
             token=self._token,
             data=self._data
         )
+
+def get_saved_value(entry, override, key: str):
+    """Get the value for a given key. Options flow 1st, Config flow 2nd."""
+    return entry.options.get(key, entry.data[key]) if override is True else entry.data[key]
