@@ -124,9 +124,9 @@ class AkuvoxData:
         self.door_keys_data = []
         for door_keys_json in json_data:
             door_keys_data = {}
-            door_keys_data["id"] = door_keys_json["ID"]
+            door_keys_data["key_id"] = door_keys_json["ID"]
             door_keys_data["description"] = door_keys_json["Description"]
-            door_keys_data["temp_code"] = door_keys_json["TmpKey"]
+            door_keys_data["key_code"] = door_keys_json["TmpKey"]
             door_keys_data["begin_time"] = door_keys_json["BeginTime"]
             door_keys_data["end_time"] = door_keys_json["EndTime"]
             door_keys_data["access_times"] = door_keys_json["AccessTimes"]
@@ -139,7 +139,7 @@ class AkuvoxData:
             if "Doors" in door_keys_json:
                 for door_key_json in door_keys_json["Doors"]:
                     door_keys_data["doors"].append({
-                        "id": door_key_json["ID"],
+                        "door_id": door_key_json["ID"],
                         "key_id": door_key_json["KeyID"],  # Reference to key
                         "relay": door_key_json["Relay"],
                         "mac": door_key_json["MAC"]

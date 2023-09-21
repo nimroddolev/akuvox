@@ -23,6 +23,7 @@ from .coordinator import AkuvoxDataUpdateCoordinator
 PLATFORMS: list[Platform] = [
     Platform.CAMERA,
     Platform.BUTTON,
+    Platform.SENSOR
 ]
 
 hass: HomeAssistant

@@ -72,7 +72,6 @@ class AkuvoxDoorRelayEntity(ButtonEntity):
             name=name,
             model=VERSION,
             manufacturer=NAME,
-
         )
 
     def press(self) -> None:
