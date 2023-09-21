@@ -27,3 +27,7 @@ API_SMS_LOGIN = "sms_login"
 API_USERCONF = "userconf"
 API_OPENDOOR = "opendoor"
 
+API_TEMP_KEY_LIST_HOST = "ecloud.akuvox.com/web-server/v3/app/community"
+API_GET_PERSONAL_TEMP_KEY_LIST = "tempKey/getPersonalTempKeyList?row=20&page=1"
+TEMP_KEY_QR_HOST = "ecloud.akuvox.com/"
+

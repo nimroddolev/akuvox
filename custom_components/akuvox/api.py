@@ -55,7 +55,7 @@ class AkuvoxData:
     project_name: str = ""
     camera_data = []
     door_relay_data = []
-    responses = {}
+    door_keys_data = []
 
     def __init__(self, data):
         """Initialize the Akuvox API client."""
@@ -85,6 +85,8 @@ class AkuvoxData:
 
     def parse_userconf_data(self, json_data: dict):
         """Parse the userconf API response."""
+        self.door_relay_data = []
+        self.camera_data = []
         if json_data is not None:
             if "app_conf" in json_data:
                 self.project_name = json_data["app_conf"]["project_name"]
@@ -117,6 +119,42 @@ class AkuvoxData:
                             LOGGER.debug("🚪 Door relay parsed: %s-%s",
                                          name, door_name)
 
+    def parse_temp_keys_data(self, json_data: list):
+        """Parse the getPersonalTempKeyList API response."""
+        self.door_keys_data = []
+        for door_keys_json in json_data:
+            door_keys_data = {}
+            door_keys_data["id"] = door_keys_json["ID"]
+            door_keys_data["description"] = door_keys_json["Description"]
+            door_keys_data["temp_code"] = door_keys_json["TmpKey"]
+            door_keys_data["begin_time"] = door_keys_json["BeginTime"]
+            door_keys_data["end_time"] = door_keys_json["EndTime"]
+            door_keys_data["access_times"] = door_keys_json["AccessTimes"]
+            door_keys_data["allowed_times"] = door_keys_json["AllowedTimes"]
+            door_keys_data["each_allowed_times"] = door_keys_json["EachAllowedTimes"]
+            door_keys_data["qr_code_url"] = f"https://{TEMP_KEY_QR_HOST}{door_keys_json['QrCodeUrl']}"
+            door_keys_data["expired"] = False if door_keys_json["Expired"] else True
+
+            door_keys_data["doors"] = []
+            if "Doors" in door_keys_json:
+                for door_key_json in door_keys_json["Doors"]:
+                    door_keys_data["doors"].append({
+                        "id": door_key_json["ID"],
+                        "key_id": door_key_json["KeyID"],  # Reference to key
+                        "relay": door_key_json["Relay"],
+                        "mac": door_key_json["MAC"]
+                    })
+
+            self.door_keys_data.append(door_keys_data)
+
+
+            LOGGER.debug("🔑 %s parsed, opening %s door%s",
+                         door_keys_data["description"],
+                         str(len(door_keys_data["doors"])),
+                         "" if len(door_keys_data["doors"]) == 1 else "s")
+
+    ###################
+
     def get_device_data(self) -> dict:
         """Device data dictionary."""
         return {
@@ -125,6 +163,7 @@ class AkuvoxData:
             "auth_token": self.auth_token,
             "camera_data": self.camera_data,
             "door_relay_data": self.door_relay_data,
+            "door_keys_data": self.door_keys_data,
         }
 
 
@@ -359,7 +398,7 @@ class AkuvoxApiClient:
         LOGGER.error("❌ Request to open door failed.")
         return None
 
-    async def async_retrieve_temp_key_data(self) -> bool:
+    async def async_retrieve_temp_keys_data(self) -> bool:
         """Request and parse the user's temporary keys."""
         json_data = await self.async_get_temp_key_list()
         if json_data is not None:
@@ -369,7 +408,7 @@ class AkuvoxApiClient:
 
     async def async_get_temp_key_list(self):
         """Request the user's configuration data."""
-        LOGGER.debug("📡 Retrieving list of user's devices...")
+        LOGGER.debug("📡 Retrieving list of user's temporary keys...")
         url = f"https://{API_TEMP_KEY_LIST_HOST}/{API_GET_PERSONAL_TEMP_KEY_LIST}"
         data = {}
         headers = {
@@ -388,7 +427,7 @@ class AkuvoxApiClient:
         json_data = await self._api_wrapper(method="get", url=url, headers=headers, data=data)
 
         if json_data is not None:
-            LOGGER.debug("✅ User's device list retrieved successfully")
+            LOGGER.debug("✅ User's temporary keys list retrieved successfully")
             return json_data
 
         LOGGER.error("❌ Unable to retrieve user's device list'.")
@@ -432,10 +471,19 @@ class AkuvoxApiClient:
             # Assuming the response is valid JSON, parse it
             try:
                 json_data = response.json()
+
+                # Standard requests
                 if "result" in json_data and json_data["result"] == 0:
                     if "datas" in json_data:
                         return json_data["datas"]
                     return json_data
+
+                # Temp key requests
+                if "code" in json_data and json_data["code"] == 0:
+                    if "data" in json_data:
+                        return json_data["data"]
+                    return json_data
+
                 LOGGER.warning("🤨 Response: %s", str(json_data))
             except Exception as error:
                 LOGGER.error(
