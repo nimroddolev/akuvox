@@ -39,7 +39,6 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                 hass=self.hass,
                 data=None,
             )
-            LOGGER.debug("del AkuvoxFlowHandler --> async_step_user() --> AkuvoxAPI: async_init_api_data()")
             await self.akuvox_api_client.async_init_api_data()
 
         return self.async_show_menu(
@@ -72,8 +71,6 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                         errors=None
                     )
                 if selection == app_tokens_sign_in:
-                    LOGGER.debug("Selection error. No match for selection '%s'. user_input = %s",
-                                 selection, str(user_input))
                     return self.async_show_form(
                         step_id="app_tokens_sign_in",
                         data_schema=vol.Schema(self.get_app_tokens_sign_in_schema()),
@@ -81,12 +78,8 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                         last_step=False,
                         errors=None
                     )
-                LOGGER.debug("Selection error. No match for selection '%s'. user_input = %s",
-                            selection, str(user_input))
                 errors["base"] = "Please choose a sign-in option."
             else:
-                LOGGER.debug("Selection error. No value found for selection. user_input = %s",
-                             str(user_input))
                 errors["base"] = "Please choose a valid sign-in option."
 
         return self.async_show_form(
@@ -326,12 +319,10 @@ class AkuvoxOptionsFlowHandler(config_entries.OptionsFlow):
 
     def __init__(self, config_entry: config_entries.ConfigEntry):
         """Initialize options flow."""
-        LOGGER.debug("del In AkuvoxOptionsFlowHandler --> __init__()")
         self.config_entry = config_entry
 
     async def async_step_init(self, user_input=None):
         """Initialize the options flow."""
-        LOGGER.debug("del In AkuvoxOptionsFlowHandler --> async_step_init()")
 
         # Define the options schema
         config_options = dict(self.config_entry.options)
@@ -372,7 +363,6 @@ class AkuvoxOptionsFlowHandler(config_entries.OptionsFlow):
                     hass=self.hass,
                     data=None
                 )
-            LOGGER.debug("del AkuvoxOptionsFlowHandler --> async_step_init() --> AkuvoxAPI: async_init_api_data()")
             await self.akuvox_api_client.async_init_api_data()
 
             # Retrieve device data

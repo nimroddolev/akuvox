@@ -325,10 +325,8 @@ class AkuvoxApiClient:
     async def async_retrieve_user_data(self) -> bool:
         """Retrieve user devices and temp keys data."""
         if await self.async_retrieve_device_data() is False:
-            LOGGER.debug("Unable to retrieve devices data")
             return False
         if await self.async_retrieve_temp_keys_data() is False:
-            LOGGER.debug("Unable to retrieve temp keys data")
             return False
         return True
 
@@ -484,10 +482,10 @@ class AkuvoxApiClient:
 
                 LOGGER.warning("🤨 Response: %s", str(json_data))
             except Exception as error:
-                LOGGER.error(
-                    "❌ Error occurred when parsing JSON: %s", error)
+                LOGGER.error("❌ Error occurred when parsing JSON: %s",
+                             error)
         else:
-            LOGGER.debug("Error: HTTP status code %s",
+            LOGGER.debug("❌ Error: HTTP status code %s",
                          response.status_code)
         return None
 
@@ -509,13 +507,12 @@ class AkuvoxApiClient:
                 # Assuming the response is valid JSON, parse it
                 try:
                     json_data = response.json()
-                    LOGGER.debug("json_data = %s", str(json_data))
                     return json_data
                 except Exception as error:
                     LOGGER.warning(
-                        "Error occurred when parsing JSON: %s", error)
+                        "❌ Error occurred when parsing JSON: %s", error)
             else:
-                LOGGER.debug("Error: HTTP status code %s",
+                LOGGER.debug("❌ Error: HTTP status code %s",
                              response.status)
                 return None
 
