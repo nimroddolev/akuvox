@@ -11,7 +11,7 @@
             },
             "sms_sign_in_warning": {
                 "title": "SMS Verification",
-                "description": "⚠️ Warning ⚠️\n\nChoosing this sign-in method will log you out of the SmartPlus app on your phone.\n\nTo stay logged in to the appand use both the app and this integration, please use the `App Token` sign-in method instead."
+                "description": "⚠️ Warning ⚠️\n\nChoosing this sign-in method will log you out of the SmartPlus app on your phone.\n\nTo stay logged in to the app and use both the app and this integration, please use the `App Token` sign-in method instead."
             },
             "sms_sign_in": {
                 "title": "SMS Verification",

@@ -50,7 +50,7 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_sms_sign_in_warning(self, user_input=None):
         """Step 1a: Warning before continuing with login via SMS Verification."""
         errors = {}
-        sms_sign_in = "Continue with SMS Verification Sign"
+        sms_sign_in = "Continue sign-in via SMS Verification"
         app_tokens_sign_in = "Sign-in via app tokens"
         data_schema = {
             "warning_option_selection": selector({
@@ -191,7 +191,7 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                     step_id="app_tokens_sign_in",
                     data_schema=vol.Schema(self.get_app_tokens_sign_in_schema()),
                     description_placeholders=user_input,
-                    last_step=False,
+                    last_step=True,
                     errors={
                         "base": "Sign in failed. Please check the values entered and try again."
                     }
@@ -201,7 +201,7 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                 step_id="app_tokens_sign_in",
                 data_schema=vol.Schema(data_schema),
                 description_placeholders=user_input,
-                last_step=False,
+                last_step=True,
                 errors={
                     "base": "Please check the values enterted and try again."
                 }
@@ -211,7 +211,7 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="app_tokens_sign_in",
             data_schema=vol.Schema(data_schema),
             description_placeholders=user_input,
-            last_step=False,
+            last_step=True,
         )
 
     async def async_step_verify_sms_code(self, user_input=None):
