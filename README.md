@@ -112,5 +112,5 @@ Once configured, Akuvox cameras & door buttons will appear as a device with a ca
 
 ## Show Your Support
 
-If you find Chime TTS useful, consider showing your support:
+If you find this integration useful, consider showing your support:
 <a href="https://www.buymeacoffee.com/nimroddolev" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 30px !important;width: 140px !important;" ></a>
