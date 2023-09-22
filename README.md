@@ -1,6 +1,6 @@
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration )<!-- ![version](https://img.shields.io/github/v/release/nimroddolev/akuvox) --> <a href="https://www.buymeacoffee.com/nimroddolev"><img src="https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png" height="20px"></a>
 
-# Akuvox SmartPlus Door Intercom Integration for Home Assistant
+# Akuvox SmartPlus Integration for Home Assistant
 
 <img src="https://user-images.githubusercontent.com/1849295/269948645-08c99fe2-253e-49cc-b38b-2a2937c2726d.png" width="100">
 
