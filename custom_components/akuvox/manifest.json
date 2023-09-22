@@ -1,14 +1,16 @@
 {
   "domain": "akuvox",
-  "name": "Akuvox",
+  "name": "Akuvox SmartPlus",
   "codeowners": [
     "@nimroddolev"
   ],
   "config_flow": true,
   "dependencies": [
     "button",
-    "generic"
+    "generic",
+    "sensor"
   ],
+  "integration_type": "virtual",
   "documentation": "https://github.com/nimroddolev/akuvox",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/nimroddolev/akuvox/issues",
