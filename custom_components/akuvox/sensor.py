@@ -15,9 +15,9 @@ from .const import (
 async def async_setup_entry(hass, entry, async_add_devices):
     """Set up the temporary door key platform."""
     LOGGER.debug("In sensor.py async_setup_entry()")
-    host = entry.data.get("host", "")
+    entry.data.get("host", "")
     override = entry.options.get("override", False)
-    token = get_saved_value(entry, override, "token")
+    get_saved_value(entry, override, "token")
 
     client = AkuvoxApiClient(
         session=async_get_clientsession(hass),
@@ -123,6 +123,8 @@ def get_saved_value(entry, override, key: str):
 
 
 class TemporaryDoorKey:
+    """Akuvox temporary door key class."""
+
     def __init__(self,
                  key_id,
                  description,
@@ -131,6 +133,7 @@ class TemporaryDoorKey:
                  end_time,
                  allowed_times,
                  qr_code_url):
+        """Initialize the Akuvox dor key class."""
         self.key_id = key_id
         self.description = description
         self.key_code = key_code
@@ -142,16 +145,12 @@ class TemporaryDoorKey:
         self.expired = False
 
     def is_key_active(self):
-        """
-        Check if the key is currently active based on the begin_time and end_time.
-        """
+        """Check if the key is currently active based on the begin_time and end_time."""
         current_time = datetime.datetime.now()
         return self.begin_time <= current_time <= self.end_time
 
     def to_dict(self):
-        """
-        Convert the object to a dictionary for easy serialization.
-        """
+        """Convert the object to a dictionary for easy serialization."""
         return {
             'key_id': self.key_id,
             'description': self.description,
