@@ -10,7 +10,7 @@
     "generic",
     "sensor"
   ],
-  "integration_type": "virtual",
+  "integration_type": "hub",
   "documentation": "https://github.com/nimroddolev/akuvox",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/nimroddolev/akuvox/issues",
