@@ -1,28 +1,36 @@
 """Camera platform for akuvox."""
 from homeassistant.components.generic.camera import GenericCamera
+from homeassistant.helpers import storage
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.const import (
     CONF_NAME,
     CONF_VERIFY_SSL,
 )
 
-from .const import (DOMAIN,
-                    LOGGER,
-                    NAME,
-                    VERSION)
-
+from .const import (
+    DOMAIN,
+    LOGGER,
+    NAME,
+    VERSION,
+    DATA_STORAGE_KEY
+)
 
 async def async_setup_entry(hass, entry, async_add_devices):
     """Set up the camera platform."""
-    entry.data.get("devices", [])
+    store = storage.Store(hass, 1, DATA_STORAGE_KEY)
+    device_data = await store.async_load()
+    cameras_data = device_data["camera_data"] # type: ignore
 
-    cameras_data = entry.data.get("camera_data", [])
     entities = []
-
     for camera_data in cameras_data:
         name = camera_data["name"]
         rtsp_url = camera_data["video_url"]
         entities.append(AkuvoxCameraEntity(name=name, rtsp_url=rtsp_url))
+        name = str(camera_data["name"]).strip()
+        rtsp_url = str(camera_data["video_url"]).strip()
+        entities.append(AkuvoxCameraEntity(
+            name=name,
+            rtsp_url=rtsp_url))
 
     async_add_devices(entities)
 
