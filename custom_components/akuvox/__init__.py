@@ -26,8 +26,6 @@ PLATFORMS: list[Platform] = [
     Platform.SENSOR
 ]
 
-hass: HomeAssistant
-
 
 # https://developers.home-assistant.io/docs/config_entries_index/#setting-up-an-entry
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -38,10 +36,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         client=AkuvoxApiClient(
             session=async_get_clientsession(hass),
             hass=hass,
-            data=entry.data,
+            entry=entry,
         ),
     )
-    await coordinator.client.async_retrieve_user_data()
+    await coordinator.client.async_init_api_data()
 
     # https://developers.home-assistant.io/docs/integration_fetching_data#coordinated-single-api-poll-for-data-for-all-entities
     await coordinator.async_config_entry_first_refresh()

@@ -31,3 +31,4 @@ API_TEMP_KEY_LIST_HOST = "ecloud.akuvox.com/web-server/v3/app/community"
 API_GET_PERSONAL_TEMP_KEY_LIST = "tempKey/getPersonalTempKeyList?row=20&page=1"
 TEMP_KEY_QR_HOST = "ecloud.akuvox.com"
 
+DATA_STORAGE_KEY = "akuvox_data_storage_key"

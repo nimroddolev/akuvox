@@ -37,7 +37,7 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             self.akuvox_api_client = AkuvoxApiClient(
                 session=async_get_clientsession(self.hass),
                 hass=self.hass,
-                data=None,
+                entry=None,
             )
             await self.akuvox_api_client.async_init_api_data()
 

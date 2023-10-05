@@ -1,76 +1,82 @@
 """Sensor platform for akuvox."""
+from datetime import datetime
 from homeassistant.components.sensor import SensorEntity
-from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers import storage
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-import datetime
+from homeassistant.helpers.entity import DeviceInfo
 
 from .api import AkuvoxApiClient
 from .const import (
     DOMAIN,
     LOGGER,
     NAME,
-    VERSION
+    VERSION,
+    DATA_STORAGE_KEY
 )
+from .entity import AkuvoxEntity
 
 async def async_setup_entry(hass, entry, async_add_devices):
     """Set up the temporary door key platform."""
-    LOGGER.debug("In sensor.py async_setup_entry()")
-    entry.data.get("host", "")
-    override = entry.options.get("override", False)
-    get_saved_value(entry, override, "token")
-
     client = AkuvoxApiClient(
         session=async_get_clientsession(hass),
         hass=hass,
-        data=entry.data
+        entry=entry
     )
-    await client.async_init_api_data()
-    await client.async_retrieve_temp_keys_data()
-    device_data = client.get_devices_json()
-    door_key_data = device_data["door_keys_data"]
-
-    LOGGER.debug("door_key_data = %s", str(door_key_data))
+    store = storage.Store(hass, 1, DATA_STORAGE_KEY)
+    device_data: dict = await store.async_load() # type: ignore
+    door_keys_data = device_data["door_keys_data"]
+    date_format = "%d-%m-%Y %H:%M:%S"
 
     entities = []
-    for door_key in door_key_data:
-        key_id = door_key["key_id"]
-        description = door_key["description"]
-        key_code=door_key["key_code"]
-        begin_time=door_key["begin_time"]
-        end_time=door_key["end_time"]
-        allowed_times=door_key["allowed_times"]
-        qr_code_url=door_key["qr_code_url"]
+    for door_key_data in door_keys_data:
+        key_id = door_key_data["key_id"]
+        description = door_key_data["description"]
+        key_code=door_key_data["key_code"]
+        begin_time = datetime.strptime(str(door_key_data["begin_time"]), date_format)
+        end_time = datetime.strptime(str(door_key_data["end_time"]), date_format)
+        allowed_times=door_key_data["allowed_times"]
+        access_times=door_key_data["access_times"]
+        qr_code_url=door_key_data["qr_code_url"]
 
         entities.append(
             AkuvoxTemporaryDoorKey(
                 client=client,
+                entry=entry,
                 key_id=key_id,
                 description=description,
                 key_code=key_code,
                 begin_time=begin_time,
                 end_time=end_time,
                 allowed_times=allowed_times,
+                access_times=access_times,
                 qr_code_url=qr_code_url,
             )
         )
 
     async_add_devices(entities)
 
-class AkuvoxTemporaryDoorKey(SensorEntity):
+class AkuvoxTemporaryDoorKey(SensorEntity, AkuvoxEntity):
     """Akuvox temporary door key class."""
 
     def __init__(
         self,
         client: AkuvoxApiClient,
+        entry,
         key_id: str,
         description: str,
         key_code: str,
-        begin_time: str,
-        end_time: str,
+        begin_time: datetime,
+        end_time: datetime,
         allowed_times: int,
+        access_times: int,
         qr_code_url) -> None:
         """Initialize the Akuvox door relay class."""
-        super().__init__()
+        super(SensorEntity, self).__init__(client=client, entry=entry)
+        AkuvoxEntity.__init__(
+            self=self,
+            client=client,
+            entry=entry
+        )
         self.client = client
         self.key_id = key_id
         self.description = description
@@ -78,25 +84,16 @@ class AkuvoxTemporaryDoorKey(SensorEntity):
         self.begin_time = begin_time
         self.end_time = end_time
         self.allowed_times = allowed_times
+        self.access_times = access_times
         self.qr_code_url = qr_code_url
-        self.access_times = 0
         self.expired = False
 
         name = f"{self.description} {self.key_id}"
         self._attr_unique_id = name
         self._attr_name = name
         self._attr_key_code = key_code
-        self._attr_extra_state_attributes = {
-            "key_id": key_id,
-            "description": description,
-            "key_code": key_code,
-            "begin_time": begin_time,
-            "end_time": end_time,
-            "allowed_times": allowed_times,
-            "qr_code_url": qr_code_url,
-            "access_times": 0,
-            "expired": False,
-        }
+
+        self._attr_extra_state_attributes = self.to_dict()
 
         LOGGER.debug("Adding temporary door key '%s'", self._attr_unique_id)
         self._attr_device_info = DeviceInfo(
@@ -106,47 +103,9 @@ class AkuvoxTemporaryDoorKey(SensorEntity):
             manufacturer=NAME,
         )
 
-    # def press(self) -> None:
-    #     """Trigger the door relay."""
-    #     self._client.make_opendoor_request(
-    #         name=self._name,
-    #         host=self._host,
-    #         token=self._token,
-    #         data=self._data
-    #     )
-
-def get_saved_value(entry, override, key: str):
-    """Get the value for a given key. Options flow 1st, Config flow 2nd."""
-    return entry.options.get(key, entry.data[key]) if override is True else entry.data[key]
-
-
-
-
-class TemporaryDoorKey:
-    """Akuvox temporary door key class."""
-
-    def __init__(self,
-                 key_id,
-                 description,
-                 key_code,
-                 begin_time,
-                 end_time,
-                 allowed_times,
-                 qr_code_url):
-        """Initialize the Akuvox dor key class."""
-        self.key_id = key_id
-        self.description = description
-        self.key_code = key_code
-        self.begin_time = begin_time
-        self.end_time = end_time
-        self.allowed_times = allowed_times
-        self.qr_code_url = qr_code_url
-        self.access_times = 0
-        self.expired = False
-
     def is_key_active(self):
         """Check if the key is currently active based on the begin_time and end_time."""
-        current_time = datetime.datetime.now()
+        current_time = datetime.now()
         return self.begin_time <= current_time <= self.end_time
 
     def to_dict(self):
@@ -155,10 +114,11 @@ class TemporaryDoorKey:
             'key_id': self.key_id,
             'description': self.description,
             'key_code': self.key_code,
-            'begin_time': self.begin_time.strftime('%Y-%m-%d %H:%M:%S'),
-            'end_time': self.end_time.strftime('%Y-%m-%d %H:%M:%S'),
+            'enabled': self.is_key_active(),
+            'begin_time': self.begin_time,
+            'end_time': self.end_time,
             'access_times': self.access_times,
             'allowed_times': self.allowed_times,
             'qr_code_url': self.qr_code_url,
-            'expired': self.expired
+            'expired': not self.is_key_active()
         }

@@ -7,6 +7,8 @@ import socket
 import json
 
 from homeassistant.core import HomeAssistant
+from homeassistant.config_entries import ConfigEntry
+
 
 import aiohttp
 import async_timeout
@@ -57,16 +59,18 @@ class AkuvoxData:
     door_relay_data = []
     door_keys_data = []
 
-    def __init__(self, data):
+    def __init__(self, entry: ConfigEntry):
         """Initialize the Akuvox API client."""
-        if data is None:
-            return
-        if "host" in data:
-            self.host = data["host"]
-        if "auth_token" in data:
-            self.auth_token = data["auth_token"]
-        if "token" in data:
-            self.token = data["token"]
+        self.host = self.get_value_for_key(entry, "host") # type: ignore
+        self.auth_token = self.get_value_for_key(entry, "auth_token") # type: ignore
+        self.token = self.get_value_for_key(entry, "token") # type: ignore
+
+    def get_value_for_key(self, entry: ConfigEntry, key: str):
+        """Get the value for a given key. 1st check: options, 2nd check: data."""
+        if entry is not None:
+            override = entry.options.get("override", False)
+            return entry.options.get(key, entry.data[key]) if override is True else entry.data[key]
+        return None
 
     def parse_rest_server_response(self, json_data: dict):
         """Parse the rest_server API response."""
@@ -176,19 +180,29 @@ class AkuvoxApiClient:
         self,
         session: aiohttp.ClientSession,
         hass: HomeAssistant,
-        data,
+        entry,
     ) -> None:
         """Akuvox API Client."""
         self._session = session
         self.hass = hass
-        self._data = AkuvoxData(data)
+        self._data = AkuvoxData(entry)
 
     async def async_init_api_data(self) -> None:
-        """Fetch API configuration data."""
+        """Initialize API configuration data."""
         if self._data.host is None or len(self._data.host) == 0:
             self._data.host = "...request in process"
             json_data = await self.async_make_rest_server_request()
             self._data.parse_rest_server_response(json_data)
+
+    def init_api_with_tokens(self, host=None, auth_token=None, token=None):
+        """"Initialize values from saved data/options."""
+        if host is not None:
+            self._data.host = host # type: ignore
+        if auth_token is not None:
+            self._data.auth_token = auth_token
+        if token is not None:
+            self._data.auth_token = token
+
 
     ####################
     # API Call Methods #
