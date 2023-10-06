@@ -6,12 +6,12 @@
                 "description": "Choose a sign-in method to connect to your Akuvox SmartPlus account:",
                 "menu_options": {
                     "sms_sign_in_warning": "1. SMS Verification (Recommended)",
-                    "app_tokens_sign_in": "2. App Token (Advanced)"
+                    "app_tokens_sign_in": "2. App Tokens (Advanced)"
                 }
             },
             "sms_sign_in_warning": {
                 "title": "SMS Verification",
-                "description": "⚠️ Warning ⚠️\n\nChoosing this sign-in method will log you out of the SmartPlus app on your phone.\n\nTo stay logged in to the app and use both the app and this integration, please use the `App Token` sign-in method instead."
+                "description": "⚠️ Warning ⚠️\n\nChoosing this sign-in method will log you out of the SmartPlus app on your phone.\n\nTo stay logged in to the app and use both the app and this integration, please use the `App Tokens` sign-in method instead."
             },
             "sms_sign_in": {
                 "title": "SMS Verification",
