@@ -61,7 +61,7 @@ Or:
 
 ## Adding the Akuvox Integration
 
-1. Click this button: <a href="https://my.home-assistant.io/redirect/config_flow_start/?domain=akuvox" rel="nofollow"><img src="https://camo.githubusercontent.com/637fd24a458765d763a6dced4b312c503f54397bdd9b683584ef8054f305cd7f/68747470733a2f2f6d792e686f6d652d617373697374616e742e696f2f6261646765732f636f6e6669675f666c6f775f73746172742e737667" alt="Open your Home Assistant instance and start setting up a new integration." data-canonical-src="https://my.home-assistant.io/badges/config_flow_start.svg" style="max-width: 100%;"></a> to add the integration.
+1. Click this button: <a href="https://my.home-assistant.io/redirect/config_flow_start/?domain=akuvox" rel="nofollow" target="_blank"><img src="https://camo.githubusercontent.com/637fd24a458765d763a6dced4b312c503f54397bdd9b683584ef8054f305cd7f/68747470733a2f2f6d792e686f6d652d617373697374616e742e696f2f6261646765732f636f6e6669675f666c6f775f73746172742e737667" alt="Open your Home Assistant instance and start setting up a new integration." data-canonical-src="https://my.home-assistant.io/badges/config_flow_start.svg" style="max-width: 100%;"></a> to add the integration.
 
 2. Click `OPEN LINK`
 
@@ -71,7 +71,8 @@ Or:
 
 4. Select a sign in method:
 
-<img src="https://user-images.githubusercontent.com/1849295/269956184-eba99117-c9e2-4db9-8b96-011e1ba585e6.png" width="500">
+<img src="https://user-images.githubusercontent.com/1849295/273309170-31e1e9cf-4d93-469a-9a7c-0bc101b4ac4c.png" width="500">
+
 
 ### Method 1: SMS Verification (Recommended)
 
@@ -91,16 +92,17 @@ Sigining in via SMS verification will sign you out from the SmartPlus app on you
 
 ### Method 2: App Tokens (Advanced)
 
-To obtain your tokens you can use an HTTP proxy (such as [mitmproxy](https://mitmproxy.org/))
+Sigining in using your SmartLife app tokens will allow you to remain signed in to the SmartLife app on your device. To obtain your tokens you can use an HTTP proxy (such as [mitmproxy](https://mitmproxy.org/))
 
 1. Connect your device to your HTTP proxy
 
 2. Log out from your SmartPlus app, and then log in with your phone number and SMS code
 
 3. Search for `akuvox`, and you should see the `servers_list` request. Click on it and in the `Requests` tab you should find your `auth_token` and `token` values:
-![mitmproxy](https://github.com/nimroddolev/akuvox/assets/1849295/2972d105-2b5a-47d5-a713-59b869f5949d)
+![mitmproxy](https://github.com/nimroddolev/akuvox/assets/1849295/d7d2b7ba-cc0e-4f64-b62b-43850bbc90c1)
 
-4. Enter your phone number, your `auth_token` and your `token` values and click `SUBMIT`:
+
+5. Enter your phone number, `auth_token` and `token` values and click `SUBMIT`:
 <img src="https://user-images.githubusercontent.com/1849295/269958871-071008db-c2d8-4455-a612-eb0a9721ea39.png" width="400">
 
 ### You should now have one device per Akuvox door camera
