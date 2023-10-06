@@ -53,6 +53,7 @@ class AkuvoxData:
     host: str = ""
     auth_token: str = ""
     token: str = ""
+    phone_number: str = ""
     rtsp_ip: str = ""
     project_name: str = ""
     camera_data = []
@@ -64,6 +65,7 @@ class AkuvoxData:
         self.host = self.get_value_for_key(entry, "host") # type: ignore
         self.auth_token = self.get_value_for_key(entry, "auth_token") # type: ignore
         self.token = self.get_value_for_key(entry, "token") # type: ignore
+        self.phone_number = self.get_value_for_key(entry, "phone_number") # type: ignore
 
     def get_value_for_key(self, entry: ConfigEntry, key: str):
         """Get the value for a given key. 1st check: options, 2nd check: data."""
@@ -79,6 +81,7 @@ class AkuvoxData:
 
     def parse_sms_login_response(self, json_data: dict):
         """Parse the sms_login API response."""
+        LOGGER.debug("parse_sms_login_response = %s", json_data)
         if json_data is not None:
             if "auth_token" in json_data:
                 self.auth_token = json_data["auth_token"]
@@ -93,10 +96,10 @@ class AkuvoxData:
         self.camera_data = []
         if json_data is not None:
             if "app_conf" in json_data:
-                self.project_name = json_data["app_conf"]["project_name"]
+                self.project_name = json_data["app_conf"]["project_name"].strip()
             if "dev_list" in json_data:
                 for dev_data in json_data["dev_list"]:
-                    name = dev_data["location"]
+                    name = dev_data["location"].strip()
                     mac = dev_data["mac"]
 
                     # Camera
@@ -112,7 +115,7 @@ class AkuvoxData:
                     if "relay" in dev_data:
                         for relay in dev_data["relay"]:
                             relay_id = relay["relay_id"]
-                            door_name = relay["door_name"]
+                            door_name = relay["door_name"].strip()
                             self.door_relay_data.append({
                                 "name": name,
                                 "door_name": door_name,
@@ -193,8 +196,13 @@ class AkuvoxApiClient:
             self._data.host = "...request in process"
             json_data = await self.async_make_rest_server_request()
             self._data.parse_rest_server_response(json_data)
+        if self._data.rtsp_ip is None:
+            await self.async_make_servers_list_request(
+                self._data.auth_token,
+                self._data.token,
+                self._data.phone_number)
 
-    def init_api_with_tokens(self, host=None, auth_token=None, token=None):
+    def init_api_with_tokens(self, host=None, auth_token=None, token=None, phone_number=None):
         """"Initialize values from saved data/options."""
         if host is not None:
             self._data.host = host # type: ignore
@@ -202,7 +210,8 @@ class AkuvoxApiClient:
             self._data.auth_token = auth_token
         if token is not None:
             self._data.auth_token = token
-
+        if phone_number is not None:
+            self._data.phone_number = phone_number
 
     ####################
     # API Call Methods #
@@ -263,11 +272,12 @@ class AkuvoxApiClient:
                                               auth_token: str,
                                               token: str,
                                               phone_number: str) -> bool:
-        """Request SMS code to user's device."""
+        """Request server list data."""
 
         # Store tokens
         self._data.auth_token = auth_token
         self._data.token = token
+        self._data.phone_number = phone_number
 
         url = f"https://{REST_SERVER_ADDR}:{REST_SERVER_PORT}/{API_SERVERS_LIST}"
         headers = {
@@ -293,14 +303,14 @@ class AkuvoxApiClient:
             data=data,
         )
         if json_data is not None:
-            LOGGER.debug("✅ User's device list retrieved successfully")
+            LOGGER.debug("✅ Server list retrieved successfully")
             self._data.parse_sms_login_response(json_data)
             return True
 
-        LOGGER.error("❌ Unable to retrieve user's device list.")
+        LOGGER.error("❌ Unable to retrieve server list.")
         return False
 
-    async def async_sign_in(self, phone_number, country_code, sms_code) -> bool:
+    async def async_sms_sign_in(self, phone_number, country_code, sms_code) -> bool:
         """Sign user in with their phone number and SMS code."""
 
         login_data = await self.async_validate_sms_code(phone_number, country_code, sms_code)
@@ -338,6 +348,11 @@ class AkuvoxApiClient:
 
     async def async_retrieve_user_data(self) -> bool:
         """Retrieve user devices and temp keys data."""
+        await self.async_make_servers_list_request(
+                self._data.auth_token,
+                self._data.token,
+                self._data.phone_number)
+
         if await self.async_retrieve_device_data() is False:
             return False
         if await self.async_retrieve_temp_keys_data() is False:

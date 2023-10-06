@@ -88,7 +88,7 @@ class AkuvoxTemporaryDoorKey(SensorEntity, AkuvoxEntity):
         self.qr_code_url = qr_code_url
         self.expired = False
 
-        name = f"{self.description} {self.key_id}"
+        name = f"{self.description} {self.key_id}".strip()
         self._attr_unique_id = name
         self._attr_name = name
         self._attr_key_code = key_code

@@ -23,15 +23,11 @@ async def async_setup_entry(hass, entry, async_add_devices):
 
     entities = []
     for camera_data in cameras_data:
-        name = camera_data["name"]
-        rtsp_url = camera_data["video_url"]
-        entities.append(AkuvoxCameraEntity(name=name, rtsp_url=rtsp_url))
         name = str(camera_data["name"]).strip()
         rtsp_url = str(camera_data["video_url"]).strip()
         entities.append(AkuvoxCameraEntity(
             name=name,
             rtsp_url=rtsp_url))
-
     async_add_devices(entities)
 
 

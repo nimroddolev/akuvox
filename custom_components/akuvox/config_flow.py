@@ -237,7 +237,7 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             phone_number = self.data["phone_number"]
 
             # Validate SMS code
-            sign_in_response = await self.akuvox_api_client.async_sign_in(
+            sign_in_response = await self.akuvox_api_client.async_sms_sign_in(
                 phone_number,
                 country_code,
                 sms_code)

@@ -24,7 +24,8 @@ class AkuvoxEntity(Entity):
         host = self.get_saved_value("host")
         auth_token = self.get_saved_value("auth_token")
         token = self.get_saved_value("token")
-        self.client.init_api_with_tokens(host, auth_token, token)
+        phone_number = self.get_saved_value("phone_number")
+        self.client.init_api_with_tokens(host, auth_token, token, phone_number)
 
         # LOGGER.debug("Adding temporary door key '%s'", self._attr_unique_id)
         # self._attr_device_info = DeviceInfo(
