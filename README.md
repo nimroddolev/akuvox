@@ -8,6 +8,7 @@ Integrate your Akuvox SmartPlus mobile app with Home Assistant. With this integr
 
 **Disclaimer:** This integration is not affiliated with or endorsed by Akuvox. It is a community-contributed project and is provided as-is without any warranty or guarantee. Use it at your own discretion and responsibility.
 
+For troubleshooting and general discussion please join the [discussion in the Home Assistant forum](https://community.home-assistant.io/t/akuvox-smartplus-view-door-camera-feeds-open-doors-and-manage-temporary-keys/623187).
 ## Table of Contents
 
 - [Introduction](#introduction)
