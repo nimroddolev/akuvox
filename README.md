@@ -1,4 +1,7 @@
-[![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration )<!-- ![version](https://img.shields.io/github/v/release/nimroddolev/akuvox) --> <a href="https://www.buymeacoffee.com/nimroddolev"><img src="https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png" height="20px"></a>
+[![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration )
+![version](https://img.shields.io/github/v/release/nimroddolev/akuvox)
+[![Community Forum][forum-shield]][forum]
+<a href="https://www.buymeacoffee.com/nimroddolev"><img src="https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png" height="20px"></a>
 
 # Akuvox SmartPlus Integration for Home Assistant
 
@@ -8,6 +11,7 @@ Integrate your Akuvox SmartPlus mobile app with Home Assistant. With this integr
 
 **Disclaimer:** This integration is not affiliated with or endorsed by Akuvox. It is a community-contributed project and is provided as-is without any warranty or guarantee. Use it at your own discretion and responsibility.
 
+For troubleshooting and general discussion please join the [discussion in the Home Assistant forum](https://community.home-assistant.io/t/akuvox-smartplus-view-door-camera-feeds-open-doors-and-manage-temporary-keys/623187).
 ## Table of Contents
 
 - [Introduction](#introduction)
@@ -116,3 +120,6 @@ Once configured, Akuvox cameras & door buttons will appear as a device with a ca
 
 If you find this integration useful, consider showing your support:
 <a href="https://www.buymeacoffee.com/nimroddolev" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 30px !important;width: 140px !important;" ></a>
+
+[forum-shield]: https://img.shields.io/badge/community-forum-brightgreen.svg?style=popout
+[forum]: https://community.home-assistant.io/t/akuvox-smartplus-view-door-camera-feeds-open-doors-and-manage-temporary-keys/623187
