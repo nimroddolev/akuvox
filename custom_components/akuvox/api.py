@@ -197,7 +197,6 @@ class AkuvoxApiClient:
             json_data = await self.async_make_rest_server_request()
             self._data.parse_rest_server_response(json_data)
         if self._data.rtsp_ip is None:
-            LOGGER.debug("Fetching RTSP IP address")
             await self.async_make_servers_list_request(
                 self._data.auth_token,
                 self._data.token,
@@ -205,7 +204,6 @@ class AkuvoxApiClient:
 
     def init_api_with_tokens(self, host=None, auth_token=None, token=None, phone_number=None):
         """"Initialize values from saved data/options."""
-        LOGGER.debug("AKUVOX ENTITY CALLED API.init_api_with_tokens() to set token, app token and phone number")
         if host is not None:
             self._data.host = host # type: ignore
         if auth_token is not None:
@@ -354,6 +352,7 @@ class AkuvoxApiClient:
                 self._data.auth_token,
                 self._data.token,
                 self._data.phone_number)
+
         if await self.async_retrieve_device_data() is False:
             return False
         if await self.async_retrieve_temp_keys_data() is False:
