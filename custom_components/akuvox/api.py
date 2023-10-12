@@ -291,8 +291,9 @@ class AkuvoxApiClient:
         }
         obfuscated_number = str(self.get_obfuscated_phone_number(phone_number))
         data = json.dumps({
-            "token": token,
             "auth_token": auth_token,
+            "passwd": auth_token,
+            "token": token,
             "user": obfuscated_number,
         })
         LOGGER.debug("📡 Requesting server list...")
