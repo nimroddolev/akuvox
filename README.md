@@ -103,10 +103,12 @@ Sigining in using your SmartLife app tokens will allow you to remain signed in t
 2. Log out from your SmartPlus app, and then log in with your phone number and SMS code
 
 3. Search for `akuvox`, and you should see the `servers_list` request. Click on it and in the `Requests` tab you should find your `auth_token` and `token` values:
+
+__NOTE: If you see `passwd` instead of `auth_token`, please use the `passwd` value.__
+
 ![mitmproxy](https://github.com/nimroddolev/akuvox/assets/1849295/d7d2b7ba-cc0e-4f64-b62b-43850bbc90c1)
 
-
-5. Enter your phone number, `auth_token` and `token` values and click `SUBMIT`:
+4. Enter your phone number, `auth_token` and `token` values and click `SUBMIT`:
 <img src="https://user-images.githubusercontent.com/1849295/269958871-071008db-c2d8-4455-a612-eb0a9721ea39.png" width="400">
 
 ### You should now have one device per Akuvox door camera
