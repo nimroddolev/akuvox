@@ -169,14 +169,16 @@ class AkuvoxData:
         ret_value = None
         if json_data is not None and len(json_data) > 0:
             new_door_log = json_data[0]
-            if self.latest_door_log is not None and "ID" in new_door_log:
-                if self.latest_door_log["ID"] != new_door_log["ID"]:
-                    LOGGER.debug("New personal door log entry detected:")
-                    LOGGER.debug(" - Initiator: %s", new_door_log["Initiator"])
-                    LOGGER.debug(" - Location: %s", new_door_log["Location"])
-                    LOGGER.debug(" - Door MAC: %s", new_door_log["MAC"])
-                    LOGGER.debug(" - Door Relay: %s", new_door_log["Relay"])
-                    ret_value =  self.latest_door_log
+            if self.latest_door_log is not None and "CaptureTime" in self.latest_door_log:
+                if new_door_log is not None and "CaptureTime" in new_door_log:
+                    # New door event detected
+                    if str(self.latest_door_log["CaptureTime"]) != str(new_door_log["CaptureTime"]):
+                        LOGGER.debug("New personal door log entry detected:")
+                        LOGGER.debug(" - Initiator: %s", new_door_log["Initiator"])
+                        LOGGER.debug(" - Location: %s", new_door_log["Location"])
+                        LOGGER.debug(" - Door MAC: %s", new_door_log["MAC"])
+                        LOGGER.debug(" - Door Relay: %s", new_door_log["Relay"])
+                        ret_value = new_door_log
             self.latest_door_log = new_door_log
         return ret_value
 
@@ -483,11 +485,11 @@ class AkuvoxApiClient:
 
     async def start_polling_personal_door_log(self):
         """Poll the server contineously for the latest personal door log."""
-        asyncio.run_coroutine_threadsafe(self.async_retrieve_personal_door_log(), self.hass.loop)
+        LOGGER.debug("🔄 Poll user's personal door log every 2 seconds..")
+        self.hass.async_create_task(self.async_retrieve_personal_door_log())
 
     async def async_retrieve_personal_door_log(self) -> bool:
         """Request and parse the user's door log every 2 seconds."""
-        LOGGER.debug("🔄 Begin polling user's personal door log every 2 seconds..")
         while True:
             json_data = await self.async_get_personal_door_log()
             if json_data is not None:
@@ -516,7 +518,6 @@ class AkuvoxApiClient:
             "x-auth-token": self._data.token,
             "sec-fetch-dest": "empty"
         }
-
         json_data = await self._api_wrapper(method="get", url=url, headers=headers, data=data)
 
         if json_data is not None:
