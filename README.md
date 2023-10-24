@@ -16,6 +16,10 @@ For troubleshooting and general discussion please join the [discussion in the Ho
 
 - [Introduction](#introduction)
 - [Features](#features)
+  - [Door Camera Feeds](#door-camera-feeds)
+  - [Relay Button Control](#relay-button-control)
+  - [Temporary Keys](#temporary-keys)
+  - [Door Open Events](#door-open-events)
 - [Installation](#installation)
   - [Via HACS (Recommended)](#via-hacs-recommended)
   - [Manual Installation](#manual-installation)
