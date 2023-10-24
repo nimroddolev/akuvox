@@ -84,7 +84,7 @@ class AkuvoxData:
 
     def parse_sms_login_response(self, json_data: dict):
         """Parse the sms_login API response."""
-        LOGGER.debug("parse_sms_login_response = %s", json_data)
+        LOGGER.debug("parse_sms_login_response = %s", json.dumps(json_data, indent=4))
         if json_data is not None:
             if "auth_token" in json_data:
                 self.auth_token = json_data["auth_token"]
@@ -174,6 +174,7 @@ class AkuvoxData:
                     LOGGER.debug(" - Initiator: %s", new_door_log["Initiator"])
                     LOGGER.debug(" - Location: %s", new_door_log["Location"])
                     LOGGER.debug(" - Door MAC: %s", new_door_log["MAC"])
+                    LOGGER.debug(" - Door Relay: %s", new_door_log["Relay"])
                     self.latest_door_log = new_door_log
                     return self.latest_door_log
             self.latest_door_log = new_door_log
@@ -415,7 +416,7 @@ class AkuvoxApiClient:
             LOGGER.debug("✅ User's device list retrieved successfully")
             return json_data
 
-        LOGGER.error("❌ Unable to retrieve user's device list'.")
+        LOGGER.error("❌ Unable to retrieve user's device list.")
         return None
 
     def make_opendoor_request(self, name: str, host: str, token: str, data: str):
@@ -476,7 +477,7 @@ class AkuvoxApiClient:
             LOGGER.debug("✅ User's temporary keys list retrieved successfully")
             return json_data
 
-        LOGGER.error("❌ Unable to retrieve user's device list'.")
+        LOGGER.error("❌ Unable to retrieve user's temporary key list.")
         return None
 
     async def start_polling_personal_door_log(self):
@@ -485,20 +486,21 @@ class AkuvoxApiClient:
 
     async def async_retrieve_personal_door_log(self) -> bool:
         """Request and parse the user's door log every 2 seconds."""
+        LOGGER.debug("🔄 Begin polling user's personal door log every 2 seconds..")
         while True:
             json_data = await self.async_get_personal_door_log()
             if json_data is not None:
                 new_door_log = self._data.parse_personal_door_log(json_data)
                 if new_door_log is not None:
                     # Fire HA event
-                    LOGGER.debug("Calling door update event")
+                    LOGGER.debug("🚪 New door open event occurred. Firing akuvox_door_update event")
                     event_name = "akuvox_door_update"
                     self.hass.bus.async_fire(event_name, new_door_log)
             await asyncio.sleep(2)  # Wait for 2 seconds before calling again
 
     async def async_get_personal_door_log(self):
         """Request the user's configuration data."""
-        LOGGER.debug("📡 Retrieving list of user's personal door log...")
+        # LOGGER.debug("📡 Retrieving list of user's personal door log...")
         url = f"https://{API_TEMP_KEY_LIST_HOST}/{API_GET_PERSONAL_DOOR_LOG}"
         data = {}
         headers = {
@@ -517,10 +519,10 @@ class AkuvoxApiClient:
         json_data = await self._api_wrapper(method="get", url=url, headers=headers, data=data)
 
         if json_data is not None:
-            LOGGER.debug("✅ User's personal door log retrieved successfully")
+            # LOGGER.debug("✅ User's personal door log retrieved successfully")
             return json_data
 
-        LOGGER.error("❌ Unable to retrieve user's personal door log")
+        # LOGGER.error("❌ Unable to retrieve user's personal door log")
         return None
 
     ###################
