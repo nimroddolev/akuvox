@@ -30,6 +30,7 @@ from .const import (
     API_OPENDOOR,
     API_TEMP_KEY_LIST_HOST,
     API_GET_PERSONAL_TEMP_KEY_LIST,
+    API_GET_PERSONAL_DOOR_LOG,
     TEMP_KEY_QR_HOST,
 )
 
@@ -59,6 +60,8 @@ class AkuvoxData:
     camera_data = []
     door_relay_data = []
     door_keys_data = []
+    latest_door_log = {}
+
 
     def __init__(self, entry: ConfigEntry):
         """Initialize the Akuvox API client."""
@@ -160,6 +163,22 @@ class AkuvoxData:
                          str(len(door_keys_data["doors"])),
                          "" if len(door_keys_data["doors"]) == 1 else "s")
 
+
+    def parse_personal_door_log(self, json_data: list):
+        """Parse the getDoorLog API response."""
+        if json_data is not None and len(json_data) > 0:
+            new_door_log = json_data[0]
+            if self.latest_door_log is not None and "ID" in self.latest_door_log:
+                if self.latest_door_log["ID"] != new_door_log["ID"]:
+                    LOGGER.debug("New personal door log entry detected:")
+                    LOGGER.debug(" - Initiator: %s", new_door_log["Initiator"])
+                    LOGGER.debug(" - Location: %s", new_door_log["Location"])
+                    LOGGER.debug(" - Door MAC: %s", new_door_log["MAC"])
+                    self.latest_door_log = new_door_log
+                    return self.latest_door_log
+            self.latest_door_log = new_door_log
+        return None
+
     ###################
 
     def get_device_data(self) -> dict:
@@ -171,6 +190,7 @@ class AkuvoxData:
             "camera_data": self.camera_data,
             "door_relay_data": self.door_relay_data,
             "door_keys_data": self.door_keys_data,
+            "latest_door_log": self.latest_door_log
         }
 
 
@@ -201,6 +221,8 @@ class AkuvoxApiClient:
                 self._data.auth_token,
                 self._data.token,
                 self._data.phone_number)
+        # Begin polling personal door log
+        await self.start_polling_personal_door_log()
 
     def init_api_with_tokens(self, host=None, auth_token=None, token=None, phone_number=None):
         """"Initialize values from saved data/options."""
@@ -354,6 +376,7 @@ class AkuvoxApiClient:
                 self._data.token,
                 self._data.phone_number)
 
+
         if await self.async_retrieve_device_data() is False:
             return False
         if await self.async_retrieve_temp_keys_data() is False:
@@ -457,6 +480,50 @@ class AkuvoxApiClient:
             return json_data
 
         LOGGER.error("❌ Unable to retrieve user's device list'.")
+        return None
+
+    async def start_polling_personal_door_log(self):
+        """Poll the server contineously for the latest personal door log."""
+        asyncio.run_coroutine_threadsafe(self.async_retrieve_personal_door_log(), self.hass.loop)
+
+    async def async_retrieve_personal_door_log(self) -> bool:
+        """Request and parse the user's door log every 2 seconds."""
+        while True:
+            json_data = await self.async_get_personal_door_log()
+            if json_data is not None:
+                new_door_log = self._data.parse_personal_door_log(json_data)
+                if new_door_log is not None:
+                    # Fire HA event
+                    LOGGER.debug("Calling door update event")
+                    event_name = "akuvox_door_update"
+                    self.hass.bus.async_fire(event_name, new_door_log)
+            await asyncio.sleep(2)  # Wait for 2 seconds before calling again
+
+    async def async_get_personal_door_log(self):
+        """Request the user's configuration data."""
+        LOGGER.debug("📡 Retrieving list of user's personal door log...")
+        url = f"https://{API_TEMP_KEY_LIST_HOST}/{API_GET_PERSONAL_DOOR_LOG}"
+        data = {}
+        headers = {
+            "x-cloud-version": "6.4",
+            "accept": "application/json, text/plain, */*",
+            "sec-fetch-site": "same-origin",
+            "accept-language": "en-AU,en;q=0.9",
+            "sec-fetch-mode": "cors",
+            "x-cloud-lang": "en",
+            "user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) SmartPlus/6.2",
+            "referer": f"https://ecloud.akuvox.com/smartplus/Activities.html?TOKEN={self._data.token}&USERTYPE=20&VERSION=6.6",
+            "x-auth-token": self._data.token,
+            "sec-fetch-dest": "empty"
+        }
+
+        json_data = await self._api_wrapper(method="get", url=url, headers=headers, data=data)
+
+        if json_data is not None:
+            LOGGER.debug("✅ User's personal door log retrieved successfully")
+            return json_data
+
+        LOGGER.error("❌ Unable to retrieve user's personal door log")
         return None
 
     ###################
