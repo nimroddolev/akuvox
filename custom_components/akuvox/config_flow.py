@@ -366,36 +366,35 @@ class AkuvoxOptionsFlowHandler(config_entries.OptionsFlow):
             await self.akuvox_api_client.async_init_api_data()
 
             # Retrieve device data
-            user_data_retrieved = await self.akuvox_api_client.async_retrieve_user_data_with_tokens(
+            await self.akuvox_api_client.async_retrieve_user_data_with_tokens(
                 user_input["auth_token"],
                 user_input["token"])
-            if user_data_retrieved is True:
-                devices_json = self.akuvox_api_client.get_devices_json()
-                if devices_json is not None and all(key in devices_json for key in (
-                    "camera_data",
-                    "door_relay_data",
-                    "door_keys_data")
-                ):
-                    camera_data = devices_json["camera_data"]
-                    door_relay_data = devices_json["door_relay_data"]
-                    door_keys_data = devices_json["door_keys_data"]
-                    options_schema = vol.Schema({
-                        vol.Required("override",
-                                        default=config_options.get("override", None)): bool,
-                        vol.Required("token", default=config_options.get("token", None)): str,
-                        vol.Optional("camera_data", default=camera_data): dict,
-                        vol.Optional("door_relay_data", default=door_relay_data): dict,
-                        vol.Optional("door_keys_data", default=door_keys_data): dict,
-                    })
+            devices_json = self.akuvox_api_client.get_devices_json()
+            if devices_json is not None and all(key in devices_json for key in (
+                "camera_data",
+                "door_relay_data",
+                "door_keys_data")
+            ):
+                camera_data = devices_json["camera_data"]
+                door_relay_data = devices_json["door_relay_data"]
+                door_keys_data = devices_json["door_keys_data"]
+                options_schema = vol.Schema({
+                    vol.Required("override",
+                                    default=config_options.get("override", None)): bool,
+                    vol.Required("token", default=config_options.get("token", None)): str,
+                    vol.Optional("camera_data", default=camera_data): dict,
+                    vol.Optional("door_relay_data", default=door_relay_data): dict,
+                    vol.Optional("door_keys_data", default=door_keys_data): dict,
+                })
 
-                    ############################################
-                    # User input is valid - update the options #
-                    ############################################
-                    LOGGER.debug("Configuration values changed. Updating...")
-                    return self.async_create_entry(
-                        data=user_input,
-                        description_placeholders=user_input,
-                    )
+                ############################################
+                # User input is valid - update the options #
+                ############################################
+                LOGGER.debug("Configuration values changed. Updating...")
+                return self.async_create_entry(
+                    data=user_input,
+                    description_placeholders=user_input,
+                )
 
             data_schema = {
                 vol.Required(

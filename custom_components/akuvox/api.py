@@ -376,11 +376,8 @@ class AkuvoxApiClient:
                 self._data.token,
                 self._data.phone_number)
 
-
-        if await self.async_retrieve_device_data() is False:
-            return False
-        if await self.async_retrieve_temp_keys_data() is False:
-            return False
+        await self.async_retrieve_device_data()
+        await self.async_retrieve_temp_keys_data()
         return True
 
     async def async_retrieve_device_data(self) -> bool:
@@ -572,10 +569,12 @@ class AkuvoxApiClient:
                     return json_data
 
                 # Temp key requests
-                if "code" in json_data and json_data["code"] == 0:
-                    if "data" in json_data:
-                        return json_data["data"]
-                    return json_data
+                if "code" in json_data:
+                    if json_data["code"] == 0:
+                        if "data" in json_data:
+                            return json_data["data"]
+                        return json_data
+                    return []
 
                 LOGGER.warning("🤨 Response: %s", str(json_data))
             except Exception as error:
