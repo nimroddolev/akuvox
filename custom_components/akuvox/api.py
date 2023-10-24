@@ -422,6 +422,7 @@ class AkuvoxApiClient:
     def make_opendoor_request(self, name: str, host: str, token: str, data: str):
         """Request the user's configuration data."""
         LOGGER.debug("📡 Sending request to open door '%s'...", name)
+        LOGGER.debug("Request data = %s", str(data))
         url = f"https://{host}/{API_OPENDOOR}?token={token}"
         headers = {
             "Host": host,

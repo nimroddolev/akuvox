@@ -27,7 +27,7 @@ async def async_setup_entry(hass, entry, async_add_devices):
 
     entities = []
     for door_relay in door_relay_data:
-        name = door_relay["name"]
+        name = door_relay["name"] + ", relay " + door_relay["relay_id"]
         mac = door_relay["mac"]
         relay_id = door_relay["relay_id"]
         data = f"mac={mac}&relay={relay_id}"
