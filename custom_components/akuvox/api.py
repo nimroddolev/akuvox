@@ -166,19 +166,19 @@ class AkuvoxData:
 
     def parse_personal_door_log(self, json_data: list):
         """Parse the getDoorLog API response."""
+        ret_value = None
         if json_data is not None and len(json_data) > 0:
             new_door_log = json_data[0]
-            if self.latest_door_log is not None and "ID" in self.latest_door_log:
+            if self.latest_door_log is not None and "ID" in new_door_log:
                 if self.latest_door_log["ID"] != new_door_log["ID"]:
                     LOGGER.debug("New personal door log entry detected:")
                     LOGGER.debug(" - Initiator: %s", new_door_log["Initiator"])
                     LOGGER.debug(" - Location: %s", new_door_log["Location"])
                     LOGGER.debug(" - Door MAC: %s", new_door_log["MAC"])
                     LOGGER.debug(" - Door Relay: %s", new_door_log["Relay"])
-                    self.latest_door_log = new_door_log
-                    return self.latest_door_log
+                    ret_value =  self.latest_door_log
             self.latest_door_log = new_door_log
-        return None
+        return ret_value
 
     ###################
 
