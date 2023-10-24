@@ -44,7 +44,7 @@ View your temporary access keys.
 ### Door Open Events
 Whenever a door is opened, the `akuvox_door_update` event is fired in Home Assistant.
 
-For example, an automation to send a notification whenever a door is opened:
+This could be used in an automation to send a notification whenever a door is opened:
 
 ```
 trigger:
