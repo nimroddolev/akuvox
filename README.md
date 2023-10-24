@@ -16,6 +16,10 @@ For troubleshooting and general discussion please join the [discussion in the Ho
 
 - [Introduction](#introduction)
 - [Features](#features)
+  - [Door Camera Feeds](#door-camera-feeds)
+  - [Relay Button Control](#relay-button-control)
+  - [Temporary Keys](#temporary-keys)
+  - [Door Open Events](#door-open-events)
 - [Installation](#installation)
   - [Via HACS (Recommended)](#via-hacs-recommended)
   - [Manual Installation](#manual-installation)
@@ -28,9 +32,34 @@ For troubleshooting and general discussion please join the [discussion in the Ho
 
 ## Features
 
-- **Door Camera Feeds:** Access live camera feeds from your Akuvox SmartPlus Door Intercom.
-- **Relay Button Control:** Open doors remotely using Home Assistant.
-- **Temporary Keys:** View your temporary access keys.
+### Door Camera Feeds
+Access live camera feeds from your Akuvox SmartPlus Door Intercom.
+
+### Relay Button Control
+Open doors remotely using Home Assistant.
+
+### Temporary Keys
+View your temporary access keys.
+
+### Door Open Events
+Whenever a door is opened, the `akuvox_door_update` event is fired in Home Assistant.
+
+This could be used in an automation to send a notification whenever a door is opened:
+
+```
+trigger:
+  - platform: event
+    event_type: akuvox_door_update
+action:
+  - service: notify.notify
+    data:
+      title: Door Opened
+      mwessage: >-
+        {{ trigger.event.data.Location }} opened by {{ trigger.event.data.Initiator }}
+```
+![notification](https://github.com/nimroddolev/akuvox/assets/1849295/15a49b4f-0b2f-4760-9864-66c06aa483be)
+
+
 
 ***
 
