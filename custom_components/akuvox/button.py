@@ -27,7 +27,7 @@ async def async_setup_entry(hass, entry, async_add_devices):
 
     entities = []
     for door_relay in door_relay_data:
-        name = door_relay["name"] + ", relay " + door_relay["relay_id"]
+        name = door_relay["name"]
         mac = door_relay["mac"]
         relay_id = door_relay["relay_id"]
         data = f"mac={mac}&relay={relay_id}"
@@ -37,6 +37,7 @@ async def async_setup_entry(hass, entry, async_add_devices):
                 client=client,
                 entry=entry,
                 name=name,
+                relay_id=relay_id,
                 data=data,
             )
         )
@@ -52,6 +53,7 @@ class AkuvoxDoorRelayEntity(ButtonEntity, AkuvoxEntity):
         client: AkuvoxApiClient,
         entry,
         name: str,
+        relay_id: str,
         data: str,
     ) -> None:
         """Initialize the Akuvox door relay class."""
@@ -61,17 +63,17 @@ class AkuvoxDoorRelayEntity(ButtonEntity, AkuvoxEntity):
             client=client,
             entry=entry
         )
-
+        unique_name = name + ", " + relay_id
         self._client = client
-        self._name = name
+        self._name = unique_name
         self._host = self.get_saved_value("host")
         self._token = self.get_saved_value("token")
         self._data = data
 
-        self._attr_unique_id = name
-        self._attr_name = name
+        self._attr_unique_id = unique_name
+        self._attr_name = unique_name
 
-        LOGGER.debug("Adding Akuvox door relay '%s'", self._attr_unique_id)
+        LOGGER.debug("Adding Akuvox door relay '%s'", unique_name)
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, name)},  # type: ignore
             name=name,
