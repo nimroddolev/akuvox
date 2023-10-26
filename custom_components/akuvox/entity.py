@@ -16,7 +16,6 @@ class AkuvoxEntity(Entity):
         entry
         ) -> None:
         """Initialize the Akuvox door relay class."""
-        LOGGER.debug("In AkuvoxEntity init")
         super().__init__()
         self.entry = entry
         self.client = client
@@ -27,15 +26,9 @@ class AkuvoxEntity(Entity):
         phone_number = self.get_saved_value("phone_number")
         self.client.init_api_with_tokens(host, auth_token, token, phone_number)
 
-        # LOGGER.debug("Adding temporary door key '%s'", self._attr_unique_id)
-        # self._attr_device_info = DeviceInfo(
-        #     identifiers={(DOMAIN, "Temporary Keys")},  # type: ignore
-        #     name="Temporary Keys",
-        #     model=VERSION,
-        #     manufacturer=NAME,
-        # )
-
     def get_saved_value(self, key: str):
         """Get the value for a given key. Options flow 1st, Config flow 2nd."""
-        override = self.entry.options.get("override", False)
-        return self.entry.options.get(key, self.entry.data[key]) if override is True else self.entry.data[key]
+        should_override = self.entry.options.get("override", False)
+        if should_override is True:
+            return self.entry.options.get(key, self.entry.data[key])
+        return self.entry.data[key]
