@@ -502,7 +502,7 @@ class AkuvoxApiClient:
             await asyncio.sleep(2)  # Wait for 2 seconds before calling again
 
     async def async_get_personal_door_log(self):
-        """Request the user's configuration data."""
+        """Request the user's personal door log data."""
         # LOGGER.debug("📡 Retrieving list of user's personal door log...")
         url = f"https://{API_TEMP_KEY_LIST_HOST}/{API_GET_PERSONAL_DOOR_LOG}"
         data = {}
@@ -514,7 +514,7 @@ class AkuvoxApiClient:
             "sec-fetch-mode": "cors",
             "x-cloud-lang": "en",
             "user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) SmartPlus/6.2",
-            "referer": f"https://ecloud.akuvox.com/smartplus/Activities.html?TOKEN={self._data.token}&USERTYPE=20&VERSION=6.6",
+            "referer": f"https://ecloud.akuvox.com/smartplus/Activities.html?TOKEN={self._data.token}",
             "x-auth-token": self._data.token,
             "sec-fetch-dest": "empty"
         }
@@ -540,18 +540,18 @@ class AkuvoxApiClient:
     ):
         """Get information from the API."""
         try:
-            async with async_timeout.timeout(10):
+            async with async_timeout.timeout(20):
                 func = self.post_request if method == "post" else self.get_request
-                response = await self.hass.async_add_executor_job(func, url, headers, data)
+                response = await self.hass.async_add_executor_job(func, url, headers, data, 20)
                 return self.process_response(response)
 
         except asyncio.TimeoutError as exception:
             raise AkuvoxApiClientCommunicationError(
-                f"Timeout error fetching information {exception}",
+                f"Timeout error fetching information: {exception}",
             ) from exception
         except (aiohttp.ClientError, socket.gaierror) as exception:
             raise AkuvoxApiClientCommunicationError(
-                f"Error fetching information {exception}",
+                f"Error fetching information: {exception}",
             ) from exception
         except Exception as exception:  # pylint: disable=broad-except
             raise AkuvoxApiClientError(
