@@ -55,7 +55,7 @@ action:
     data:
       title: Door Opened
       mwessage: >-
-        {{ trigger.event.data.Location }} opened by {{ trigger.event.data.Initiator }}
+        {{ trigger.event.data.Location }} door opened by {{ trigger.event.data.Initiator }}
 ```
 ![notification](https://github.com/nimroddolev/akuvox/assets/1849295/15a49b4f-0b2f-4760-9864-66c06aa483be)
 
