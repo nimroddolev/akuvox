@@ -658,7 +658,7 @@ class AkuvoxApiClient:
         return int(transformed_str)
 
     def get_activities_host(self):
-        """The host address used for activities API requests"""
+        """Get the host address string for activities API requests."""
         if self._data.app_type == "single":
             return API_APP_HOST + "single"
         return API_APP_HOST + "community"
