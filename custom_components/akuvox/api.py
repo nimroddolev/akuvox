@@ -540,9 +540,9 @@ class AkuvoxApiClient:
     ):
         """Get information from the API."""
         try:
-            async with async_timeout.timeout(20):
+            async with async_timeout.timeout(10):
                 func = self.post_request if method == "post" else self.get_request
-                response = await self.hass.async_add_executor_job(func, url, headers, data, 20)
+                response = await self.hass.async_add_executor_job(func, url, headers, data, 10)
                 return self.process_response(response)
 
         except asyncio.TimeoutError as exception:
