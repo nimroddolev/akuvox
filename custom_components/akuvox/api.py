@@ -28,7 +28,7 @@ from .const import (
     API_USERCONF,
     OPENDOOR_API_VERSION,
     API_OPENDOOR,
-    API_TEMP_KEY_LIST_HOST,
+    API_APP_HOST,
     API_GET_PERSONAL_TEMP_KEY_LIST,
     API_GET_PERSONAL_DOOR_LOG,
     TEMP_KEY_QR_HOST,
@@ -52,6 +52,7 @@ class AkuvoxData:
     """Data class holding key data from API requests."""
 
     host: str = ""
+    app_type: str = ""
     auth_token: str = ""
     token: str = ""
     phone_number: str = ""
@@ -459,7 +460,8 @@ class AkuvoxApiClient:
     async def async_get_temp_key_list(self):
         """Request the user's configuration data."""
         LOGGER.debug("📡 Retrieving list of user's temporary keys...")
-        url = f"https://{API_TEMP_KEY_LIST_HOST}/{API_GET_PERSONAL_TEMP_KEY_LIST}"
+        host = self.get_activities_host()
+        url = f"https://{host}/{API_GET_PERSONAL_TEMP_KEY_LIST}"
         data = {}
         headers = {
             "x-cloud-version": "6.4",
@@ -504,7 +506,8 @@ class AkuvoxApiClient:
     async def async_get_personal_door_log(self):
         """Request the user's personal door log data."""
         # LOGGER.debug("📡 Retrieving list of user's personal door log...")
-        url = f"https://{API_TEMP_KEY_LIST_HOST}/{API_GET_PERSONAL_DOOR_LOG}"
+        host = self.get_activities_host()
+        url = f"https://{host}/{API_GET_PERSONAL_DOOR_LOG}"
         data = {}
         headers = {
             "x-cloud-version": "6.4",
@@ -546,6 +549,11 @@ class AkuvoxApiClient:
                 return self.process_response(response)
 
         except asyncio.TimeoutError as exception:
+            # Fix for accounts which use the "single" endpoint instead of "community"
+            if "app/community/" in url:
+                self._data.app_type = "single"
+                url = url.replace("app/community/", "app/single/")
+                return self._api_wrapper(method, url, data, headers)
             raise AkuvoxApiClientCommunicationError(
                 f"Timeout error fetching information: {exception}",
             ) from exception
@@ -648,4 +656,10 @@ class AkuvoxApiClient:
             transformed_digit = (digit + 3) % 10
             transformed_str += str(transformed_digit)
         return int(transformed_str)
+
+    def get_activities_host(self):
+        """The host address used for activities API requests"""
+        if self._data.app_type == "single":
+            return API_APP_HOST + "single"
+        return API_APP_HOST + "community"
 
