@@ -2,7 +2,6 @@
 # from homeassistant.components.entity import Entity
 from homeassistant.helpers.entity import Entity
 from .api import AkuvoxApiClient
-from .const import LOGGER
 
 class AkuvoxEntity(Entity):
     """Akuvox temporary door key class."""
