@@ -551,9 +551,13 @@ class AkuvoxApiClient:
         except asyncio.TimeoutError as exception:
             # Fix for accounts which use the "single" endpoint instead of "community"
             if "app/community/" in url:
+                LOGGER.warning("Timeout occured for 'community' API %s request: %s - Retry using 'single'...",
+                               method, url)
                 self._data.app_type = "single"
                 url = url.replace("app/community/", "app/single/")
                 return self._api_wrapper(method, url, data, headers)
+            if "app/single/" in url:
+                LOGGER.error("Timeout occured for app/single API %s request: %s", method, url)
             raise AkuvoxApiClientCommunicationError(
                 f"Timeout error fetching information: {exception}",
             ) from exception
