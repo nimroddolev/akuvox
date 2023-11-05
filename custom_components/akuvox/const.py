@@ -34,3 +34,6 @@ API_GET_PERSONAL_DOOR_LOG = "log/getDoorLog?row=1"
 TEMP_KEY_QR_HOST = "ecloud.akuvox.com"
 
 DATA_STORAGE_KEY = "akuvox_data_storage_key"
+
+CAPTURE_TIME_KEY = "CaptureTime"
+PIC_URL_KEY = "PicUrl"

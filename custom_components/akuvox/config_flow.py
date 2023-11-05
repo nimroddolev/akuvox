@@ -3,7 +3,9 @@ from __future__ import annotations
 
 from homeassistant import config_entries
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.helpers.selector import selector
+from homeassistant.helpers.selector import (
+    selector
+)
 
 import voluptuous as vol
 from .api import AkuvoxApiClient
@@ -328,6 +330,10 @@ class AkuvoxOptionsFlowHandler(config_entries.OptionsFlow):
         config_options = dict(self.config_entry.options)
         config_data = dict(self.config_entry.data)
 
+        event_screenshot_options = {
+            "asap": "Receive events once generated, without waiting for camera screenshot URLs.",
+            "wait": "Wait for camera screenshot URLs to become available before triggering the event (typically adds a delay of 0-3 seconds)."
+        }
         options_schema = vol.Schema({
             vol.Required("override",
                          default=self.get_data_key_value("override", False) # type: ignore
@@ -338,6 +344,9 @@ class AkuvoxOptionsFlowHandler(config_entries.OptionsFlow):
             vol.Optional("token",
                          default=self.get_data_key_value("token", False) # type: ignore
             ): str,
+            vol.Required("event_screenshot_options",
+                         default=self.get_data_key_value("event_screenshot_options", "asap") # type: ignore
+            ): vol.In(event_screenshot_options),
         })
 
         # Show the form with the current options
@@ -349,20 +358,27 @@ class AkuvoxOptionsFlowHandler(config_entries.OptionsFlow):
                 last_step=True
             )
 
-        # Use the new tokens supplied by the user
-        camera_data = None
-        door_relay_data = None
-        door_keys_data = None
-        if user_input.get("override", False) is True:
-            LOGGER.debug("New user tokens set. Refreshing device data...")
+        wait_for_image_url = True if user_input.get("event_screenshot_options", "asap") == "wait" else False
 
-            # Initialize the API client
-            if self.akuvox_api_client is None:
-                self.akuvox_api_client = AkuvoxApiClient(
-                    session=async_get_clientsession(self.hass),
-                    hass=self.hass,
-                    data=None
-                )
+        # Initialize the API client
+        if self.akuvox_api_client is None:
+            self.akuvox_api_client = AkuvoxApiClient(
+                session=async_get_clientsession(self.hass),
+                hass=self.hass,
+                entry={
+                    "configured" : {
+                        "host": self.get_data_key_value("host", None),
+                        "auth_token": self.get_data_key_value("auth_token", None),
+                        "token": self.get_data_key_value("token", None),
+                        "phone_number": self.get_data_key_value("phone_number", None),
+                        "wait_for_image_url": wait_for_image_url
+                    }
+                }
+            )
+
+        # User wishes to use other SmartLife account tokens
+        if user_input.get("override", False) is True:
+            LOGGER.debug("Use custom token strings...")
             await self.akuvox_api_client.async_init_api_data()
 
             # Retrieve device data
@@ -386,53 +402,53 @@ class AkuvoxOptionsFlowHandler(config_entries.OptionsFlow):
                     vol.Optional("door_relay_data", default=door_relay_data): dict,
                     vol.Optional("door_keys_data", default=door_keys_data): dict,
                 })
-
-                ############################################
-                # User input is valid - update the options #
-                ############################################
-                LOGGER.debug("Configuration values changed. Updating...")
-                return self.async_create_entry(
-                    data=user_input,
-                    description_placeholders=user_input,
+            else:
+                data_schema = {
+                    vol.Required(
+                        "override",
+                        msg=None,
+                        default=user_input.get("override", False),
+                        description={
+                            "auth_token": f"Current auth_token: {config_data['auth_token']}",
+                            "token": f"Current token: {config_data['token']}",
+                        },
+                    ): bool,
+                    vol.Optional(
+                        "auth_token",
+                        msg=None,
+                        default=user_input.get("auth_token", ""),
+                        description="Your SmartPlus user's auth_token."
+                    ): str,
+                    vol.Optional(
+                        "token",
+                        msg=None,
+                        default=user_input.get("token", ""),
+                        description="Your SmartPlus user's token."
+                    ): str,
+                    vol.Required(
+                        "wait_for_image_url",
+                        msg=None,
+                        default=bool(wait_for_image_url) # type: ignore
+                    ): bool
+                }
+                return self.async_show_form(
+                    step_id="init",
+                    data_schema=vol.Schema(data_schema),
+                    errors={"token": ("Unable to receive device list. Check your token.")}
                 )
 
-            data_schema = {
-                vol.Required(
-                    "override",
-                    msg=None,
-                    default=user_input.get("override", False),
-                    description={
-                        "auth_token": f"Current auth_token: {config_data['auth_token']}",
-                        "token": f"Current token: {config_data['token']}",
-                    },
-                ): bool,
-                vol.Optional(
-                    "token",
-                    msg=None,
-                    default=user_input.get("token", ""),
-                    description="Your SmartPlus user's token."
-                ): str
-            }
-            return self.async_show_form(
-                step_id="init",
-                data_schema=vol.Schema(data_schema),
-                errors={"token": ("Unable to receive device list. Check your token.")}
-            )
-
         # User input is valid, update the options
-        LOGGER.debug("Initial token set.")
-        user_input = None
+        LOGGER.debug("Updating configuration...")
+        # user_input = None
         return self.async_create_entry(
             data=user_input, # type: ignore
-            description_placeholders=user_input,
+            title="",
         )
 
     def get_data_key_value(self, key, placeholder=None):
         """Get the value for a given key. Options flow 1st, Config flow 2nd."""
-        config_options = dict(self.config_entry.options)
-        config_data = dict(self.config_entry.data)
-        if key in config_options:
-            return config_options[key]
-        if key in config_data:
-            return config_data[key]
+        dicts = [dict(self.config_entry.options), dict(self.config_entry.data)]
+        for p_dict in dicts:
+            if key in p_dict:
+                return p_dict[key]
         return placeholder

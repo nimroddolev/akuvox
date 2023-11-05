@@ -32,6 +32,8 @@ from .const import (
     API_GET_PERSONAL_TEMP_KEY_LIST,
     API_GET_PERSONAL_DOOR_LOG,
     TEMP_KEY_QR_HOST,
+    PIC_URL_KEY,
+    CAPTURE_TIME_KEY,
 )
 
 
@@ -56,6 +58,7 @@ class AkuvoxData:
     auth_token: str = ""
     token: str = ""
     phone_number: str = ""
+    wait_for_image_url: bool = False
     rtsp_ip: str = ""
     project_name: str = ""
     camera_data = []
@@ -70,12 +73,20 @@ class AkuvoxData:
         self.auth_token = self.get_value_for_key(entry, "auth_token") # type: ignore
         self.token = self.get_value_for_key(entry, "token") # type: ignore
         self.phone_number = self.get_value_for_key(entry, "phone_number") # type: ignore
+        self.wait_for_image_url = bool(self.get_value_for_key(entry, "wait_for_image_url")) # type: ignore
 
     def get_value_for_key(self, entry: ConfigEntry, key: str):
-        """Get the value for a given key. 1st check: options, 2nd check: data."""
+        """Get the value for a given key. 1st check: configured, 2nd check: options, 3rd check: data."""
         if entry is not None:
-            override = entry.options.get("override", False)
-            return entry.options.get(key, entry.data[key]) if override is True else entry.data[key]
+            if isinstance(entry, dict):
+                if key in entry["configured"]: # type: ignore
+                    return entry["configured"][key] # type: ignore
+                return None
+            override = entry.options.get("override", False) or key == "wait_for_image_url"
+            placeholder = None if key not in entry.data else entry.data[key]
+            if override:
+                return entry.options.get(key, placeholder)
+            return placeholder
         return None
 
     def parse_rest_server_response(self, json_data: dict):
@@ -170,16 +181,24 @@ class AkuvoxData:
         ret_value = None
         if json_data is not None and len(json_data) > 0:
             new_door_log = json_data[0]
-            if self.latest_door_log is not None and "CaptureTime" in self.latest_door_log:
-                if new_door_log is not None and "CaptureTime" in new_door_log:
+            if self.latest_door_log is not None and CAPTURE_TIME_KEY in self.latest_door_log:
+                if new_door_log is not None and CAPTURE_TIME_KEY in new_door_log:
+                    # Old door open event
+                    if str(self.latest_door_log[CAPTURE_TIME_KEY]) == str(new_door_log[CAPTURE_TIME_KEY]):
+                        return None
+                    # Screenshot required and currently unavailable
+                    if self.wait_for_image_url is True:
+                        if PIC_URL_KEY in new_door_log and new_door_log[PIC_URL_KEY] == "":
+                            LOGGER.debug("New door entry detected --> Waiting for screenshot URL...")
+                            return None
                     # New door event detected
-                    if str(self.latest_door_log["CaptureTime"]) != str(new_door_log["CaptureTime"]):
-                        LOGGER.debug("New personal door log entry detected:")
-                        LOGGER.debug(" - Initiator: %s", new_door_log["Initiator"])
-                        LOGGER.debug(" - Location: %s", new_door_log["Location"])
-                        LOGGER.debug(" - Door MAC: %s", new_door_log["MAC"])
-                        LOGGER.debug(" - Door Relay: %s", new_door_log["Relay"])
-                        ret_value = new_door_log
+                    LOGGER.debug("ℹ️ New personal door log entry detected:")
+                    LOGGER.debug(" - Initiator: %s", new_door_log["Initiator"])
+                    LOGGER.debug(" - Location: %s", new_door_log["Location"])
+                    LOGGER.debug(" - Door MAC: %s", new_door_log["MAC"])
+                    LOGGER.debug(" - Door Relay: %s", new_door_log["Relay"])
+                    LOGGER.debug(" - Camera screenshot URL: %s", new_door_log["PicUrl"])
+                    ret_value = new_door_log
             self.latest_door_log = new_door_log
         return ret_value
 

@@ -46,12 +46,13 @@
     "options": {
         "step": {
             "init": {
-                "title": "Replace User Token",
-                "description": "Enter your SmartPlus app user's token to allow Home Assistant to communicate with Akuvox's servers whilst remaining signed in on your device.\n\nRefer to the documentation for instructions on how to extract your token string.",
+                "title": "SmartPlus User Tokens & Event Configuration",
+                "description": "If you signed into the SmartPlus app on your device after adding the integration, you can update your user tokens below. This will allow Home Assistant to communicate with Akuvox's servers while you remain signed in on your device.\n\nPlease refer to the documentation for instructions on how to extract your token string.",
                 "data": {
-                    "override": "Replace your tokens?",
-                    "auth_token": "New auth_token",
-                    "token": "New token"
+                    "override": "Use the following SmartLife account tokens:",
+                    "auth_token": "auth_token",
+                    "token": "token",
+                    "event_screenshot_options": "Screenshot URLS for `akuvox_door_update` events:"
                 }
             }
         }
