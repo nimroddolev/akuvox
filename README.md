@@ -14,7 +14,6 @@ Integrate your Akuvox SmartPlus mobile app with Home Assistant. With this integr
 For troubleshooting and general discussion please join the [discussion in the Home Assistant forum](https://community.home-assistant.io/t/akuvox-smartplus-view-door-camera-feeds-open-doors-and-manage-temporary-keys/623187).
 ## Table of Contents
 
-- [Introduction](#introduction)
 - [Features](#features)
   - [Door Camera Feeds](#door-camera-feeds)
   - [Relay Button Control](#relay-button-control)
@@ -26,6 +25,7 @@ For troubleshooting and general discussion please join the [discussion in the Ho
 - [Adding the Akuvox Integration](#adding-the-akuvox-integration)
   - [Method 1: SMS Verification (Recommended)](#method-1-sms-verification-recommended)
   - [Method 2: App Tokens (Advanced)](#method-2-app-tokens-advanced)
+- [Configuration](#configuration)
 - [Show Your Support](#show-your-support)
 
 ***
@@ -123,9 +123,36 @@ Sigining in via SMS verification will sign you out from the SmartPlus app on you
 
 <img src="https://user-images.githubusercontent.com/1849295/269956800-e5bb633b-db85-4acb-b90d-effa81c1fa05.png" width="400">
 
+
 ### Method 2: App Tokens (Advanced)
 
-Sigining in using your SmartLife app tokens will allow you to remain signed in to the SmartLife app on your device. To obtain your tokens you can use an HTTP proxy (such as [mitmproxy](https://mitmproxy.org/))
+Sigining in using your SmartLife app tokens will allow you to remain signed in to the SmartLife app on your device.
+
+1. Obtain your `auth_token` and `token` values (for help with finding your tokens, please refer to the [Finding you SmartPlus Account Tokens](#finding-your-smartplus-account-tokens) section below).
+
+1. Enter your phone number, `auth_token` and `token` values and click `SUBMIT`:
+<img src="https://user-images.githubusercontent.com/1849295/269958871-071008db-c2d8-4455-a612-eb0a9721ea39.png" width="400">
+
+### You should now have one device per Akuvox door camera with a camera and door relay button/s entity
+
+<img src="https://user-images.githubusercontent.com/1849295/270029169-53f3afaf-146b-466b-8950-b7e19da79565.png" width="600">
+
+Once configured, Akuvox cameras & door buttons will appear as a device with a camera entity and a button entity, which when pressed triggers the door relay and opens the doors directly from Home Assistant.
+
+
+## Configuration
+
+Via the integration's `CONFIGURE` button you can adjust the following:
+
+1. Update your SmartLife account's tokens used to communicate with the Akuvox API. This is particularly useful if you logged into the SmartLife app on your device after adding the integration. For help accessing your account's tokens, please refer to the [Finding you SmartPlus Account Tokens](#finding-your-smartplus-account-tokens) section below.
+   
+1. Choose between two options for `akuvox_door_update` event handling:
+   - Wait for camera screenshots to become available before triggering the event.
+   - Receive the event as soon as it is generated, without waiting for camera screenshots.
+
+## Finding your SmartPlus Account Tokens
+
+To obtain your SmartPlus account tokens you can use an HTTP proxy (such as [mitmproxy](https://mitmproxy.org/))
 
 1. Connect your device to your HTTP proxy
 
@@ -136,16 +163,6 @@ Sigining in using your SmartLife app tokens will allow you to remain signed in t
 __NOTE: If you see `passwd` instead of `auth_token`, please use the `passwd` value.__
 
 ![mitmproxy](https://github.com/nimroddolev/akuvox/assets/1849295/d7d2b7ba-cc0e-4f64-b62b-43850bbc90c1)
-
-4. Enter your phone number, `auth_token` and `token` values and click `SUBMIT`:
-<img src="https://user-images.githubusercontent.com/1849295/269958871-071008db-c2d8-4455-a612-eb0a9721ea39.png" width="400">
-
-### You should now have one device per Akuvox door camera
-
-<img src="https://user-images.githubusercontent.com/1849295/270029169-53f3afaf-146b-466b-8950-b7e19da79565.png" width="600">
-
-
-Once configured, Akuvox cameras & door buttons will appear as a device with a camera entity and a button entity, which when pressed triggers the door relay and opens the doors directly from Home Assistant.
 
 ## Show Your Support
 
