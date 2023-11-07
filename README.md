@@ -26,6 +26,7 @@ For troubleshooting and general discussion please join the [discussion in the Ho
   - [Method 1: SMS Verification (Recommended)](#method-1-sms-verification-recommended)
   - [Method 2: App Tokens (Advanced)](#method-2-app-tokens-advanced)
 - [Configuration](#configuration)
+- [Finding Your SmartPlus Account Tokens](#finding-your-smartplus-account-tokens)
 - [Show Your Support](#show-your-support)
 
 ***
