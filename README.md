@@ -161,7 +161,7 @@ To obtain your SmartPlus account tokens you can use an HTTP proxy (such as [mitm
 
 3. Search for `akuvox`, and you should see the `servers_list` request. Click on it and in the `Requests` tab you should find your `auth_token` and `token` values:
 
-__NOTE: If you see `passwd` instead of `auth_token`, please use the `passwd` value.__
+__NOTE: If you see `passwd` instead of `auth_token`, please use the `passwd` value as your `auth_token`.__
 
 ![mitmproxy](https://github.com/nimroddolev/akuvox/assets/1849295/d7d2b7ba-cc0e-4f64-b62b-43850bbc90c1)
 
