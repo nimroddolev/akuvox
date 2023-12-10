@@ -275,7 +275,7 @@ class AkuvoxApiClient:
         )
         if json_data is not None:
             LOGGER.debug("✅ REST server data received successfully")
-            return json_data
+            return json_data # type: ignore
 
         LOGGER.error("❌ Unable to reach Akuvox server.")
         return {}
@@ -306,7 +306,7 @@ class AkuvoxApiClient:
             data=data,
         )
         if response is not None:
-            if response["result"] == 0:
+            if response["result"] == 0: # type: ignore
                 LOGGER.debug("✅ SMS code request successful")
                 return True
 
@@ -350,7 +350,7 @@ class AkuvoxApiClient:
         )
         if json_data is not None:
             LOGGER.debug("✅ Server list retrieved successfully")
-            self._data.parse_sms_login_response(json_data)
+            self._data.parse_sms_login_response(json_data) # type: ignore
             return True
 
         LOGGER.error("❌ Unable to retrieve server list.")
@@ -361,7 +361,7 @@ class AkuvoxApiClient:
 
         login_data = await self.async_validate_sms_code(phone_number, country_code, sms_code)
         if login_data is not None:
-            self._data.parse_sms_login_response(login_data)
+            self._data.parse_sms_login_response(login_data) # type: ignore
 
             # Retrieve connected device data
             await self.async_retrieve_device_data()
@@ -407,7 +407,7 @@ class AkuvoxApiClient:
         """Request and parse the user's device data."""
         user_conf_data = await self.async_user_conf()
         if user_conf_data is not None:
-            self._data.parse_userconf_data(user_conf_data)
+            self._data.parse_userconf_data(user_conf_data) # type: ignore
             return True
         return False
 
