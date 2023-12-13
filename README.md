@@ -12,13 +12,26 @@ Integrate your Akuvox SmartPlus mobile app with Home Assistant. With this integr
 **Disclaimer:** This integration is not affiliated with or endorsed by Akuvox. It is a community-contributed project and is provided as-is without any warranty or guarantee. Use it at your own discretion and responsibility.
 
 For troubleshooting and general discussion please join the [discussion in the Home Assistant forum](https://community.home-assistant.io/t/akuvox-smartplus-view-door-camera-feeds-open-doors-and-manage-temporary-keys/623187).
+
+---
+
+## Show Your Support
+
+If you find this integration useful, consider showing your support:
+<a href="https://www.buymeacoffee.com/nimroddolev" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 30px !important;width: 140px !important;" ></a>
+
+---
+
+[forum-shield]: https://img.shields.io/badge/community-forum-brightgreen.svg?style=popout
+[forum]: https://community.home-assistant.io/t/akuvox-smartplus-view-door-camera-feeds-open-doors-and-manage-temporary-keys/623187
+
 ## Table of Contents
 
 - [Features](#features)
   - [Door Camera Feeds](#door-camera-feeds)
   - [Relay Button Control](#relay-button-control)
   - [Temporary Keys](#temporary-keys)
-  - [Door Bell & Door Open Events](#door-bell-door-open-events)
+  - [Door Bell & Door Open Events](#door-bell--door-open-events)
 - [Installation](#installation)
   - [Via HACS (Recommended)](#via-hacs-recommended)
   - [Manual Installation](#manual-installation)
@@ -27,7 +40,6 @@ For troubleshooting and general discussion please join the [discussion in the Ho
   - [Method 2: App Tokens (Advanced)](#method-2-app-tokens-advanced)
 - [Configuration](#configuration)
 - [Finding Your SmartPlus Account Tokens](#finding-your-smartplus-account-tokens)
-- [Show Your Support](#show-your-support)
 
 ***
 
@@ -212,10 +224,3 @@ __NOTE: If you see `passwd` instead of `auth_token`, please use the `passwd` val
 
 ![mitmproxy](https://github.com/nimroddolev/akuvox/assets/1849295/d7d2b7ba-cc0e-4f64-b62b-43850bbc90c1)
 
-## Show Your Support
-
-If you find this integration useful, consider showing your support:
-<a href="https://www.buymeacoffee.com/nimroddolev" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 30px !important;width: 140px !important;" ></a>
-
-[forum-shield]: https://img.shields.io/badge/community-forum-brightgreen.svg?style=popout
-[forum]: https://community.home-assistant.io/t/akuvox-smartplus-view-door-camera-feeds-open-doors-and-manage-temporary-keys/623187
