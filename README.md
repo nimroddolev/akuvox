@@ -18,7 +18,7 @@ For troubleshooting and general discussion please join the [discussion in the Ho
   - [Door Camera Feeds](#door-camera-feeds)
   - [Relay Button Control](#relay-button-control)
   - [Temporary Keys](#temporary-keys)
-  - [Door Open Events](#door-open-events)
+  - [Door Bell & Door Open Events](#door-bell-door-open-events)
 - [Installation](#installation)
   - [Via HACS (Recommended)](#via-hacs-recommended)
   - [Manual Installation](#manual-installation)
@@ -42,10 +42,57 @@ Open doors remotely using Home Assistant.
 ### Temporary Keys
 View your temporary access keys.
 
-### Door Open Events
-Whenever a door is opened, the `akuvox_door_update` event is fired in Home Assistant.
+### Door Bell & Door Open Events
+Whenever a door is rung or opened, the `akuvox_door_update` event is fired in Home Assistant. This event can be used to trigger an automation whenever a door is rung or opened.
 
-This could be used in an automation to send a notification whenever a door is opened:
+#### Example 1: Play a sound effect and announce that a door was **rung**
+
+```
+trigger:
+  - platform: event
+    event_type: akuvox_door_update
+    event_data:
+      CaptureType: Call
+    variables:
+      door_name: "{{ trigger.event.data.Location }}"
+
+condition: []
+
+action:
+
+  # Play Ding Dong
+  - service: media_player.play_media
+    target:
+      entity_id: media_player.kitchen_speaker
+    data:
+      media_content_id: media-source://media_source/local/sounds/ding_dong.mp3
+      media_content_type: audio/mpeg
+    metadata:
+      title: ding_dong.mp3
+      media_class: music
+      navigateIds:
+        - {}
+        - media_content_type: app
+          media_content_id: media-source://media_source
+        - media_content_type: ""
+          media_content_id: media-source://media_source/local/sounds
+
+  # Wait 3 seconds
+  - delay:
+      hours: 0
+      minutes: 0
+      seconds: 3
+      milliseconds: 0
+
+  # Announce which door was rung
+  - service: tts.google_say
+    data:
+      entity_id: media_player.macbook_pro
+      message: Someone's at the {{ door_name }}
+      language: en
+```
+
+#### Example 2: Send a notification when a door is opened
 
 ```
 trigger:
