@@ -46,18 +46,46 @@ If you find this integration useful, consider showing your support:
 ## Features
 
 ### Door Camera Feeds
-Access live camera feeds from your Akuvox SmartPlus Door Intercom.
+You door camera feeds are accessible as camera entities in Home Assistant.
 
 ### Relay Button Control
-Open doors remotely using Home Assistant.
+Your door's relays are added as buttons in Home Assistant which allow you to trigger your doors to open remotely.
 
 ### Temporary Keys
-View your temporary access keys.
+You can view your temporary access keys from the SmartPlus app in Home Assistant.
 
 ### Door Bell & Door Open Events
-Whenever a door is rung or opened, the `akuvox_door_update` event is fired in Home Assistant. This event can be used to trigger an automation whenever a door is rung or opened.
+Whenever any of your doors are rung or opened, the `akuvox_door_update` event is fired in Home Assistant. When you use the `akuvox_door_update` even as an automation trigger, you will have access to data associated with the specific door ring/open event, accessible under: `trigger.event.data`.
 
-#### Example 1: Play a sound effect and announce that a door was **rung**
+#### 1. `trigger.event.data.Location`
+The `Location` value represents the name of the Akuvox door that was rung or opened, eg: `Front Door`, `Side Door`, etc.
+
+#### 2. `trigger.event.data.CallType`
+The `CallType` value represents the door event type:
+| `CallType` Value | Meaning |
+|-|-|
+| `Call` | Someone rang the door. |
+| `Face Unlock` | The door was opened via facial recognition. |
+| `Unlock on SmartPlus` | The door opened by a SmartPlus app account. |
+
+#### 3. `trigger.event.data.Initiator`
+The `Initiator` value represents the name of the individual that triggered the event.
+| Scenario | Value |
+|-|-|
+| Door opened by a SmartPlus account holder | `John Smith` |
+| Door rung by an unknown individual | `Visitor` |
+
+#### 4. `trigger.event.data.PicUrl`
+The `PicUrl` value contains a URL to the camera screenshot image taken at the time of the door ring/open event.
+
+#### 5. `trigger.event.data.RelayName`
+The `RelayName` value represents the name of the door relay that was opened (useful if your door has multiple relays), eg: `Relay1`, `Relay2`, etc.
+
+---
+
+##### Examples
+
+###### Example 1: Play a sound effect and announce that a door was **rung**
 
 ```
 trigger:
@@ -104,7 +132,7 @@ action:
       language: en
 ```
 
-#### Example 2: Send a notification when a door is opened
+###### Example 2: Send a notification when a door is opened
 
 ```
 trigger:
