@@ -32,6 +32,9 @@ If you find this integration useful, consider showing your support:
   - [Relay Button Control](#relay-button-control)
   - [Temporary Keys](#temporary-keys)
   - [Door Bell & Door Open Events](#door-bell--door-open-events)
+    - [YAML Examples](#yaml-examples)
+      - [Example 1: Play a sound effect and announce that a door was **rung**](#example-1-play-a-sound-effect-and-announce-that-a-door-was-rung)
+      - [Example 2: Send a notification when a door is opened](#example-2-send-a-notification-when-a-door-is-opened)
 - [Installation](#installation)
   - [Via HACS (Recommended)](#via-hacs-recommended)
   - [Manual Installation](#manual-installation)
@@ -83,9 +86,9 @@ The `RelayName` value represents the name of the door relay that was opened (use
 
 ---
 
-##### Examples
+##### YAML Examples
 
-###### Example 1: Play a sound effect and announce that a door was **rung**
+###### Example 1: Play a sound effect and announce that a door was _**rung**_
 
 ```
 trigger:
@@ -132,7 +135,7 @@ action:
       language: en
 ```
 
-###### Example 2: Send a notification when a door is opened
+###### Example 2: Send a notification when a door is _**opened**_
 
 ```
 trigger:
