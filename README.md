@@ -12,13 +12,29 @@ Integrate your Akuvox SmartPlus mobile app with Home Assistant. With this integr
 **Disclaimer:** This integration is not affiliated with or endorsed by Akuvox. It is a community-contributed project and is provided as-is without any warranty or guarantee. Use it at your own discretion and responsibility.
 
 For troubleshooting and general discussion please join the [discussion in the Home Assistant forum](https://community.home-assistant.io/t/akuvox-smartplus-view-door-camera-feeds-open-doors-and-manage-temporary-keys/623187).
+
+---
+
+## Show Your Support
+
+If you find this integration useful, consider showing your support:
+<a href="https://www.buymeacoffee.com/nimroddolev" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 30px !important;width: 140px !important;" ></a>
+
+---
+
+[forum-shield]: https://img.shields.io/badge/community-forum-brightgreen.svg?style=popout
+[forum]: https://community.home-assistant.io/t/akuvox-smartplus-view-door-camera-feeds-open-doors-and-manage-temporary-keys/623187
+
 ## Table of Contents
 
 - [Features](#features)
   - [Door Camera Feeds](#door-camera-feeds)
   - [Relay Button Control](#relay-button-control)
   - [Temporary Keys](#temporary-keys)
-  - [Door Open Events](#door-open-events)
+  - [Door Bell & Door Open Events](#door-bell--door-open-events)
+    - [YAML Examples](#yaml-examples)
+      - [Example 1: Play a sound effect and announce that a door was **rung**](#example-1-play-a-sound-effect-and-announce-that-a-door-was-rung)
+      - [Example 2: Send a notification when a door is opened](#example-2-send-a-notification-when-a-door-is-opened)
 - [Installation](#installation)
   - [Via HACS (Recommended)](#via-hacs-recommended)
   - [Manual Installation](#manual-installation)
@@ -27,25 +43,99 @@ For troubleshooting and general discussion please join the [discussion in the Ho
   - [Method 2: App Tokens (Advanced)](#method-2-app-tokens-advanced)
 - [Configuration](#configuration)
 - [Finding Your SmartPlus Account Tokens](#finding-your-smartplus-account-tokens)
-- [Show Your Support](#show-your-support)
 
 ***
 
 ## Features
 
 ### Door Camera Feeds
-Access live camera feeds from your Akuvox SmartPlus Door Intercom.
+You door camera feeds are accessible as camera entities in Home Assistant.
 
 ### Relay Button Control
-Open doors remotely using Home Assistant.
+Your door's relays are added as buttons in Home Assistant which allow you to trigger your doors to open remotely.
 
 ### Temporary Keys
-View your temporary access keys.
+You can view your temporary access keys from the SmartPlus app in Home Assistant.
 
-### Door Open Events
-Whenever a door is opened, the `akuvox_door_update` event is fired in Home Assistant.
+### Door Bell & Door Open Events
+Whenever any of your doors are rung or opened, the `akuvox_door_update` event is fired in Home Assistant. When you use the `akuvox_door_update` even as an automation trigger, you will have access to data associated with the specific door ring/open event, accessible under: `trigger.event.data`.
 
-This could be used in an automation to send a notification whenever a door is opened:
+#### 1. `trigger.event.data.Location`
+The `Location` value represents the name of the Akuvox door that was rung or opened, eg: `Front Door`, `Side Door`, etc.
+
+#### 2. `trigger.event.data.CallType`
+The `CallType` value represents the door event type:
+| `CallType` Value | Meaning |
+|-|-|
+| `Call` | Someone rang the door. |
+| `Face Unlock` | The door was opened via facial recognition. |
+| `Unlock on SmartPlus` | The door opened by a SmartPlus app account. |
+
+#### 3. `trigger.event.data.Initiator`
+The `Initiator` value represents the name of the individual that triggered the event.
+| Scenario | Value |
+|-|-|
+| Door opened by a SmartPlus account holder | `John Smith` |
+| Door rung by an unknown individual | `Visitor` |
+
+#### 4. `trigger.event.data.PicUrl`
+The `PicUrl` value contains a URL to the camera screenshot image taken at the time of the door ring/open event.
+
+#### 5. `trigger.event.data.RelayName`
+The `RelayName` value represents the name of the door relay that was opened (useful if your door has multiple relays), eg: `Relay1`, `Relay2`, etc.
+
+---
+
+##### YAML Examples
+
+###### Example 1: Play a sound effect and announce that a door was _**rung**_
+
+```
+trigger:
+  - platform: event
+    event_type: akuvox_door_update
+    event_data:
+      CaptureType: Call
+    variables:
+      door_name: "{{ trigger.event.data.Location }}"
+
+condition: []
+
+action:
+
+  # Play Ding Dong
+  - service: media_player.play_media
+    target:
+      entity_id: media_player.kitchen_speaker
+    data:
+      media_content_id: media-source://media_source/local/sounds/ding_dong.mp3
+      media_content_type: audio/mpeg
+    metadata:
+      title: ding_dong.mp3
+      media_class: music
+      navigateIds:
+        - {}
+        - media_content_type: app
+          media_content_id: media-source://media_source
+        - media_content_type: ""
+          media_content_id: media-source://media_source/local/sounds
+
+  # Wait 3 seconds
+  - delay:
+      hours: 0
+      minutes: 0
+      seconds: 3
+      milliseconds: 0
+
+  # Announce which door was rung
+  - service: tts.google_say
+    data:
+      entity_id: media_player.macbook_pro
+      message: Someone's at the {{ door_name }}
+      language: en
+```
+
+###### Example 2: Send a notification when a door is _**opened**_
 
 ```
 trigger:
@@ -165,10 +255,3 @@ __NOTE: If you see `passwd` instead of `auth_token`, please use the `passwd` val
 
 ![mitmproxy](https://github.com/nimroddolev/akuvox/assets/1849295/d7d2b7ba-cc0e-4f64-b62b-43850bbc90c1)
 
-## Show Your Support
-
-If you find this integration useful, consider showing your support:
-<a href="https://www.buymeacoffee.com/nimroddolev" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 30px !important;width: 140px !important;" ></a>
-
-[forum-shield]: https://img.shields.io/badge/community-forum-brightgreen.svg?style=popout
-[forum]: https://community.home-assistant.io/t/akuvox-smartplus-view-door-camera-feeds-open-doors-and-manage-temporary-keys/623187
