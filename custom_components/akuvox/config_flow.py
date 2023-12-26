@@ -324,7 +324,7 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         }
 
     def get_subdomain_from_country_code(self, country_code):
-        """The subdomain correlating to the user's country_code number."""
+        """Correlate the subdomain to the user's country code number."""
         # Australia
         if country_code == "61":
             return "aucloud"

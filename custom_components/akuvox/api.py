@@ -266,7 +266,7 @@ class AkuvoxApiClient:
     # API Call Methods #
     ####################
 
-    async def async_fetch_rest_server(self) -> dict:
+    async def async_fetch_rest_server(self):
         """Retrieve the Akuvox REST server addresses and data."""
         LOGGER.debug("📡 Fetching REST server data...")
         json_data = await self._api_wrapper(
