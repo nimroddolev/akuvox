@@ -54,6 +54,7 @@ class AkuvoxData:
     """Data class holding key data from API requests."""
 
     host: str = ""
+    subdomain: str = ""
     app_type: str = ""
     auth_token: str = ""
     token: str = ""
@@ -70,6 +71,7 @@ class AkuvoxData:
     def __init__(self, entry: ConfigEntry):
         """Initialize the Akuvox API client."""
         self.host = self.get_value_for_key(entry, "host") # type: ignore
+        self.subdomain = self.get_value_for_key(entry, "subdomain") # type: ignore
         self.auth_token = self.get_value_for_key(entry, "auth_token") # type: ignore
         self.token = self.get_value_for_key(entry, "token") # type: ignore
         self.phone_number = self.get_value_for_key(entry, "phone_number") # type: ignore
@@ -194,6 +196,7 @@ class AkuvoxData:
                     # New door event detected
                     LOGGER.debug("ℹ️ New personal door log entry detected:")
                     LOGGER.debug(" - Initiator: %s", new_door_log["Initiator"])
+                    LOGGER.debug(" - CaptureType: %s", new_door_log["CaptureType"])
                     LOGGER.debug(" - Location: %s", new_door_log["Location"])
                     LOGGER.debug(" - Door MAC: %s", new_door_log["MAC"])
                     LOGGER.debug(" - Door Relay: %s", new_door_log["Relay"])
@@ -237,8 +240,7 @@ class AkuvoxApiClient:
         """Initialize API configuration data."""
         if self._data.host is None or len(self._data.host) == 0:
             self._data.host = "...request in process"
-            json_data = await self.async_make_rest_server_request()
-            self._data.parse_rest_server_response(json_data)
+            await self.async_fetch_rest_server()
         if self._data.rtsp_ip is None:
             await self.async_make_servers_list_request(
                 self._data.auth_token,
@@ -247,10 +249,12 @@ class AkuvoxApiClient:
         # Begin polling personal door log
         await self.start_polling_personal_door_log()
 
-    def init_api_with_tokens(self, host=None, auth_token=None, token=None, phone_number=None):
+    def init_api_with_data(self, host=None, subdomain=None, auth_token=None, token=None, phone_number=None):
         """"Initialize values from saved data/options."""
         if host is not None:
             self._data.host = host # type: ignore
+        if subdomain is not None:
+            self._data.subdomain = subdomain
         if auth_token is not None:
             self._data.auth_token = auth_token
         if token is not None:
@@ -262,7 +266,7 @@ class AkuvoxApiClient:
     # API Call Methods #
     ####################
 
-    async def async_make_rest_server_request(self) -> dict:
+    async def async_fetch_rest_server(self) -> dict:
         """Retrieve the Akuvox REST server addresses and data."""
         LOGGER.debug("📡 Fetching REST server data...")
         json_data = await self._api_wrapper(
@@ -275,13 +279,18 @@ class AkuvoxApiClient:
         )
         if json_data is not None:
             LOGGER.debug("✅ REST server data received successfully")
-            return json_data # type: ignore
+            self._data.parse_rest_server_response(json_data) # type: ignore
+        else:
+            LOGGER.error("❌ Unable to reach Akuvox server.")
 
-        LOGGER.error("❌ Unable to reach Akuvox server.")
-        return {}
-
-    async def send_sms(self, country_code, phone_number):
+    async def send_sms(self, country_code, phone_number, subdomain):
         """Request SMS code to user's device."""
+        self.init_api_with_data(subdomain=subdomain)
+        if self._data.host == "":
+            LOGGER.debug("Fetching host")
+            await self.async_fetch_rest_server()
+        else:
+            LOGGER.debug("Host = %s", self._data.host)
         url = f"https://{self._data.host}/{API_SEND_SMS}"
         headers = {
             "Host": self._data.host,
@@ -490,7 +499,7 @@ class AkuvoxApiClient:
             "sec-fetch-mode": "cors",
             "x-cloud-lang": "en",
             "user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) SmartPlus/6.2",
-            "referer": f"https://ecloud.akuvox.com/smartplus/TmpKey.html?TOKEN={self._data.token}&USERTYPE=20&VERSION=6.6",
+            "referer": f"https://{self._data.subdomain}.akuvox.com/smartplus/TmpKey.html?TOKEN={self._data.token}&USERTYPE=20&VERSION=6.6",
             "x-auth-token": self._data.token,
             "sec-fetch-dest": "empty"
         }
@@ -506,7 +515,7 @@ class AkuvoxApiClient:
 
     async def start_polling_personal_door_log(self):
         """Poll the server contineously for the latest personal door log."""
-        LOGGER.debug("🔄 Poll user's personal door log every 2 seconds..")
+        LOGGER.debug("🔄 Poll user's personal door log every 2 seconds.")
         self.hass.async_create_task(self.async_retrieve_personal_door_log())
 
     async def async_retrieve_personal_door_log(self) -> bool:
@@ -516,6 +525,7 @@ class AkuvoxApiClient:
             if json_data is not None:
                 new_door_log = self._data.parse_personal_door_log(json_data)
                 if new_door_log is not None:
+
                     # Fire HA event
                     LOGGER.debug("🚪 New door open event occurred. Firing akuvox_door_update event")
                     event_name = "akuvox_door_update"
@@ -536,7 +546,7 @@ class AkuvoxApiClient:
             "sec-fetch-mode": "cors",
             "x-cloud-lang": "en",
             "user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) SmartPlus/6.2",
-            "referer": f"https://ecloud.akuvox.com/smartplus/Activities.html?TOKEN={self._data.token}",
+            "referer": f"https://{self._data.subdomain}.akuvox.com/smartplus/Activities.html?TOKEN={self._data.token}",
             "x-auth-token": self._data.token,
             "sec-fetch-dest": "empty"
         }
@@ -564,6 +574,7 @@ class AkuvoxApiClient:
         try:
             async with async_timeout.timeout(10):
                 func = self.post_request if method == "post" else self.get_request
+                url = url.replace("subdomain.", f"{self._data.subdomain}.")
                 response = await self.hass.async_add_executor_job(func, url, headers, data, 10)
                 return self.process_response(response)
 
@@ -579,6 +590,7 @@ class AkuvoxApiClient:
                 return await self._api_wrapper(method, url, data, headers)
             if f"app/{app_type_2}/" in url:
                 LOGGER.error("Timeout occured for 'app/%s' API %s request: %s", app_type_2, method, url)
+                self._data.app_type = app_type_1
             raise AkuvoxApiClientCommunicationError(
                 f"Timeout error fetching information: {exception}",
             ) from exception
@@ -671,6 +683,8 @@ class AkuvoxApiClient:
 
     def get_obfuscated_phone_number(self, phone_number):
         """Obfuscate the user's phone number for API requests."""
+        if (phone_number is None or len(phone_number) == 0):
+            LOGGER.error("No phone number provided for obfuscation")
         # Mask phone number
         num_str = str(phone_number)
         transformed_str = ""

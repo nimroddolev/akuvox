@@ -17,7 +17,7 @@ SMS_LOGIN_API_VERSION = "6.6"
 REST_SERVER_API_VERSION = "6.0"
 OPENDOOR_API_VERSION = "4.3"
 USERCONF_API_VERSION = "6.5"
-REST_SERVER_ADDR = "gate.ecloud.akuvox.com"
+REST_SERVER_ADDR = "gate.subdomain.akuvox.com"
 REST_SERVER_PORT = 8600
 
 API_REST_SERVER_DATA = "rest_server"
@@ -27,11 +27,11 @@ API_SMS_LOGIN = "sms_login"
 API_USERCONF = "userconf"
 API_OPENDOOR = "opendoor"
 
-API_APP_HOST = "ecloud.akuvox.com/web-server/v3/app/"
+API_APP_HOST = "subdomain.akuvox.com/web-server/v3/app/"
 API_GET_PERSONAL_TEMP_KEY_LIST = "tempKey/getPersonalTempKeyList?row=20&page=1"
 API_GET_PERSONAL_DOOR_LOG = "log/getDoorLog?row=1"
 
-TEMP_KEY_QR_HOST = "ecloud.akuvox.com"
+TEMP_KEY_QR_HOST = "subdomain.akuvox.com"
 
 DATA_STORAGE_KEY = "akuvox_data_storage_key"
 

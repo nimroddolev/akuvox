@@ -41,7 +41,6 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                 hass=self.hass,
                 entry=None,
             )
-            await self.akuvox_api_client.async_init_api_data()
 
         return self.async_show_menu(
             step_id="user",
@@ -111,15 +110,21 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             phone_number = user_input.get(
                 "phone_number", "").replace("-", "").replace(" ", "")
 
+            subdomain = self.get_subdomain_from_country_code(country_code)
+            LOGGER.debug("🌍 User will use the API from subdomain %s", subdomain)
+
             self.data = {
                 "full_phone_number": f"(+{country_code}) {phone_number}",
                 "country_code": country_code,
                 "phone_number": phone_number,
+                "subdomain": subdomain
             }
 
             if len(country_code) > 0 and len(phone_number) > 0:
                 # Request SMS code for login
-                request_sms_code = await self.akuvox_api_client.send_sms(country_code, phone_number)
+                self.akuvox_api_client.init_api_with_data(subdomain=subdomain)
+                await self.akuvox_api_client.async_init_api_data()
+                request_sms_code = await self.akuvox_api_client.send_sms(country_code, phone_number, subdomain)
                 if request_sms_code:
                     return await self.async_step_verify_sms_code()
                 else:
@@ -161,6 +166,7 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                 "phone_number", "").replace("-", "").replace(" ", "")
             token = user_input.get("token", "")
             auth_token = user_input.get("auth_token", "")
+            subdomain = self.get_subdomain_from_country_code(country_code)
 
             self.data = {
                 "full_phone_number": f"(+{country_code}) {phone_number}",
@@ -168,11 +174,14 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                 "phone_number": phone_number,
                 "token": token,
                 "auth_token": auth_token,
+                "subdomain": subdomain
             }
 
             # Perform login via auth_token, token and phone number
             if all(len(value) > 0 for value in (country_code, phone_number, token, auth_token)):
                 # Retrieve ervers_list data.
+                self.akuvox_api_client.init_api_with_data(subdomain=subdomain)
+                await self.akuvox_api_client.async_init_api_data()
                 login_successful = await self.akuvox_api_client.async_make_servers_list_request(
                     auth_token, token, phone_number)
                 if login_successful is True:
@@ -313,6 +322,27 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                 default=DEFAULT_TOKEN,  # type: ignore
                 description="Your SmartPlus account's token string"): str,
         }
+
+    def get_subdomain_from_country_code(self, country_code):
+        """The subdomain correlating to the user's country_code number."""
+        # Australia
+        if country_code == "61":
+            return "aucloud"
+        # China
+        if country_code == "86":
+            return "ccloud"
+        # Japan
+        if country_code == "81":
+            return "jcloud"
+        # Singapore
+        if country_code == "65":
+            return "scloud"
+        # United States
+        if country_code == "1":
+            return "ucloud"
+        # Europe
+        return "ecloud"
+
 
 class AkuvoxOptionsFlowHandler(config_entries.OptionsFlow):
     """Handle options flow for Akuvox integration."""
