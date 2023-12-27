@@ -20,11 +20,10 @@ class AkuvoxEntity(Entity):
         self.client = client
 
         host = self.get_saved_value("host")
-        subdomain = self.get_saved_value("subdomain")
         auth_token = self.get_saved_value("auth_token")
         token = self.get_saved_value("token")
         phone_number = self.get_saved_value("phone_number")
-        self.client.init_api_with_data(host, subdomain, auth_token, token, phone_number)
+        self.client.init_api_with_data(host=host, auth_token=auth_token, token=token, phone_number=phone_number)
 
     def get_saved_value(self, key: str):
         """Get the value for a given key. Options flow 1st, Config flow 2nd."""

@@ -122,8 +122,6 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
 
             if len(country_code) > 0 and len(phone_number) > 0:
                 # Request SMS code for login
-                self.akuvox_api_client.init_api_with_data(subdomain=subdomain)
-                await self.akuvox_api_client.async_init_api_data()
                 request_sms_code = await self.akuvox_api_client.send_sms(country_code, phone_number, subdomain)
                 if request_sms_code:
                     return await self.async_step_verify_sms_code()
@@ -179,11 +177,12 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
 
             # Perform login via auth_token, token and phone number
             if all(len(value) > 0 for value in (country_code, phone_number, token, auth_token)):
-                # Retrieve ervers_list data.
-                self.akuvox_api_client.init_api_with_data(subdomain=subdomain)
-                await self.akuvox_api_client.async_init_api_data()
+                # Retrieve servers_list data.
                 login_successful = await self.akuvox_api_client.async_make_servers_list_request(
-                    auth_token, token, phone_number)
+                    auth_token=auth_token,
+                    token=token,
+                    phone_number=phone_number,
+                    subdomain=subdomain)
                 if login_successful is True:
                     # Retrieve connected device data
                     await self.akuvox_api_client.async_retrieve_user_data()

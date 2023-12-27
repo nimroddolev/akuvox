@@ -8,7 +8,7 @@ import json
 
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
-
+from homeassistant.helpers import storage
 
 import aiohttp
 import async_timeout
@@ -34,6 +34,7 @@ from .const import (
     TEMP_KEY_QR_HOST,
     PIC_URL_KEY,
     CAPTURE_TIME_KEY,
+    DATA_STORAGE_KEY,
 )
 
 
@@ -53,6 +54,7 @@ class AkuvoxApiClientAuthenticationError(AkuvoxApiClientError):
 class AkuvoxData:
     """Data class holding key data from API requests."""
 
+    hass: HomeAssistant = None
     host: str = ""
     subdomain: str = ""
     app_type: str = ""
@@ -68,10 +70,10 @@ class AkuvoxData:
     latest_door_log = {}
 
 
-    def __init__(self, entry: ConfigEntry):
+    def __init__(self, entry: ConfigEntry, hass: HomeAssistant):
         """Initialize the Akuvox API client."""
+        self.hass = hass
         self.host = self.get_value_for_key(entry, "host") # type: ignore
-        self.subdomain = self.get_value_for_key(entry, "subdomain") # type: ignore
         self.auth_token = self.get_value_for_key(entry, "auth_token") # type: ignore
         self.token = self.get_value_for_key(entry, "token") # type: ignore
         self.phone_number = self.get_value_for_key(entry, "phone_number") # type: ignore
@@ -91,10 +93,26 @@ class AkuvoxData:
             return placeholder
         return None
 
-    def get_subdomain(self):
-        """Use the regional subdomain for API requests."""
+    async def set_subdomain(self, subdomain):
+        """Set the regional subdomain for API requests."""
+        store = storage.Store(self.hass, 1, DATA_STORAGE_KEY)
+        data: dict = await store.async_load() # type: ignore
+        data["subdomain"] = subdomain
+        await store.async_save(data)
+        self.subdomain = subdomain
+        LOGGER.debug("🗺️ Regional API subdomain set to '%s'", subdomain)
+
+
+    async def get_subdomain(self):
+        """Get the regional subdomain for API requests."""
         if self.subdomain is None or self.subdomain == "":
-            return "ecloud" # Backward compatible value for users who added the integation before v0.0.7
+            store = storage.Store(self.hass, 1, DATA_STORAGE_KEY)
+            stored_data: dict = await store.async_load() # type: ignore
+            if "subdomain" in stored_data:
+                self.subdomain = stored_data["subdomain"]
+        if self.subdomain is None or self.subdomain == "":
+            LOGGER.warning("📜 Regional API subdomain not configured...using pre v0.0.7 backward compatible 'ecloud'")
+            self.subdomain = "ecloud"
         return self.subdomain
 
     def parse_rest_server_response(self, json_data: dict):
@@ -240,7 +258,7 @@ class AkuvoxApiClient:
         """Akuvox API Client."""
         self._session = session
         self.hass = hass
-        self._data = AkuvoxData(entry)
+        self._data = AkuvoxData(entry, hass)
 
     async def async_init_api_data(self) -> None:
         """Initialize API configuration data."""
@@ -249,9 +267,9 @@ class AkuvoxApiClient:
             await self.async_fetch_rest_server()
         if self._data.rtsp_ip is None:
             await self.async_make_servers_list_request(
-                self._data.auth_token,
-                self._data.token,
-                self._data.phone_number)
+                auth_token=self._data.auth_token,
+                token=self._data.token,
+                phone_number=self._data.phone_number)
         # Begin polling personal door log
         await self.start_polling_personal_door_log()
 
@@ -259,7 +277,7 @@ class AkuvoxApiClient:
         """"Initialize values from saved data/options."""
         if host is not None:
             self._data.host = host # type: ignore
-        if subdomain is not None:
+        if subdomain is not None and len(subdomain) > 0:
             self._data.subdomain = subdomain
         if auth_token is not None:
             self._data.auth_token = auth_token
@@ -292,11 +310,7 @@ class AkuvoxApiClient:
     async def send_sms(self, country_code, phone_number, subdomain):
         """Request SMS code to user's device."""
         self.init_api_with_data(subdomain=subdomain)
-        if self._data.host == "":
-            LOGGER.debug("Fetching host")
-            await self.async_fetch_rest_server()
-        else:
-            LOGGER.debug("Host = %s", self._data.host)
+        await self.async_init_api_data()
         url = f"https://{self._data.host}/{API_SEND_SMS}"
         headers = {
             "Host": self._data.host,
@@ -331,8 +345,11 @@ class AkuvoxApiClient:
     async def async_make_servers_list_request(self,
                                               auth_token: str,
                                               token: str,
-                                              phone_number: str) -> bool:
+                                              phone_number: str,
+                                              subdomain: str = "") -> bool:
         """Request server list data."""
+        self.init_api_with_data(subdomain=subdomain)
+        await self.async_init_api_data()
 
         # Store tokens
         self._data.auth_token = auth_token
@@ -410,9 +427,9 @@ class AkuvoxApiClient:
     async def async_retrieve_user_data(self) -> bool:
         """Retrieve user devices and temp keys data."""
         await self.async_make_servers_list_request(
-                self._data.auth_token,
-                self._data.token,
-                self._data.phone_number)
+                auth_token=self._data.auth_token,
+                token=self._data.token,
+                phone_number=self._data.phone_number)
 
         await self.async_retrieve_device_data()
         await self.async_retrieve_temp_keys_data()
@@ -580,8 +597,8 @@ class AkuvoxApiClient:
         try:
             async with async_timeout.timeout(10):
                 func = self.post_request if method == "post" else self.get_request
-                url = url.replace("subdomain.", f"{self._data.get_subdomain()}.")
-                LOGGER.debug("Using subdomain: %s", self._data.get_subdomain())
+                subdomain = await self._data.get_subdomain()
+                url = url.replace("subdomain.", f"{subdomain}.")
                 response = await self.hass.async_add_executor_job(func, url, headers, data, 10)
                 return self.process_response(response)
 
@@ -708,4 +725,3 @@ class AkuvoxApiClient:
         if self._data.app_type == "single":
             return API_APP_HOST + "single"
         return API_APP_HOST + "community"
-
