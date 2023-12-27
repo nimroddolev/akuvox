@@ -91,6 +91,12 @@ class AkuvoxData:
             return placeholder
         return None
 
+    def get_subdomain(self):
+        """The regional subdomain to use for API requests."""
+        if self.subdomain is None or self.subdomain == "":
+            return "ecloud" # Backward compatible value for users who added the integation before v0.0.7
+        return self.subdomain
+
     def parse_rest_server_response(self, json_data: dict):
         """Parse the rest_server API response."""
         if json_data is not None and json_data is not {}:
@@ -574,7 +580,8 @@ class AkuvoxApiClient:
         try:
             async with async_timeout.timeout(10):
                 func = self.post_request if method == "post" else self.get_request
-                url = url.replace("subdomain.", f"{self._data.subdomain}.")
+                url = url.replace("subdomain.", f"{self._data.get_subdomain()}.")
+                LOGGER.debug("Using subdomain: %s", self._data.get_subdomain())
                 response = await self.hass.async_add_executor_job(func, url, headers, data, 10)
                 return self.process_response(response)
 
