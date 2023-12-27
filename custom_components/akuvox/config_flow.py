@@ -334,6 +334,8 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         # Japan
         if country_code == "81":
             return "jcloud"
+        if country_code == "7":
+            return "rucloud"
         # Singapore
         if country_code == "65":
             return "scloud"
