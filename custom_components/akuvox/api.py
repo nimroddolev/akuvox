@@ -92,7 +92,7 @@ class AkuvoxData:
         return None
 
     def get_subdomain(self):
-        """The regional subdomain to use for API requests."""
+        """Use the regional subdomain for API requests."""
         if self.subdomain is None or self.subdomain == "":
             return "ecloud" # Backward compatible value for users who added the integation before v0.0.7
         return self.subdomain
