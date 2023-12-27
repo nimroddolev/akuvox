@@ -5,6 +5,7 @@ from dataclasses import dataclass
 import asyncio
 import socket
 import json
+import time
 
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
@@ -122,7 +123,6 @@ class AkuvoxData:
 
     def parse_sms_login_response(self, json_data: dict):
         """Parse the sms_login API response."""
-        LOGGER.debug("parse_sms_login_response = %s", json.dumps(json_data, indent=4))
         if json_data is not None:
             if "auth_token" in json_data:
                 self.auth_token = json_data["auth_token"]
@@ -538,12 +538,32 @@ class AkuvoxApiClient:
 
     async def start_polling_personal_door_log(self):
         """Poll the server contineously for the latest personal door log."""
+        # Make sure only 1 instance of the door log polling is running
+        store = storage.Store(self.hass, 1, DATA_STORAGE_KEY)
+        stored_data: dict = await store.async_load() # type: ignore
+        if "last_polling_time" in stored_data:
+            current_time = time.time()
+            last_polling_time = stored_data["last_polling_time"]
+            difference = current_time - last_polling_time
+            if difference < 15:
+                return
         LOGGER.debug("🔄 Poll user's personal door log every 2 seconds.")
+        current_time = time.time()
+        stored_data["last_polling_time"] = current_time
+        await store.async_save(stored_data)
         self.hass.async_create_task(self.async_retrieve_personal_door_log())
 
     async def async_retrieve_personal_door_log(self) -> bool:
         """Request and parse the user's door log every 2 seconds."""
         while True:
+            # Store timestamp of polling event
+            store = storage.Store(self.hass, 1, DATA_STORAGE_KEY)
+            stored_data: dict = await store.async_load() # type: ignore
+            current_time = time.time()
+            stored_data["last_polling_time"] = current_time
+            await store.async_save(stored_data)
+
+            # Get the latest pesonal door log
             json_data = await self.async_get_personal_door_log()
             if json_data is not None:
                 new_door_log = self._data.parse_personal_door_log(json_data)
