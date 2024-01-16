@@ -48,6 +48,12 @@ async def async_setup_entry(hass, entry, async_add_devices):
 class AkuvoxDoorRelayEntity(ButtonEntity, AkuvoxEntity):
     """Akuvox door relay class."""
 
+    _client: AkuvoxApiClient
+    _name: str = ""
+    _host: str = ""
+    _token: str = ""
+    _data: str = ""
+
     def __init__(
         self,
         client: AkuvoxApiClient,

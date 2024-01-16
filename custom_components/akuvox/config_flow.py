@@ -410,7 +410,7 @@ class AkuvoxOptionsFlowHandler(config_entries.OptionsFlow):
         # User wishes to use other SmartLife account tokens
         if user_input.get("override", False) is True:
             LOGGER.debug("Use custom token strings...")
-            await self.akuvox_api_client.async_init_api_data()
+            await self.akuvox_api_client.async_init_api()
 
             # Retrieve device data
             await self.akuvox_api_client.async_retrieve_user_data_with_tokens(

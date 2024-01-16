@@ -39,7 +39,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             entry=entry,
         ),
     )
-    await coordinator.client.async_init_api_data()
+    await coordinator.client.async_init_api()
 
     # https://developers.home-assistant.io/docs/integration_fetching_data#coordinated-single-api-poll-for-data-for-all-entities
     await coordinator.async_config_entry_first_refresh()
@@ -75,5 +75,5 @@ async def async_options_updated(self, entry: ConfigEntry):
     # Handle the updated configuration options
     updated_options = entry.options
 
-    # Example: Print the updated options
-    LOGGER.debug(f"Updated Options: {updated_options}")
+    # Print the updated options
+    LOGGER.debug("Updated Options: %s", str(updated_options))

@@ -55,7 +55,7 @@ class AkuvoxApiClientAuthenticationError(AkuvoxApiClientError):
 class AkuvoxData:
     """Data class holding key data from API requests."""
 
-    hass: HomeAssistant = None
+    hass: HomeAssistant = None # type: ignore
     host: str = ""
     subdomain: str = ""
     app_type: str = ""
@@ -68,7 +68,6 @@ class AkuvoxData:
     camera_data = []
     door_relay_data = []
     door_keys_data = []
-    latest_door_log = {}
 
 
     def __init__(self, entry: ConfigEntry, hass: HomeAssistant):
@@ -78,7 +77,8 @@ class AkuvoxData:
         self.auth_token = self.get_value_for_key(entry, "auth_token") # type: ignore
         self.token = self.get_value_for_key(entry, "token") # type: ignore
         self.phone_number = self.get_value_for_key(entry, "phone_number") # type: ignore
-        self.wait_for_image_url = bool(self.get_value_for_key(entry, "wait_for_image_url")) # type: ignore
+        self.wait_for_image_url = bool(self.get_value_for_key(entry, "event_screenshot_options") == "wait") # type: ignore
+        hass.async_run_job(self.async_set_stored_data_for_key, "wait_for_image_url", self.wait_for_image_url)
 
     def get_value_for_key(self, entry: ConfigEntry, key: str):
         """Get the value for a given key. 1st check: configured, 2nd check: options, 3rd check: data."""
@@ -87,7 +87,7 @@ class AkuvoxData:
                 if key in entry["configured"]: # type: ignore
                     return entry["configured"][key] # type: ignore
                 return None
-            override = entry.options.get("override", False) or key == "wait_for_image_url"
+            override = entry.options.get("override", False) or key == "event_screenshot_options"
             placeholder = None if key not in entry.data else entry.data[key]
             if override:
                 return entry.options.get(key, placeholder)
@@ -96,25 +96,18 @@ class AkuvoxData:
 
     async def set_subdomain(self, subdomain):
         """Set the regional subdomain for API requests."""
-        store = storage.Store(self.hass, 1, DATA_STORAGE_KEY)
-        data: dict = await store.async_load() # type: ignore
-        data["subdomain"] = subdomain
-        await store.async_save(data)
-        self.subdomain = subdomain
+        await self.async_set_stored_data_for_key("subdomain", subdomain)
         LOGGER.debug("🗺️ Regional API subdomain set to '%s'", subdomain)
 
 
     async def get_subdomain(self):
         """Get the regional subdomain for API requests."""
-        if self.subdomain is None or self.subdomain == "":
-            store = storage.Store(self.hass, 1, DATA_STORAGE_KEY)
-            stored_data: dict = await store.async_load() # type: ignore
-            if "subdomain" in stored_data:
-                self.subdomain = stored_data["subdomain"]
-        if self.subdomain is None or self.subdomain == "":
+        subdomain = await self.async_get_stored_data_for_key("subdomain")
+        if subdomain is None or len(subdomain) == 0:
             LOGGER.warning("📜 Regional API subdomain not configured...using pre v0.0.7 backward compatible 'ecloud'")
-            self.subdomain = "ecloud"
-        return self.subdomain
+            subdomain = "ecloud"
+            await self.async_set_stored_data_for_key("subdomain", subdomain)
+        return subdomain
 
     def parse_rest_server_response(self, json_data: dict):
         """Parse the rest_server API response."""
@@ -202,21 +195,24 @@ class AkuvoxData:
                          "" if len(door_keys_data["doors"]) == 1 else "s")
 
 
-    def parse_personal_door_log(self, json_data: list):
+    async def async_parse_personal_door_log(self, json_data: list):
         """Parse the getDoorLog API response."""
         ret_value = None
         if json_data is not None and len(json_data) > 0:
             new_door_log = json_data[0]
-            if self.latest_door_log is not None and CAPTURE_TIME_KEY in self.latest_door_log:
+            latest_door_log = await self.async_get_stored_data_for_key("latest_door_log")
+            if latest_door_log is not None and CAPTURE_TIME_KEY in latest_door_log:
                 if new_door_log is not None and CAPTURE_TIME_KEY in new_door_log:
-                    # Old door open event
-                    if str(self.latest_door_log[CAPTURE_TIME_KEY]) == str(new_door_log[CAPTURE_TIME_KEY]):
+                    # Ignore previous door open event
+                    if str(latest_door_log[CAPTURE_TIME_KEY]) == str(new_door_log[CAPTURE_TIME_KEY]):
                         return None
                     # Screenshot required and currently unavailable
-                    if self.wait_for_image_url is True:
-                        if PIC_URL_KEY in new_door_log and new_door_log[PIC_URL_KEY] == "":
+                    if PIC_URL_KEY in new_door_log and new_door_log[PIC_URL_KEY] == "":
+                        if await self.async_get_stored_data_for_key("wait_for_image_url") is True:
                             LOGGER.debug("New door entry detected --> Waiting for screenshot URL...")
                             return None
+                        else:
+                            LOGGER.debug("New door entry detected --> Not waiting for the screenshot URL...")
                     # New door event detected
                     LOGGER.debug("ℹ️ New personal door log entry detected:")
                     LOGGER.debug(" - Initiator: %s", new_door_log["Initiator"])
@@ -226,8 +222,29 @@ class AkuvoxData:
                     LOGGER.debug(" - Door Relay: %s", new_door_log["Relay"])
                     LOGGER.debug(" - Camera screenshot URL: %s", new_door_log["PicUrl"])
                     ret_value = new_door_log
-            self.latest_door_log = new_door_log
+
+            await self.async_set_stored_data_for_key("latest_door_log", new_door_log)
         return ret_value
+
+    ###################
+
+    async def async_set_stored_data_for_key(self, key, value):
+        """Store key/value pair to integration's storage."""
+        store = storage.Store(self.hass, 1, DATA_STORAGE_KEY)
+        stored_data: dict = await store.async_load() # type: ignore
+        if stored_data is None:
+            stored_data = {}
+        stored_data[key] = value
+        await store.async_save(stored_data)
+
+    async def async_get_stored_data_for_key(self, key):
+        """Store key/value pair to integration's storage."""
+        ret_val = None
+        store = storage.Store(self.hass, 1, DATA_STORAGE_KEY)
+        stored_data: dict = await store.async_load() # type: ignore
+        if stored_data is not None and key in stored_data:
+            ret_val = stored_data[key]
+        return ret_val
 
     ###################
 
@@ -239,8 +256,7 @@ class AkuvoxData:
             "auth_token": self.auth_token,
             "camera_data": self.camera_data,
             "door_relay_data": self.door_relay_data,
-            "door_keys_data": self.door_keys_data,
-            "latest_door_log": self.latest_door_log
+            "door_keys_data": self.door_keys_data
         }
 
 
@@ -260,7 +276,7 @@ class AkuvoxApiClient:
         self.hass = hass
         self._data = AkuvoxData(entry, hass)
 
-    async def async_init_api_data(self) -> None:
+    async def async_init_api(self) -> None:
         """Initialize API configuration data."""
         if self._data.host is None or len(self._data.host) == 0:
             self._data.host = "...request in process"
@@ -271,14 +287,15 @@ class AkuvoxApiClient:
                 token=self._data.token,
                 phone_number=self._data.phone_number)
         # Begin polling personal door log
-        await self.start_polling_personal_door_log()
+        await self.async_start_polling_personal_door_log()
 
     def init_api_with_data(self, host=None, subdomain=None, auth_token=None, token=None, phone_number=None):
         """"Initialize values from saved data/options."""
         if host is not None:
             self._data.host = host # type: ignore
         if subdomain is not None and len(subdomain) > 0:
-            self._data.subdomain = subdomain
+            self.hass.async_add_executor_job(self._data.async_set_stored_data_for_key, "subdomain", subdomain)
+            # await self._data.async_set_stored_data_for_key("subdomain", subdomain)
         if auth_token is not None:
             self._data.auth_token = auth_token
         if token is not None:
@@ -310,7 +327,7 @@ class AkuvoxApiClient:
     async def send_sms(self, country_code, phone_number, subdomain):
         """Request SMS code to user's device."""
         self.init_api_with_data(subdomain=subdomain)
-        await self.async_init_api_data()
+        await self.async_init_api()
         url = f"https://{self._data.host}/{API_SEND_SMS}"
         headers = {
             "Host": self._data.host,
@@ -349,7 +366,7 @@ class AkuvoxApiClient:
                                               subdomain: str = "") -> bool:
         """Request server list data."""
         self.init_api_with_data(subdomain=subdomain)
-        await self.async_init_api_data()
+        await self.async_init_api()
 
         # Store tokens
         self._data.auth_token = auth_token
@@ -512,6 +529,7 @@ class AkuvoxApiClient:
         """Request the user's configuration data."""
         LOGGER.debug("📡 Retrieving list of user's temporary keys...")
         host = self.get_activities_host()
+        subdomain = await self._data.async_get_stored_data_for_key("subdomain")
         url = f"https://{host}/{API_GET_PERSONAL_TEMP_KEY_LIST}"
         data = {}
         headers = {
@@ -522,7 +540,7 @@ class AkuvoxApiClient:
             "sec-fetch-mode": "cors",
             "x-cloud-lang": "en",
             "user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) SmartPlus/6.2",
-            "referer": f"https://{self._data.subdomain}.akuvox.com/smartplus/TmpKey.html?TOKEN={self._data.token}&USERTYPE=20&VERSION=6.6",
+            "referer": f"https://{subdomain}.akuvox.com/smartplus/TmpKey.html?TOKEN={self._data.token}&USERTYPE=20&VERSION=6.6",
             "x-auth-token": self._data.token,
             "sec-fetch-dest": "empty"
         }
@@ -536,21 +554,18 @@ class AkuvoxApiClient:
         LOGGER.error("❌ Unable to retrieve user's temporary key list.")
         return None
 
-    async def start_polling_personal_door_log(self):
+    async def async_start_polling_personal_door_log(self):
         """Poll the server contineously for the latest personal door log."""
         # Make sure only 1 instance of the door log polling is running
-        store = storage.Store(self.hass, 1, DATA_STORAGE_KEY)
-        stored_data: dict = await store.async_load() # type: ignore
-        if "last_polling_time" in stored_data:
+        last_polling_time = await self._data.async_get_stored_data_for_key("last_polling_time")
+        if last_polling_time is not None:
             current_time = time.time()
-            last_polling_time = stored_data["last_polling_time"]
             difference = current_time - last_polling_time
             if difference < 15:
                 return
-        LOGGER.debug("🔄 Poll user's personal door log every 2 seconds.")
+        LOGGER.debug("🔄 Polling user's personal door log every 2 seconds.")
         current_time = time.time()
-        stored_data["last_polling_time"] = current_time
-        await store.async_save(stored_data)
+        await self._data.async_set_stored_data_for_key("last_polling_time", current_time)
         self.hass.async_create_task(self.async_retrieve_personal_door_log())
 
     async def async_retrieve_personal_door_log(self) -> bool:
@@ -566,13 +581,18 @@ class AkuvoxApiClient:
             # Get the latest pesonal door log
             json_data = await self.async_get_personal_door_log()
             if json_data is not None:
-                new_door_log = self._data.parse_personal_door_log(json_data)
+                new_door_log = await self._data.async_parse_personal_door_log(json_data)
                 if new_door_log is not None:
 
                     # Fire HA event
                     LOGGER.debug("🚪 New door open event occurred. Firing akuvox_door_update event")
                     event_name = "akuvox_door_update"
                     self.hass.bus.async_fire(event_name, new_door_log)
+
+                    # Save
+                    stored_data["latest_door_log"] = new_door_log
+                    await store.async_save(stored_data)
+
             await asyncio.sleep(2)  # Wait for 2 seconds before calling again
 
     async def async_get_personal_door_log(self):
@@ -644,7 +664,7 @@ class AkuvoxApiClient:
             ) from exception
         except Exception as exception:  # pylint: disable=broad-except
             raise AkuvoxApiClientError(
-                f"Something really wrong happened! {exception}"
+                f"Something really wrong happened! {exception}. URL = {url}"
             ) from exception
         return None
 

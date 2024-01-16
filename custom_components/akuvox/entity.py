@@ -25,12 +25,12 @@ class AkuvoxEntity(Entity):
         phone_number = self.get_saved_value("phone_number")
         self.client.init_api_with_data(host=host, auth_token=auth_token, token=token, phone_number=phone_number)
 
-    def get_saved_value(self, key: str):
+    def get_saved_value(self, key: str) -> str:
         """Get the value for a given key. Options flow 1st, Config flow 2nd."""
-        should_override = self.entry.options.get("override", False)
-        default = None
-        if key in self.entry.data:
-            default = self.entry.data[key]
+        should_override = self.entry.options.get("override", False) # type: ignore
+        default = ""
+        if key in self.entry.data: # type: ignore
+            default = self.entry.data[key] # type: ignore
         if should_override is True:
-            return self.entry.options.get(key, default)
+            return self.entry.options.get(key, default) # type: ignore
         return default
