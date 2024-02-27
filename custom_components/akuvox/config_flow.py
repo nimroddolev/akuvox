@@ -100,6 +100,7 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
 
         Returns:
             dict: A dictionary representing the next step or an entry creation.
+
         """
 
         data_schema = self.get_sms_sign_in_schema()
@@ -232,6 +233,7 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
 
         Returns:
             dict: A dictionary representing the next step or an entry creation.
+
         """
 
         data_schema = {
