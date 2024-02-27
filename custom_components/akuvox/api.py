@@ -776,7 +776,7 @@ class AkuvoxApiClient:
         return API_APP_HOST + "community"
 
     def switch_activities_host(self):
-        """Switch the activities host from single <--> community"""
+        """Switch the activities host from single <--> community."""
         if self._data.app_type == "single":
             self._data.app_type = "community"
         else:
