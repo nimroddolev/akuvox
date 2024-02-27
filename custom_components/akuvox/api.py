@@ -88,7 +88,7 @@ class AkuvoxData:
                     return entry["configured"][key] # type: ignore
                 return None
             override = entry.options.get("override", False) or key == "event_screenshot_options"
-            placeholder = None if key not in entry.data else entry.data[key]
+            placeholder = entry.data.get(key, None)
             if override:
                 return entry.options.get(key, placeholder)
             return placeholder
