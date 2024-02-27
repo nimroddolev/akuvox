@@ -613,7 +613,16 @@ class AkuvoxApiClient:
             "x-auth-token": self._data.token,
             "sec-fetch-dest": "empty"
         }
-        json_data = await self._api_wrapper(method="get", url=url, headers=headers, data=data)
+
+        json_data: list = await self._api_wrapper(method="get", url=url, headers=headers, data=data) # type: ignore
+
+        # Response empty, try changing app type "single" <--> "community"
+        if json_data is not None and len(json_data) == 0:
+            LOGGER.debug("Changing app type \"single\" <--> \"community\"")
+            self.switch_activities_host()
+            host = self.get_activities_host()
+            url = f"https://{host}/{API_GET_PERSONAL_DOOR_LOG}"
+            json_data = await self._api_wrapper(method="get", url=url, headers=headers, data=data) # type: ignore
 
         if json_data is not None:
             # LOGGER.debug("✅ User's personal door log retrieved successfully")
@@ -765,3 +774,10 @@ class AkuvoxApiClient:
         if self._data.app_type == "single":
             return API_APP_HOST + "single"
         return API_APP_HOST + "community"
+
+    def switch_activities_host(self):
+        """Switch the activities host from single <--> community"""
+        if self._data.app_type == "single":
+            self._data.app_type = "community"
+        else:
+            self._data.app_type = "single"
