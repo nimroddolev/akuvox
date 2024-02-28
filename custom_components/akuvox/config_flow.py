@@ -15,7 +15,14 @@ from .const import (
     DEFAULT_PHONE_NUMBER,
     DEFAULT_TOKEN,
     DEFAULT_APP_TOKEN,
-    LOGGER
+    LOGGER,
+    SUBDOMAIN_AU,
+    SUBDOMAIN_CH,
+    SUBDOMAIN_JA,
+    SUBDOMAIN_RU,
+    SUBDOMAIN_SI,
+    SUBDOMAIN_US,
+    SUBDOMAIN_EU
 )
 
 class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
@@ -112,7 +119,7 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                 "phone_number", "").replace("-", "").replace(" ", "")
 
             subdomain = self.get_subdomain_from_country_code(country_code)
-            LOGGER.debug("🌍 User will use the API from subdomain %s", subdomain)
+            LOGGER.debug("🌍 User will use the API subdomain '%s'", subdomain)
 
             self.data = {
                 "full_phone_number": f"(+{country_code}) {phone_number}",
@@ -328,23 +335,24 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         """Correlate the subdomain to the user's country code number."""
         # Australia
         if country_code == "61":
-            return "aucloud"
+            return SUBDOMAIN_AU
         # China
         if country_code == "86":
-            return "ccloud"
+            return SUBDOMAIN_CH
         # Japan
         if country_code == "81":
-            return "jcloud"
+            return SUBDOMAIN_JA
+        # Russia
         if country_code == "7":
-            return "rucloud"
+            return SUBDOMAIN_RU
         # Singapore
         if country_code == "65":
-            return "scloud"
+            return SUBDOMAIN_SI
         # United States
         if country_code == "1":
-            return "ucloud"
+            return SUBDOMAIN_US
         # Europe
-        return "ecloud"
+        return SUBDOMAIN_EU
 
 
 class AkuvoxOptionsFlowHandler(config_entries.OptionsFlow):

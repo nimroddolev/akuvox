@@ -36,6 +36,13 @@ from .const import (
     PIC_URL_KEY,
     CAPTURE_TIME_KEY,
     DATA_STORAGE_KEY,
+    SUBDOMAIN_AU,
+    SUBDOMAIN_CH,
+    SUBDOMAIN_JA,
+    SUBDOMAIN_RU,
+    SUBDOMAIN_SI,
+    SUBDOMAIN_US,
+    SUBDOMAIN_EU
 )
 
 
@@ -97,7 +104,8 @@ class AkuvoxData:
     async def set_subdomain(self, subdomain):
         """Set the regional subdomain for API requests."""
         await self.async_set_stored_data_for_key("subdomain", subdomain)
-        LOGGER.debug("🗺️ Regional API subdomain set to '%s'", subdomain)
+        flag = self.get_flag(subdomain)
+        LOGGER.debug("%s Setting regional API subdomain set to '%s'", flag, subdomain)
 
 
     async def get_subdomain(self):
@@ -106,8 +114,27 @@ class AkuvoxData:
         if subdomain is None or len(subdomain) == 0:
             LOGGER.warning("📜 Regional API subdomain not configured...using pre v0.0.7 backward compatible 'ecloud'")
             subdomain = "ecloud"
-            await self.async_set_stored_data_for_key("subdomain", subdomain)
+            await self.set_subdomain(subdomain)
+        else:
+            flag = self.get_flag(subdomain)
+            LOGGER.debug("%s Regional API subdomain set to '%s'", flag, subdomain)
         return subdomain
+
+    def get_flag(self, subdomain):
+        """The flag emoji corresponding to the subdomain region"""
+        if subdomain == SUBDOMAIN_AU:
+            return "🇦🇺"
+        if subdomain == SUBDOMAIN_CH:
+            return "🇨🇳"
+        if subdomain == SUBDOMAIN_JA:
+            return "🇯🇵"
+        if subdomain == SUBDOMAIN_RU:
+            return "🇷🇺"
+        if subdomain == SUBDOMAIN_SI:
+            return "🇸🇬"
+        if subdomain == SUBDOMAIN_US:
+            return "🇺🇸"
+        return "🇪🇺"
 
     def parse_rest_server_response(self, json_data: dict):
         """Parse the rest_server API response."""
