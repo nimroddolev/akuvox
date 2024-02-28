@@ -73,7 +73,7 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                 if selection == sms_sign_in:
                     return self.async_show_form(
                         step_id="sms_sign_in",
-                        data_schema=vol.Schema(self.get_sms_sign_in_schema()),
+                        data_schema=vol.Schema(self.get_sms_sign_in_schema(user_input)),
                         description_placeholders=user_input,
                         last_step=False,
                         errors=None
@@ -81,7 +81,7 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                 if selection == app_tokens_sign_in:
                     return self.async_show_form(
                         step_id="app_tokens_sign_in",
-                        data_schema=vol.Schema(self.get_app_tokens_sign_in_schema()),
+                        data_schema=vol.Schema(self.get_app_tokens_sign_in_schema(user_input)),
                         description_placeholders=user_input,
                         last_step=False,
                         errors=None
@@ -110,7 +110,7 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
 
         """
 
-        data_schema = self.get_sms_sign_in_schema()
+        data_schema = self.get_sms_sign_in_schema(user_input)
 
         if user_input is not None:
             country_code = user_input.get(
@@ -164,7 +164,7 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_app_tokens_sign_in(self, user_input=None):
         """Step 1c: User enters app tokens and phone number to sign in."""
-        data_schema = self.get_app_tokens_sign_in_schema()
+        data_schema = self.get_app_tokens_sign_in_schema(user_input)
         if user_input is not None:
             country_code = user_input.get(
                 "country_code", "").replace("+", "").replace(" ", "")
@@ -207,7 +207,7 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
 
                 return self.async_show_form(
                     step_id="app_tokens_sign_in",
-                    data_schema=vol.Schema(self.get_app_tokens_sign_in_schema()),
+                    data_schema=vol.Schema(self.get_app_tokens_sign_in_schema(user_input)),
                     description_placeholders=user_input,
                     last_step=True,
                     errors={
@@ -291,43 +291,45 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             last_step=True
         )
 
-    def get_sms_sign_in_schema(self):
+    def get_sms_sign_in_schema(self, user_input):
         """Get the schema for sms_sign_in step."""
+        user_input = user_input or {}
         return {
             vol.Required(
                 "country_code",
                 msg=None,
-                default=DEFAULT_COUNTRY_CODE,  # type: ignore
+                default=user_input.get("country_code", DEFAULT_COUNTRY_CODE),  # type: ignore
                 description="Your phone's international calling code prefix, eg: +1"): str,
             vol.Required(
                 "phone_number",
                 msg=None,
-                default=DEFAULT_PHONE_NUMBER,  # type: ignore
+                default=user_input.get("phone_number", DEFAULT_PHONE_NUMBER),  # type: ignore
                 description="Your phone number"): str,
         }
 
-    def get_app_tokens_sign_in_schema(self):
+    def get_app_tokens_sign_in_schema(self, user_input: dict = {}):
         """Get the schema for app_tokens_sign_in step."""
+        user_input = user_input or {}
         return {
             vol.Required(
                 "country_code",
                 msg=None,
-                default=DEFAULT_COUNTRY_CODE,  # type: ignore
+                default=user_input.get("country_code", DEFAULT_COUNTRY_CODE),  # type: ignore
                 description="Your phone's international calling code prefix"): str,
             vol.Required(
                 "phone_number",
                 msg=None,
-                default=DEFAULT_PHONE_NUMBER,  # type: ignore
+                default=user_input.get("phone_number", DEFAULT_PHONE_NUMBER),  # type: ignore
                 description="Your phone number"): str,
             vol.Required(
                 "auth_token",
                 msg=None,
-                default=DEFAULT_APP_TOKEN,  # type: ignore
+                default=user_input.get("auth_token", DEFAULT_APP_TOKEN),  # type: ignore
                 description="Your SmartPlus account's auth_token string"): str,
             vol.Required(
                 "token",
                 msg=None,
-                default=DEFAULT_TOKEN,  # type: ignore
+                default=user_input.get("token", DEFAULT_TOKEN),  # type: ignore
                 description="Your SmartPlus account's token string"): str,
         }
 
