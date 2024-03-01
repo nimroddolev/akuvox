@@ -204,6 +204,8 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                         title=self.akuvox_api_client.get_title(),
                         data=self.data
                     )
+                else:
+                    LOGGER.error("❌ Unable to retrieve user data. Check your tokens.")
 
                 return self.async_show_form(
                     step_id="app_tokens_sign_in",
@@ -419,66 +421,72 @@ class AkuvoxOptionsFlowHandler(config_entries.OptionsFlow):
                 }
             )
 
+        errors = {}
+
         # User wishes to use other SmartLife account tokens
         if user_input.get("override", False) is True:
             LOGGER.debug("Use custom token strings...")
-            await self.akuvox_api_client.async_init_api()
+            if await self.akuvox_api_client.async_init_api() is True:
 
-            # Retrieve device data
-            await self.akuvox_api_client.async_retrieve_user_data_with_tokens(
-                user_input["auth_token"],
-                user_input["token"])
-            devices_json = self.akuvox_api_client.get_devices_json()
-            if devices_json is not None and all(key in devices_json for key in (
-                "camera_data",
-                "door_relay_data",
-                "door_keys_data")
-            ):
-                camera_data = devices_json["camera_data"]
-                door_relay_data = devices_json["door_relay_data"]
-                door_keys_data = devices_json["door_keys_data"]
-                options_schema = vol.Schema({
-                    vol.Required("override",
-                                    default=config_options.get("override", None)): bool,
-                    vol.Required("token", default=config_options.get("token", None)): str,
-                    vol.Optional("camera_data", default=camera_data): dict,
-                    vol.Optional("door_relay_data", default=door_relay_data): dict,
-                    vol.Optional("door_keys_data", default=door_keys_data): dict,
-                })
+                # Retrieve device data
+                await self.akuvox_api_client.async_retrieve_user_data_with_tokens(
+                    user_input["auth_token"],
+                    user_input["token"])
+                devices_json = self.akuvox_api_client.get_devices_json()
+                if devices_json is not None and all(key in devices_json for key in (
+                    "camera_data",
+                    "door_relay_data",
+                    "door_keys_data")
+                ):
+                    camera_data = devices_json["camera_data"]
+                    door_relay_data = devices_json["door_relay_data"]
+                    door_keys_data = devices_json["door_keys_data"]
+                    options_schema = vol.Schema({
+                        vol.Required("override",
+                                        default=config_options.get("override", None)): bool,
+                        vol.Required("token", default=config_options.get("token", None)): str,
+                        vol.Optional("camera_data", default=camera_data): dict,
+                        vol.Optional("door_relay_data", default=door_relay_data): dict,
+                        vol.Optional("door_keys_data", default=door_keys_data): dict,
+                    })
+                else:
+                    errors["token"] = "Unable to receive device list. Check your token."
             else:
-                data_schema = {
-                    vol.Required(
-                        "override",
-                        msg=None,
-                        default=user_input.get("override", False),
-                        description={
-                            "auth_token": f"Current auth_token: {config_data['auth_token']}",
-                            "token": f"Current token: {config_data['token']}",
-                        },
-                    ): bool,
-                    vol.Optional(
-                        "auth_token",
-                        msg=None,
-                        default=user_input.get("auth_token", ""),
-                        description="Your SmartPlus user's auth_token."
-                    ): str,
-                    vol.Optional(
-                        "token",
-                        msg=None,
-                        default=user_input.get("token", ""),
-                        description="Your SmartPlus user's token."
-                    ): str,
-                    vol.Required(
-                        "wait_for_image_url",
-                        msg=None,
-                        default=bool(wait_for_image_url) # type: ignore
-                    ): bool
-                }
-                return self.async_show_form(
-                    step_id="init",
-                    data_schema=vol.Schema(data_schema),
-                    errors={"token": ("Unable to receive device list. Check your token.")}
-                )
+                errors["bad_tokens"] = "Unable to initialize API. Did you login again from your device? Try logging in/adding tokens again."
+
+            data_schema = {
+                vol.Required(
+                    "override",
+                    msg=None,
+                    default=user_input.get("override", False),
+                    description={
+                        "auth_token": f"Current auth_token: {config_data['auth_token']}",
+                        "token": f"Current token: {config_data['token']}",
+                    },
+                ): bool,
+                vol.Optional(
+                    "auth_token",
+                    msg=None,
+                    default=user_input.get("auth_token", ""),
+                    description="Your SmartPlus user's auth_token."
+                ): str,
+                vol.Optional(
+                    "token",
+                    msg=None,
+                    default=user_input.get("token", ""),
+                    description="Your SmartPlus user's token."
+                ): str,
+                vol.Required(
+                    "wait_for_image_url",
+                    msg=None,
+                    default=bool(wait_for_image_url) # type: ignore
+                ): bool
+            }
+            return self.async_show_form(
+                step_id="init",
+                data_schema=vol.Schema(data_schema),
+                errors=errors
+            )
 
         # User input is valid, update the options
         LOGGER.debug("Updating configuration...")

@@ -113,15 +113,12 @@ class AkuvoxData:
         subdomain = await self.async_get_stored_data_for_key("subdomain")
         if subdomain is None or len(subdomain) == 0:
             LOGGER.warning("📜 Regional API subdomain not configured...using pre v0.0.7 backward compatible 'ecloud'")
-            subdomain = "ecloud"
+            subdomain = SUBDOMAIN_EU
             await self.set_subdomain(subdomain)
-        else:
-            flag = self.get_flag(subdomain)
-            LOGGER.debug("%s Regional API subdomain set to '%s'", flag, subdomain)
         return subdomain
 
     def get_flag(self, subdomain):
-        """The flag emoji corresponding to the subdomain region"""
+        """Return the flag emoji corresponding to the subdomain region."""
         if subdomain == SUBDOMAIN_AU:
             return "🇦🇺"
         if subdomain == SUBDOMAIN_CH:
@@ -140,6 +137,8 @@ class AkuvoxData:
         """Parse the rest_server API response."""
         if json_data is not None and json_data is not {}:
             self.host = json_data["rest_server_https"]
+            return True
+        return self.host is None or len(self.host) == 0
 
     def parse_sms_login_response(self, json_data: dict):
         """Parse the sms_login API response."""
@@ -303,26 +302,36 @@ class AkuvoxApiClient:
         self.hass = hass
         self._data = AkuvoxData(entry, hass)
 
-    async def async_init_api(self) -> None:
+    async def async_init_api(self) -> bool:
         """Initialize API configuration data."""
         if self._data.host is None or len(self._data.host) == 0:
             self._data.host = "...request in process"
-            await self.async_fetch_rest_server()
+            if await self.async_fetch_rest_server() is False:
+                return False
+
         if self._data.rtsp_ip is None:
-            await self.async_make_servers_list_request(
-                auth_token=self._data.auth_token,
-                token=self._data.token,
-                phone_number=self._data.phone_number)
+            if self._data.host is not None and len(self._data.host) > 0:
+                if await self.async_make_servers_list_request(
+                    auth_token=self._data.auth_token,
+                    token=self._data.token,
+                    phone_number=self._data.phone_number) is False:
+                    LOGGER.error("❌ API request for servers list failed.")
+                    return False
+            else:
+                LOGGER.error("❌ Unable to find API host address.")
+                return False
+
         # Begin polling personal door log
         await self.async_start_polling_personal_door_log()
+
+        return True
 
     def init_api_with_data(self, host=None, subdomain=None, auth_token=None, token=None, phone_number=None):
         """"Initialize values from saved data/options."""
         if host is not None:
             self._data.host = host # type: ignore
         if subdomain is not None and len(subdomain) > 0:
-            self.hass.async_add_executor_job(self._data.async_set_stored_data_for_key, "subdomain", subdomain)
-            # await self._data.async_set_stored_data_for_key("subdomain", subdomain)
+            self.hass.add_job(self._data.async_set_stored_data_for_key, "subdomain", subdomain)
         if auth_token is not None:
             self._data.auth_token = auth_token
         if token is not None:
@@ -337,7 +346,7 @@ class AkuvoxApiClient:
     async def async_fetch_rest_server(self):
         """Retrieve the Akuvox REST server addresses and data."""
         LOGGER.debug("📡 Fetching REST server data...")
-        json_data = await self._api_wrapper(
+        json_data = await self._async_api_wrapper(
             method="get",
             url=f"https://{REST_SERVER_ADDR}:{REST_SERVER_PORT}/{API_REST_SERVER_DATA}",
             data=None,
@@ -347,43 +356,48 @@ class AkuvoxApiClient:
         )
         if json_data is not None:
             LOGGER.debug("✅ REST server data received successfully")
-            self._data.parse_rest_server_response(json_data) # type: ignore
+            if self._data.parse_rest_server_response(json_data): # type: ignore
+                return True
+            LOGGER.error("❌ Unable to parse Akuvox server rest API data.")
         else:
-            LOGGER.error("❌ Unable to reach Akuvox server.")
+            LOGGER.error("❌ Unable to fetch Akuvox server rest API data.")
+        return False
 
     async def send_sms(self, country_code, phone_number, subdomain):
         """Request SMS code to user's device."""
         self.init_api_with_data(subdomain=subdomain)
-        await self.async_init_api()
-        url = f"https://{self._data.host}/{API_SEND_SMS}"
-        headers = {
-            "Host": self._data.host,
-            "Content-Type": "application/x-www-form-urlencoded",
-            "X-AUTH-TOKEN": "",
-            "Connection": "keep-alive",
-            "Accept": "*/*",
-            "User-Agent": "VBell/6.61.2 (iPhone; iOS 16.6; Scale/3.00)",
-            "Accept-Language": "en-AU;q=1, he-AU;q=0.9, ru-RU;q=0.8",
-            "x-cloud-lang": "en"
-        }
-        data = {
-            "AreaCode": country_code,
-            "MobileNumber": phone_number,
-            "Type": 0
-        }
-        LOGGER.debug("📡 Requesting SMS code...")
-        response = await self._api_wrapper(
-            method="post",
-            url=url,
-            headers=headers,
-            data=data,
-        )
-        if response is not None:
-            if response["result"] == 0: # type: ignore
-                LOGGER.debug("✅ SMS code request successful")
-                return True
+        if await self.async_init_api():
+            url = f"https://{self._data.host}/{API_SEND_SMS}"
+            headers = {
+                "Host": self._data.host,
+                "Content-Type": "application/x-www-form-urlencoded",
+                "X-AUTH-TOKEN": "",
+                "Connection": "keep-alive",
+                "Accept": "*/*",
+                "User-Agent": "VBell/6.61.2 (iPhone; iOS 16.6; Scale/3.00)",
+                "Accept-Language": "en-AU;q=1, he-AU;q=0.9, ru-RU;q=0.8",
+                "x-cloud-lang": "en"
+            }
+            data = {
+                "AreaCode": country_code,
+                "MobileNumber": phone_number,
+                "Type": 0
+            }
+            LOGGER.debug("📡 Requesting SMS code...")
+            response = await self._async_api_wrapper(
+                method="post",
+                url=url,
+                headers=headers,
+                data=data,
+            )
+            if response is not None:
+                if response["result"] == 0: # type: ignore
+                    LOGGER.debug("✅ SMS code request successful")
+                    return True
 
-        LOGGER.debug("❌ SMS code request unsuccessful")
+            LOGGER.error("❌ SMS code request unsuccessful")
+        else:
+            LOGGER.error("❌ Unable to initialize API. Did you login again from your device? Try logging in/adding tokens again.")
         return False
 
     async def async_make_servers_list_request(self,
@@ -393,7 +407,8 @@ class AkuvoxApiClient:
                                               subdomain: str = "") -> bool:
         """Request server list data."""
         self.init_api_with_data(subdomain=subdomain)
-        await self.async_init_api()
+        if await self.async_init_api() is False:
+            return False
 
         # Store tokens
         self._data.auth_token = auth_token
@@ -418,7 +433,7 @@ class AkuvoxApiClient:
             "user": obfuscated_number,
         })
         LOGGER.debug("📡 Requesting server list...")
-        json_data = await self._api_wrapper(
+        json_data = await self._async_api_wrapper(
             method="post",
             url=url,
             headers=headers,
@@ -429,7 +444,7 @@ class AkuvoxApiClient:
             self._data.parse_sms_login_response(json_data) # type: ignore
             return True
 
-        LOGGER.error("❌ Unable to retrieve server list.")
+        LOGGER.error("❌ Unable to retrieve server list. Try sigining in again / check that your tokens are valid.")
         return False
 
     async def async_sms_sign_in(self, phone_number, country_code, sms_code) -> bool:
@@ -459,7 +474,7 @@ class AkuvoxApiClient:
             'api-version': SMS_LOGIN_API_VERSION,
             'User-Agent': 'VBell/6.61.2 (iPhone; iOS 16.6; Scale/3.00)'
         }
-        response = await self._api_wrapper(method="get", url=url, headers=headers, data=data)
+        response = await self._async_api_wrapper(method="get", url=url, headers=headers, data=data)
 
         if response is not None:
             LOGGER.debug("✅ Login successful")
@@ -470,14 +485,14 @@ class AkuvoxApiClient:
 
     async def async_retrieve_user_data(self) -> bool:
         """Retrieve user devices and temp keys data."""
-        await self.async_make_servers_list_request(
+        if await self.async_make_servers_list_request(
                 auth_token=self._data.auth_token,
                 token=self._data.token,
-                phone_number=self._data.phone_number)
-
-        await self.async_retrieve_device_data()
-        await self.async_retrieve_temp_keys_data()
-        return True
+                phone_number=self._data.phone_number):
+            await self.async_retrieve_device_data()
+            await self.async_retrieve_temp_keys_data()
+            return True
+        return False
 
     async def async_retrieve_device_data(self) -> bool:
         """Request and parse the user's device data."""
@@ -508,7 +523,7 @@ class AkuvoxApiClient:
             "Accept-Language": "en-AU;q=1, he-AU;q=0.9, ru-RU;q=0.8",
             "x-cloud-lang": "en"
         }
-        json_data = await self._api_wrapper(method="get", url=url, headers=headers, data=data)
+        json_data = await self._async_api_wrapper(method="get", url=url, headers=headers, data=data)
 
         if json_data is not None:
             LOGGER.debug("✅ User's device list retrieved successfully")
@@ -572,7 +587,7 @@ class AkuvoxApiClient:
             "sec-fetch-dest": "empty"
         }
 
-        json_data = await self._api_wrapper(method="get", url=url, headers=headers, data=data)
+        json_data = await self._async_api_wrapper(method="get", url=url, headers=headers, data=data)
 
         if json_data is not None:
             LOGGER.debug("✅ User's temporary keys list retrieved successfully")
@@ -585,10 +600,11 @@ class AkuvoxApiClient:
         """Poll the server contineously for the latest personal door log."""
         # Make sure only 1 instance of the door log polling is running
         last_polling_time = await self._data.async_get_stored_data_for_key("last_polling_time")
-        if last_polling_time is not None:
+        if last_polling_time is not None and last_polling_time > 0:
             current_time = time.time()
             difference = current_time - last_polling_time
             if difference < 15:
+                LOGGER.debug("⛔️ Already polling for door events")
                 return
         LOGGER.debug("🔄 Polling user's personal door log every 2 seconds.")
         current_time = time.time()
@@ -641,28 +657,26 @@ class AkuvoxApiClient:
             "sec-fetch-dest": "empty"
         }
 
-        json_data: list = await self._api_wrapper(method="get", url=url, headers=headers, data=data) # type: ignore
+        json_data: list = await self._async_api_wrapper(method="get", url=url, headers=headers, data=data) # type: ignore
 
         # Response empty, try changing app type "single" <--> "community"
         if json_data is not None and len(json_data) == 0:
-            LOGGER.debug("Changing app type \"single\" <--> \"community\"")
             self.switch_activities_host()
             host = self.get_activities_host()
             url = f"https://{host}/{API_GET_PERSONAL_DOOR_LOG}"
-            json_data = await self._api_wrapper(method="get", url=url, headers=headers, data=data) # type: ignore
+            json_data = await self._async_api_wrapper(method="get", url=url, headers=headers, data=data) # type: ignore
 
         if json_data is not None:
-            # LOGGER.debug("✅ User's personal door log retrieved successfully")
             return json_data
 
-        # LOGGER.error("❌ Unable to retrieve user's personal door log")
+        LOGGER.error("❌ Unable to retrieve user's personal door log")
         return None
 
     ###################
     # Request Methods #
     ###################
 
-    async def _api_wrapper(
+    async def _async_api_wrapper(
         self,
         method: str,
         url: str,
@@ -687,7 +701,7 @@ class AkuvoxApiClient:
                                method, url)
                 self._data.app_type = app_type_2
                 url = url.replace("app/"+app_type_1+"/", "app/"+app_type_2+"/")
-                return await self._api_wrapper(method, url, data, headers)
+                return await self._async_api_wrapper(method, url, data, headers)
             if f"app/{app_type_2}/" in url:
                 LOGGER.error("Timeout occured for 'app/%s' API %s request: %s", app_type_2, method, url)
                 self._data.app_type = app_type_1
