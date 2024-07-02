@@ -3,9 +3,7 @@ from __future__ import annotations
 
 from homeassistant import config_entries
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.helpers.selector import (
-    selector
-)
+from homeassistant.helpers import selector
 
 import voluptuous as vol
 from .api import AkuvoxApiClient
@@ -16,14 +14,12 @@ from .const import (
     DEFAULT_TOKEN,
     DEFAULT_APP_TOKEN,
     LOGGER,
-    SUBDOMAIN_AU,
-    SUBDOMAIN_CH,
-    SUBDOMAIN_JA,
-    SUBDOMAIN_RU,
-    SUBDOMAIN_SI,
-    SUBDOMAIN_US,
-    SUBDOMAIN_EU
+    LOCATIONS_DICT,
+    COUNTRY_PHONE,
 )
+from .helpers import AkuvoxHelpers
+
+helpers = AkuvoxHelpers()
 
 class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
     """Config flow for Akuvox."""
@@ -61,7 +57,7 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         sms_sign_in = "Continue sign-in via SMS Verification"
         app_tokens_sign_in = "Sign-in via app tokens"
         data_schema = {
-            "warning_option_selection": selector({
+            "warning_option_selection": selector.selector({
                 "select": {
                     "options": [sms_sign_in, app_tokens_sign_in],
                 }
@@ -113,24 +109,24 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         data_schema = self.get_sms_sign_in_schema(user_input)
 
         if user_input is not None:
-            country_code = user_input.get(
-                "country_code", "").replace("+", "").replace(" ", "")
+            country_code = helpers.get_country_phone_code_from_name(user_input.get("country_code"))
             phone_number = user_input.get(
                 "phone_number", "").replace("-", "").replace(" ", "")
 
-            subdomain = self.get_subdomain_from_country_code(country_code)
-            LOGGER.debug("🌍 User will use the API subdomain '%s'", subdomain)
+            subdomain = helpers.get_subdomain_from_country_code(country_code)
+            location_dict = helpers.get_location_dict(country_code)
+            LOGGER.debug("User will use the API subdomain '%s' for %s", location_dict.get("subdomain"), location_dict.get("country"))
 
             self.data = {
                 "full_phone_number": f"(+{country_code}) {phone_number}",
                 "country_code": country_code,
                 "phone_number": phone_number,
-                "subdomain": subdomain
+                "subdomain": location_dict.get("subdomain")
             }
 
             if len(country_code) > 0 and len(phone_number) > 0:
                 # Request SMS code for login
-                request_sms_code = await self.akuvox_api_client.send_sms(country_code, phone_number, subdomain)
+                request_sms_code = await self.akuvox_api_client.async_send_sms(self.hass, country_code, phone_number, subdomain)
                 if request_sms_code:
                     return await self.async_step_verify_sms_code()
                 else:
@@ -166,13 +162,12 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         """Step 1c: User enters app tokens and phone number to sign in."""
         data_schema = self.get_app_tokens_sign_in_schema(user_input)
         if user_input is not None:
-            country_code = user_input.get(
-                "country_code", "").replace("+", "").replace(" ", "")
+            country_code = helpers.get_country_phone_code_from_name(user_input.get("country_code"))
             phone_number = user_input.get(
                 "phone_number", "").replace("-", "").replace(" ", "")
             token = user_input.get("token", "")
             auth_token = user_input.get("auth_token", "")
-            subdomain = self.get_subdomain_from_country_code(country_code)
+            subdomain = helpers.get_subdomain_from_country_code(country_code)
 
             self.data = {
                 "full_phone_number": f"(+{country_code}) {phone_number}",
@@ -187,8 +182,10 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             if all(len(value) > 0 for value in (country_code, phone_number, token, auth_token)):
                 # Retrieve servers_list data.
                 login_successful = await self.akuvox_api_client.async_make_servers_list_request(
+                    hass=self.hass,
                     auth_token=auth_token,
                     token=token,
+                    country_code=country_code,
                     phone_number=phone_number,
                     subdomain=subdomain)
                 if login_successful is True:
@@ -296,12 +293,21 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
     def get_sms_sign_in_schema(self, user_input):
         """Get the schema for sms_sign_in step."""
         user_input = user_input or {}
+
+        default_country_name_code = helpers.find_country_name_code(str(COUNTRY_PHONE.get(self.hass.config.country,"")))
+        default_country_name = LOCATIONS_DICT.get(default_country_name_code, {}).get("country")
+        country_names_list:list = helpers.get_country_names_list()
+
         return {
-            vol.Required(
-                "country_code",
-                msg=None,
-                default=user_input.get("country_code", DEFAULT_COUNTRY_CODE),  # type: ignore
-                description="Your phone's international calling code prefix, eg: +1"): str,
+            vol.Required("country_code",
+                         default=default_country_name,
+                         description="Your phone's international calling code prefix"):
+                         selector.SelectSelector(
+                             selector.SelectSelectorConfig(
+                                 options=country_names_list,
+                                 mode=selector.SelectSelectorMode.DROPDOWN,
+                                 custom_value=False),
+                                 ),
             vol.Required(
                 "phone_number",
                 msg=None,
@@ -312,12 +318,21 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
     def get_app_tokens_sign_in_schema(self, user_input: dict = {}):
         """Get the schema for app_tokens_sign_in step."""
         user_input = user_input or {}
+
+        default_country_name_code = helpers.find_country_name_code(str(COUNTRY_PHONE.get(self.hass.config.country,"")))
+        default_country_name = LOCATIONS_DICT.get(default_country_name_code, {}).get("country")
+        country_names_list:list = helpers.get_country_names_list()
+
         return {
-            vol.Required(
-                "country_code",
-                msg=None,
-                default=user_input.get("country_code", DEFAULT_COUNTRY_CODE),  # type: ignore
-                description="Your phone's international calling code prefix"): str,
+            vol.Required("country_code",
+                         default=default_country_name,
+                         description="Your phone's international calling code prefix"):
+                         selector.SelectSelector(
+                             selector.SelectSelectorConfig(
+                                 options=country_names_list,
+                                 mode=selector.SelectSelectorMode.DROPDOWN,
+                                 custom_value=False),
+                                 ),
             vol.Required(
                 "phone_number",
                 msg=None,
@@ -334,30 +349,6 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                 default=user_input.get("token", DEFAULT_TOKEN),  # type: ignore
                 description="Your SmartPlus account's token string"): str,
         }
-
-    def get_subdomain_from_country_code(self, country_code):
-        """Correlate the subdomain to the user's country code number."""
-        # Australia
-        if country_code == "61":
-            return SUBDOMAIN_AU
-        # China
-        if country_code == "86":
-            return SUBDOMAIN_CH
-        # Japan
-        if country_code == "81":
-            return SUBDOMAIN_JA
-        # Russia
-        if country_code == "7":
-            return SUBDOMAIN_RU
-        # Singapore
-        if country_code == "65":
-            return SUBDOMAIN_SI
-        # United States
-        if country_code == "1":
-            return SUBDOMAIN_US
-        # Europe
-        return SUBDOMAIN_EU
-
 
 class AkuvoxOptionsFlowHandler(config_entries.OptionsFlow):
     """Handle options flow for Akuvox integration."""
@@ -379,10 +370,23 @@ class AkuvoxOptionsFlowHandler(config_entries.OptionsFlow):
             "asap": "Receive events once generated, without waiting for camera screenshot URLs.",
             "wait": "Wait for camera screenshot URLs to become available before triggering the event (typically adds a delay of 0-3 seconds)."
         }
+
+        default_country_name_code = helpers.find_country_name_code(config_data.get('country_code', self.hass.config.country))
+        default_country_name = LOCATIONS_DICT.get(default_country_name_code, {}).get("country")
+        country_names_list:list = []
+        for _country, country_dict in LOCATIONS_DICT.items():
+            country_names_list.append(country_dict.get("country"))
+
         options_schema = vol.Schema({
-            vol.Required("override",
-                         default=self.get_data_key_value("override", False) # type: ignore
-            ): bool,
+            vol.Optional("country",
+                         default=default_country_name,
+                         description="Your country code"):
+                         selector.SelectSelector(
+                             selector.SelectSelectorConfig(
+                                 options=country_names_list,
+                                 mode=selector.SelectSelectorMode.DROPDOWN,
+                                 custom_value=False),
+                                 ),
             vol.Optional("auth_token",
                          default=self.get_data_key_value("auth_token", False) # type: ignore
             ): str,
@@ -442,8 +446,6 @@ class AkuvoxOptionsFlowHandler(config_entries.OptionsFlow):
                     door_relay_data = devices_json["door_relay_data"]
                     door_keys_data = devices_json["door_keys_data"]
                     options_schema = vol.Schema({
-                        vol.Required("override",
-                                        default=config_options.get("override", None)): bool,
                         vol.Required("token", default=config_options.get("token", None)): str,
                         vol.Optional("camera_data", default=camera_data): dict,
                         vol.Optional("door_relay_data", default=door_relay_data): dict,
@@ -455,15 +457,6 @@ class AkuvoxOptionsFlowHandler(config_entries.OptionsFlow):
                 errors["bad_tokens"] = "Unable to initialize API. Did you login again from your device? Try logging in/adding tokens again."
 
             data_schema = {
-                vol.Required(
-                    "override",
-                    msg=None,
-                    default=user_input.get("override", False),
-                    description={
-                        "auth_token": f"Current auth_token: {config_data['auth_token']}",
-                        "token": f"Current token: {config_data['token']}",
-                    },
-                ): bool,
                 vol.Optional(
                     "auth_token",
                     msg=None,

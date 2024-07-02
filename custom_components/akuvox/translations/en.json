@@ -17,16 +17,16 @@
                 "title": "SMS Verification",
                 "description": "Please enter your mobile phone number to receive your verification SMS:",
                 "data": {
-                    "country_code": "Country Code",
-                    "phone_number": "Phone Number"
+                    "country_code": "Country",
+                    "phone_number": "Phone Number (without the country code)"
                 }
             },
             "app_tokens_sign_in": {
                 "title": "Sign In via App Tokens",
                 "description": "Please enter your account details below.\n\nℹ️ To obtain your tokens please review the documentation.",
                 "data": {
-                    "country_code": "Country Code",
-                    "phone_number": "Phone Number",
+                    "country_code": "Country",
+                    "phone_number": "Phone Number (without the country code)",
                     "token": "Token",
                     "auth_token": "Auth Token"
                 }
@@ -49,9 +49,10 @@
                 "title": "SmartPlus User Tokens & Event Configuration",
                 "description": "If you signed into the SmartPlus app on your device after adding the integration, you can update your user tokens below. This will allow Home Assistant to communicate with Akuvox's servers while you remain signed in on your device.\n\nPlease refer to the documentation for instructions on how to extract your token string.",
                 "data": {
+                    "country": "The country registered in your Akuvox SmartPlus account",
                     "override": "Use the following SmartLife account tokens:",
-                    "auth_token": "auth_token",
-                    "token": "token",
+                    "auth_token": "Your SmartLife `auth_token` value",
+                    "token": "Your SmartLife `token` value",
                     "event_screenshot_options": "Screenshot URLS for `akuvox_door_update` events:"
                 }
             }

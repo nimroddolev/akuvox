@@ -5,7 +5,11 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.const import (
     CONF_NAME,
     CONF_VERIFY_SSL,
+    ATTR_MODEL,
+    ATTR_MANUFACTURER,
+    ATTR_IDENTIFIERS,
 )
+from homeassistant.core import HomeAssistant
 
 from .const import (
     DOMAIN,
@@ -15,7 +19,7 @@ from .const import (
     DATA_STORAGE_KEY
 )
 
-async def async_setup_entry(hass, entry, async_add_devices):
+async def async_setup_entry(hass: HomeAssistant, _entry, async_add_devices):
     """Set up the camera platform."""
     store = storage.Store(hass, 1, DATA_STORAGE_KEY)
     device_data = await store.async_load()

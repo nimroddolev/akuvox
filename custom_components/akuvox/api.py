@@ -15,6 +15,8 @@ import aiohttp
 import async_timeout
 import requests
 
+from .data import AkuvoxData
+
 from .const import (
     LOGGER,
     REST_SERVER_ADDR,
@@ -32,17 +34,8 @@ from .const import (
     API_APP_HOST,
     API_GET_PERSONAL_TEMP_KEY_LIST,
     API_GET_PERSONAL_DOOR_LOG,
-    TEMP_KEY_QR_HOST,
-    PIC_URL_KEY,
-    CAPTURE_TIME_KEY,
     DATA_STORAGE_KEY,
-    SUBDOMAIN_AU,
-    SUBDOMAIN_CH,
-    SUBDOMAIN_JA,
-    SUBDOMAIN_RU,
-    SUBDOMAIN_SI,
-    SUBDOMAIN_US,
-    SUBDOMAIN_EU
+    LOCATIONS_DICT
 )
 
 
@@ -57,239 +50,11 @@ class AkuvoxApiClientCommunicationError(AkuvoxApiClientError):
 class AkuvoxApiClientAuthenticationError(AkuvoxApiClientError):
     """Exception to indicate an authentication error."""
 
-
-@dataclass
-class AkuvoxData:
-    """Data class holding key data from API requests."""
-
-    hass: HomeAssistant = None # type: ignore
-    host: str = ""
-    subdomain: str = ""
-    app_type: str = ""
-    auth_token: str = ""
-    token: str = ""
-    phone_number: str = ""
-    wait_for_image_url: bool = False
-    rtsp_ip: str = ""
-    project_name: str = ""
-    camera_data = []
-    door_relay_data = []
-    door_keys_data = []
-
-
-    def __init__(self, entry: ConfigEntry, hass: HomeAssistant):
-        """Initialize the Akuvox API client."""
-        self.hass = hass
-        self.host = self.get_value_for_key(entry, "host") # type: ignore
-        self.auth_token = self.get_value_for_key(entry, "auth_token") # type: ignore
-        self.token = self.get_value_for_key(entry, "token") # type: ignore
-        self.phone_number = self.get_value_for_key(entry, "phone_number") # type: ignore
-        self.wait_for_image_url = bool(self.get_value_for_key(entry, "event_screenshot_options") == "wait") # type: ignore
-        hass.async_run_job(self.async_set_stored_data_for_key, "wait_for_image_url", self.wait_for_image_url)
-
-    def get_value_for_key(self, entry: ConfigEntry, key: str):
-        """Get the value for a given key. 1st check: configured, 2nd check: options, 3rd check: data."""
-        if entry is not None:
-            if isinstance(entry, dict):
-                if key in entry["configured"]: # type: ignore
-                    return entry["configured"][key] # type: ignore
-                return None
-            override = entry.options.get("override", False) or key == "event_screenshot_options"
-            placeholder = entry.data.get(key, None)
-            if override:
-                return entry.options.get(key, placeholder)
-            return placeholder
-        return None
-
-    async def set_subdomain(self, subdomain):
-        """Set the regional subdomain for API requests."""
-        await self.async_set_stored_data_for_key("subdomain", subdomain)
-        flag = self.get_flag(subdomain)
-        LOGGER.debug("%s Setting regional API subdomain set to '%s'", flag, subdomain)
-
-
-    async def get_subdomain(self):
-        """Get the regional subdomain for API requests."""
-        subdomain = await self.async_get_stored_data_for_key("subdomain")
-        if subdomain is None or len(subdomain) == 0:
-            LOGGER.warning("📜 Regional API subdomain not configured...using pre v0.0.7 backward compatible 'ecloud'")
-            subdomain = SUBDOMAIN_EU
-            await self.set_subdomain(subdomain)
-        return subdomain
-
-    def get_flag(self, subdomain):
-        """Return the flag emoji corresponding to the subdomain region."""
-        if subdomain == SUBDOMAIN_AU:
-            return "🇦🇺"
-        if subdomain == SUBDOMAIN_CH:
-            return "🇨🇳"
-        if subdomain == SUBDOMAIN_JA:
-            return "🇯🇵"
-        if subdomain == SUBDOMAIN_RU:
-            return "🇷🇺"
-        if subdomain == SUBDOMAIN_SI:
-            return "🇸🇬"
-        if subdomain == SUBDOMAIN_US:
-            return "🇺🇸"
-        return "🇪🇺"
-
-    def parse_rest_server_response(self, json_data: dict):
-        """Parse the rest_server API response."""
-        if json_data is not None and json_data is not {}:
-            self.host = json_data["rest_server_https"]
-            return True
-        return self.host is None or len(self.host) == 0
-
-    def parse_sms_login_response(self, json_data: dict):
-        """Parse the sms_login API response."""
-        if json_data is not None:
-            if "auth_token" in json_data:
-                self.auth_token = json_data["auth_token"]
-            if "token" in json_data:
-                self.token = json_data["token"]
-            if "access_server" in json_data:
-                self.rtsp_ip = json_data["access_server"].split(':')[0]
-
-    def parse_userconf_data(self, json_data: dict):
-        """Parse the userconf API response."""
-        self.door_relay_data = []
-        self.camera_data = []
-        if json_data is not None:
-            if "app_conf" in json_data:
-                self.project_name = json_data["app_conf"]["project_name"].strip()
-            if "dev_list" in json_data:
-                for dev_data in json_data["dev_list"]:
-                    name = dev_data["location"].strip()
-                    mac = dev_data["mac"]
-
-                    # Camera
-                    if "location" in dev_data and "rtsp_pwd" in dev_data and "mac" in dev_data:
-                        password = dev_data["rtsp_pwd"]
-                        self.camera_data.append({
-                            "name": name,
-                            "video_url": f"rtsp://ak:{password}@{self.rtsp_ip}:554/{mac}"
-                        })
-                        LOGGER.debug("🎥 Camera parsed: %s", name)
-
-                    # Door Relay
-                    if "relay" in dev_data:
-                        for relay in dev_data["relay"]:
-                            relay_id = relay["relay_id"]
-                            door_name = relay["door_name"].strip()
-                            self.door_relay_data.append({
-                                "name": name,
-                                "door_name": door_name,
-                                "relay_id": relay_id,
-                                "mac": mac
-                            })
-
-                            LOGGER.debug("🚪 Door relay parsed: %s-%s",
-                                         name, door_name)
-
-    def parse_temp_keys_data(self, json_data: list):
-        """Parse the getPersonalTempKeyList API response."""
-        self.door_keys_data = []
-        for door_keys_json in json_data:
-            door_keys_data = {}
-            door_keys_data["key_id"] = door_keys_json["ID"]
-            door_keys_data["description"] = door_keys_json["Description"]
-            door_keys_data["key_code"] = door_keys_json["TmpKey"]
-            door_keys_data["begin_time"] = door_keys_json["BeginTime"]
-            door_keys_data["end_time"] = door_keys_json["EndTime"]
-            door_keys_data["access_times"] = door_keys_json["AccessTimes"]
-            door_keys_data["allowed_times"] = door_keys_json["AllowedTimes"]
-            door_keys_data["each_allowed_times"] = door_keys_json["EachAllowedTimes"]
-            door_keys_data["qr_code_url"] = f"https://{TEMP_KEY_QR_HOST}{door_keys_json['QrCodeUrl']}"
-            door_keys_data["expired"] = False if door_keys_json["Expired"] else True
-
-            door_keys_data["doors"] = []
-            if "Doors" in door_keys_json:
-                for door_key_json in door_keys_json["Doors"]:
-                    door_keys_data["doors"].append({
-                        "door_id": door_key_json["ID"],
-                        "key_id": door_key_json["KeyID"],  # Reference to key
-                        "relay": door_key_json["Relay"],
-                        "mac": door_key_json["MAC"]
-                    })
-
-            self.door_keys_data.append(door_keys_data)
-
-
-            LOGGER.debug("🔑 %s parsed, opening %s door%s",
-                         door_keys_data["description"],
-                         str(len(door_keys_data["doors"])),
-                         "" if len(door_keys_data["doors"]) == 1 else "s")
-
-
-    async def async_parse_personal_door_log(self, json_data: list):
-        """Parse the getDoorLog API response."""
-        ret_value = None
-        if json_data is not None and len(json_data) > 0:
-            new_door_log = json_data[0]
-            latest_door_log = await self.async_get_stored_data_for_key("latest_door_log")
-            if latest_door_log is not None and CAPTURE_TIME_KEY in latest_door_log:
-                if new_door_log is not None and CAPTURE_TIME_KEY in new_door_log:
-                    # Ignore previous door open event
-                    if str(latest_door_log[CAPTURE_TIME_KEY]) == str(new_door_log[CAPTURE_TIME_KEY]):
-                        return None
-                    # Screenshot required and currently unavailable
-                    if PIC_URL_KEY in new_door_log and new_door_log[PIC_URL_KEY] == "":
-                        if await self.async_get_stored_data_for_key("wait_for_image_url") is True:
-                            LOGGER.debug("New door entry detected --> Waiting for screenshot URL...")
-                            return None
-                        else:
-                            LOGGER.debug("New door entry detected --> Not waiting for the screenshot URL...")
-                    # New door event detected
-                    LOGGER.debug("ℹ️ New personal door log entry detected:")
-                    LOGGER.debug(" - Initiator: %s", new_door_log["Initiator"])
-                    LOGGER.debug(" - CaptureType: %s", new_door_log["CaptureType"])
-                    LOGGER.debug(" - Location: %s", new_door_log["Location"])
-                    LOGGER.debug(" - Door MAC: %s", new_door_log["MAC"])
-                    LOGGER.debug(" - Door Relay: %s", new_door_log["Relay"])
-                    LOGGER.debug(" - Camera screenshot URL: %s", new_door_log["PicUrl"])
-                    ret_value = new_door_log
-
-            await self.async_set_stored_data_for_key("latest_door_log", new_door_log)
-        return ret_value
-
-    ###################
-
-    async def async_set_stored_data_for_key(self, key, value):
-        """Store key/value pair to integration's storage."""
-        store = storage.Store(self.hass, 1, DATA_STORAGE_KEY)
-        stored_data: dict = await store.async_load() # type: ignore
-        if stored_data is None:
-            stored_data = {}
-        stored_data[key] = value
-        await store.async_save(stored_data)
-
-    async def async_get_stored_data_for_key(self, key):
-        """Store key/value pair to integration's storage."""
-        ret_val = None
-        store = storage.Store(self.hass, 1, DATA_STORAGE_KEY)
-        stored_data: dict = await store.async_load() # type: ignore
-        if stored_data is not None and key in stored_data:
-            ret_val = stored_data[key]
-        return ret_val
-
-    ###################
-
-    def get_device_data(self) -> dict:
-        """Device data dictionary."""
-        return {
-            "host": self.host,
-            "token": self.token,
-            "auth_token": self.auth_token,
-            "camera_data": self.camera_data,
-            "door_relay_data": self.door_relay_data,
-            "door_keys_data": self.door_keys_data
-        }
-
-
 class AkuvoxApiClient:
     """Sample API Client."""
 
-    _data: AkuvoxData
+    _data: AkuvoxData = None
+    hass: HomeAssistant = None
 
     def __init__(
         self,
@@ -300,7 +65,16 @@ class AkuvoxApiClient:
         """Akuvox API Client."""
         self._session = session
         self.hass = hass
-        self._data = AkuvoxData(entry, hass)
+        if entry:
+            LOGGER.debug("Initializing AkuvoxData from API client init")
+            self._data = AkuvoxData(entry=entry,
+                                    hass=hass,
+                                    host=None,
+                                    auth_token=None,
+                                    token=None,
+                                    country_code=None,
+                                    phone_number=None,
+                                    wait_for_image_url=None)
 
     async def async_init_api(self) -> bool:
         """Initialize API configuration data."""
@@ -312,8 +86,10 @@ class AkuvoxApiClient:
         if self._data.rtsp_ip is None:
             if self._data.host is not None and len(self._data.host) > 0:
                 if await self.async_make_servers_list_request(
+                    hass=self.hass,
                     auth_token=self._data.auth_token,
                     token=self._data.token,
+                    country_code=self.hass.config.country,
                     phone_number=self._data.phone_number) is False:
                     LOGGER.error("❌ API request for servers list failed.")
                     return False
@@ -326,10 +102,26 @@ class AkuvoxApiClient:
 
         return True
 
-    def init_api_with_data(self, host=None, subdomain=None, auth_token=None, token=None, phone_number=None):
+    def init_api_with_data(self, hass: HomeAssistant=None, host=None, subdomain=None, auth_token=None, token=None, phone_number=None, country_code:int=-1):
         """"Initialize values from saved data/options."""
+        if not self._data:
+            LOGGER.debug("Initializing AkuvoxData from API client init_api_with_data")
+            self._data = AkuvoxData(
+                entry=None,
+                hass=hass,
+                host=host,
+                subdomain=subdomain,
+                auth_token=auth_token,
+                token=token,
+                phone_number=phone_number,
+                country_code=country_code)
+        self.hass = self.hass if self.hass else hass
         if host is not None:
             self._data.host = host # type: ignore
+        if country_code and country_code != -1:
+            location_dict = LOCATIONS_DICT.get(country_code, None)
+            if location_dict and not subdomain:
+                subdomain = location_dict.get("subdomain")
         if subdomain is not None and len(subdomain) > 0:
             self.hass.add_job(self._data.async_set_stored_data_for_key, "subdomain", subdomain)
         if auth_token is not None:
@@ -363,9 +155,13 @@ class AkuvoxApiClient:
             LOGGER.error("❌ Unable to fetch Akuvox server rest API data.")
         return False
 
-    async def send_sms(self, country_code, phone_number, subdomain):
+    async def async_send_sms(self, hass:HomeAssistant, country_code, phone_number, subdomain):
         """Request SMS code to user's device."""
-        self.init_api_with_data(subdomain=subdomain)
+        self.init_api_with_data(
+            hass=hass,
+            subdomain=subdomain,
+            country_code=country_code,
+            phone_number=phone_number)
         if await self.async_init_api():
             url = f"https://{self._data.host}/{API_SEND_SMS}"
             headers = {
@@ -383,7 +179,7 @@ class AkuvoxApiClient:
                 "MobileNumber": phone_number,
                 "Type": 0
             }
-            LOGGER.debug("📡 Requesting SMS code...")
+            LOGGER.debug("📡 Requesting SMS code from subdomain %s...", subdomain)
             response = await self._async_api_wrapper(
                 method="post",
                 url=url,
@@ -401,12 +197,20 @@ class AkuvoxApiClient:
         return False
 
     async def async_make_servers_list_request(self,
+                                              hass: HomeAssistant,
                                               auth_token: str,
                                               token: str,
+                                              country_code,
                                               phone_number: str,
                                               subdomain: str = "") -> bool:
         """Request server list data."""
-        self.init_api_with_data(subdomain=subdomain)
+        self.init_api_with_data(
+            hass=hass,
+            subdomain=subdomain,
+            auth_token=auth_token,
+            token=token,
+            country_code=country_code,
+            phone_number=phone_number)
         if await self.async_init_api() is False:
             return False
 
@@ -486,9 +290,11 @@ class AkuvoxApiClient:
     async def async_retrieve_user_data(self) -> bool:
         """Retrieve user devices and temp keys data."""
         if await self.async_make_servers_list_request(
-                auth_token=self._data.auth_token,
-                token=self._data.token,
-                phone_number=self._data.phone_number):
+            hass=self.hass,
+            auth_token=self._data.auth_token,
+            token=self._data.token,
+            country_code=self.hass.config.country,
+            phone_number=self._data.phone_number):
             await self.async_retrieve_device_data()
             await self.async_retrieve_temp_keys_data()
             return True
@@ -666,7 +472,7 @@ class AkuvoxApiClient:
             url = f"https://{host}/{API_GET_PERSONAL_DOOR_LOG}"
             json_data = await self._async_api_wrapper(method="get", url=url, headers=headers, data=data) # type: ignore
 
-        if json_data is not None:
+        if json_data is not None and len(json_data) > 0:
             return json_data
 
         LOGGER.error("❌ Unable to retrieve user's personal door log")
@@ -687,7 +493,7 @@ class AkuvoxApiClient:
         try:
             async with async_timeout.timeout(10):
                 func = self.post_request if method == "post" else self.get_request
-                subdomain = await self._data.get_subdomain()
+                subdomain = self._data.subdomain
                 url = url.replace("subdomain.", f"{subdomain}.")
                 response = await self.hass.async_add_executor_job(func, url, headers, data, 10)
                 return self.process_response(response)
@@ -777,11 +583,13 @@ class AkuvoxApiClient:
 
     def post_request(self, url, headers, data="", timeout=10):
         """Make a synchronous post request."""
-        return requests.post(url, headers=headers, data=data, timeout=timeout)
+        response: requests.Response = requests.post(url, headers=headers, data=data, timeout=timeout)
+        return response
 
     def get_request(self, url, headers, data, timeout=10):
         """Make a synchronous post request."""
-        return requests.get(url, headers=headers, data=data, timeout=timeout)
+        response: requests.Response = requests.get(url, headers=headers, data=data, timeout=timeout)
+        return response
 
     ###########
     # Getters #
@@ -819,6 +627,8 @@ class AkuvoxApiClient:
     def switch_activities_host(self):
         """Switch the activities host from single <--> community."""
         if self._data.app_type == "single":
+            LOGGER.debug("Switching API address from 'single' to 'community'")
             self._data.app_type = "community"
         else:
             self._data.app_type = "single"
+            LOGGER.debug("Switching API address from 'community' to 'single'")
