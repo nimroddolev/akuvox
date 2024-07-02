@@ -1,15 +1,11 @@
 """Camera platform for akuvox."""
 
 from collections.abc import Callable, Awaitable
-from requests.auth import HTTPDigestAuth
-import requests
 
 from homeassistant.helpers import storage
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.const import ATTR_IDENTIFIERS, CONF_NAME, CONF_VERIFY_SSL
 from homeassistant.core import HomeAssistant
-from homeassistant.components.ffmpeg import get_ffmpeg_manager
-from homeassistant.components.camera import Camera
 from homeassistant.components.generic.camera import GenericCamera
 
 from .const import DOMAIN, LOGGER, NAME, VERSION, DATA_STORAGE_KEY

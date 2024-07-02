@@ -1,6 +1,5 @@
 """Akuvox API Client."""
 from __future__ import annotations
-from dataclasses import dataclass
 
 import asyncio
 import socket
@@ -8,7 +7,6 @@ import json
 import time
 
 from homeassistant.core import HomeAssistant
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers import storage
 
 import aiohttp

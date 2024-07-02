@@ -9,7 +9,6 @@ import voluptuous as vol
 from .api import AkuvoxApiClient
 from .const import (
     DOMAIN,
-    DEFAULT_COUNTRY_CODE,
     DEFAULT_PHONE_NUMBER,
     DEFAULT_TOKEN,
     DEFAULT_APP_TOKEN,
