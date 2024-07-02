@@ -57,7 +57,11 @@ class AkuvoxData:
         if subdomain:
             self.subdomain = subdomain
         else:
-            country_code = country_code if country_code else str(entry.data.get("country_code", hass.config.country))
+            try:
+                if entry.data:
+                    country_code = country_code if country_code else str(entry.data.get("country_code", hass.config.country))
+            except Exception as error:
+                LOGGER.debug("Unable to use country due to error: %s", error)
             self.location_dict = helpers.get_location_dict(country_code)
             if self.location_dict:
                 self.subdomain = self.location_dict.get("subdomain")

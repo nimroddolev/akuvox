@@ -67,14 +67,15 @@ class AkuvoxApiClient:
         self.hass = hass
         if entry:
             LOGGER.debug("Initializing AkuvoxData from API client init")
-            self._data = AkuvoxData(entry=entry,
-                                    hass=hass,
-                                    host=None,
-                                    auth_token=None,
-                                    token=None,
-                                    country_code=None,
-                                    phone_number=None,
-                                    wait_for_image_url=None)
+            self._data = AkuvoxData(
+                entry=entry,
+                hass=hass,
+                host=None,
+                auth_token=None,
+                token=None,
+                country_code=None,
+                phone_number=None,
+                wait_for_image_url=None)
 
     async def async_init_api(self) -> bool:
         """Initialize API configuration data."""
@@ -608,7 +609,11 @@ class AkuvoxApiClient:
         if (phone_number is None or len(phone_number) == 0):
             LOGGER.error("No phone number provided for obfuscation")
         # Mask phone number
-        num_str = str(phone_number)
+        try:
+            num_str = str(phone_number)
+        except Exception as error:
+            LOGGER.error("Unable to get obfuscated phone number from %s: %s", str(phone_number), str(error))
+            return False
         transformed_str = ""
         # Iterate through each digit in the input number
         for digit_char in num_str:
