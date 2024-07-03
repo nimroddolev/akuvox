@@ -69,6 +69,7 @@ class AkuvoxApiClient:
                 entry=entry,
                 hass=hass,
                 host=None,
+                subdomain=None,
                 auth_token=None,
                 token=None,
                 country_code=None,

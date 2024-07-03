@@ -12,6 +12,7 @@ from .const import (
     PIC_URL_KEY,
     CAPTURE_TIME_KEY,
     DATA_STORAGE_KEY,
+    LOCATIONS_DICT,
 )
 from .helpers import AkuvoxHelpers
 
@@ -38,16 +39,17 @@ class AkuvoxData:
 
 
     def __init__(self,
-                 entry: ConfigEntry = None,
-                 hass: HomeAssistant = None,
-                 host: str = None,
-                 subdomain: str = None,
-                 auth_token: str = None,
-                 token: str = None,
-                 country_code: str = None,
-                 phone_number: str = None,
+                 entry: ConfigEntry,
+                 hass: HomeAssistant,
+                 host: str,
+                 subdomain: str,
+                 auth_token: str,
+                 token: str,
+                 country_code: str,
+                 phone_number: str,
                  wait_for_image_url: bool = False):
         """Initialize the Akuvox API client."""
+       
         self.hass = self.hass if self.hass else hass
         self.host = host if host else self.get_value_for_key(entry, "host", host) # type: ignore
         self.auth_token = auth_token if auth_token else self.get_value_for_key(entry, "auth_token", auth_token) # type: ignore
@@ -57,14 +59,17 @@ class AkuvoxData:
         if subdomain:
             self.subdomain = subdomain
         else:
-            try:
-                if entry.data:
-                    country_code = country_code if country_code else str(entry.data.get("country_code", hass.config.country))
-            except Exception as error:
-                LOGGER.debug("Unable to use country due to error: %s", error)
-            self.location_dict = helpers.get_location_dict(country_code)
-            if self.location_dict:
-                self.subdomain = self.location_dict.get("subdomain")
+            if not country_code:
+                try:
+                    if entry.data:
+                        entry_data = dict(entry.data)
+                        country_name_code = str(entry_data.get("country", hass.config.country))
+                        if country_name_code in LOCATIONS_DICT:
+                            self.location_dict = LOCATIONS_DICT.get(country_name_code) # type: ignore
+                            self.subdomain = self.location_dict.get("subdomain", "ecloud") # type: ignore
+                except Exception as error:
+                    LOGGER.debug("Unable to use country due to error: %s", error)
+            self.subdomain = self.subdomain if self.subdomain else "ecloud"
 
         self.hass.add_job(self.async_set_stored_data_for_key, "wait_for_image_url", self.wait_for_image_url)
 
@@ -174,6 +179,7 @@ class AkuvoxData:
     async def async_parse_personal_door_log(self, json_data: list):
         """Parse the getDoorLog API response."""
         ret_value = None
+        is_wait = await self.async_get_stored_data_for_key("wait_for_image_url")
         if json_data is not None and len(json_data) > 0:
             new_door_log = json_data[0]
             latest_door_log = await self.async_get_stored_data_for_key("latest_door_log")
@@ -184,7 +190,7 @@ class AkuvoxData:
                         return None
                     # Screenshot required and currently unavailable
                     if PIC_URL_KEY in new_door_log and new_door_log[PIC_URL_KEY] == "":
-                        if await self.async_get_stored_data_for_key("wait_for_image_url") is True:
+                        if is_wait is True:
                             LOGGER.debug("New door entry detected --> Waiting for screenshot URL...")
                             return None
                         else:

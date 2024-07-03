@@ -18,16 +18,18 @@ class AkuvoxHelpers:
 
     def get_location_dict(self, country_code):
         """User's location dict."""
-        if country_code and len(country_code) > 0 and country_code != "-1":
-            country_name = self.find_country_name_code(country_code)
-            location_dict = LOCATIONS_DICT.get(str(country_name))
-            return location_dict
-        return {
+        default_dict = {
             "country": "Unknown",
             "phone_number": "Unknown",
             "flag": "?",
             "subdomain": "ecloud"
         }
+        if country_code and len(country_code) > 0 and country_code != "-1":
+            country_name = self.find_country_name_code(country_code)
+            if country_name:
+                location_dict = LOCATIONS_DICT.get(str(country_name), default_dict)
+                return location_dict
+        return default_dict
 
     def find_country_name_code(self, country_phone_number):
         """2-letter country name code for a given country code phone number."""

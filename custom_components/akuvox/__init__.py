@@ -9,6 +9,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers import storage
 
 from .config_flow import AkuvoxOptionsFlowHandler
 
@@ -16,7 +17,8 @@ from .config_flow import AkuvoxOptionsFlowHandler
 from .api import AkuvoxApiClient
 from .const import (
     DOMAIN,
-    LOGGER
+    LOGGER,
+    DATA_STORAGE_KEY
 )
 from .coordinator import AkuvoxDataUpdateCoordinator
 
@@ -31,6 +33,7 @@ PLATFORMS: list[Platform] = [
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up this integration using UI."""
     hass.data.setdefault(DOMAIN, {})
+    await async_update_configuration(hass=hass, entry=entry)
     hass.data[DOMAIN][entry.entry_id] = coordinator = AkuvoxDataUpdateCoordinator(
         hass=hass,
         client=AkuvoxApiClient(
@@ -61,7 +64,7 @@ async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Reload config entry."""
     await async_unload_entry(hass, entry)
     await async_setup_entry(hass, entry)
-
+    await async_update_configuration(hass, entry)
 
 # Integration options
 
@@ -77,3 +80,20 @@ async def async_options_updated(self, entry: ConfigEntry):
 
     # Print the updated options
     LOGGER.debug("Updated Options: %s", str(updated_options))
+
+# Update
+
+async def async_update_configuration(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Update stored values from configuration."""
+    try:
+        if entry.options:
+            updated_options: dict = entry.options.copy()
+            updated_options["wait_for_image_url"] = bool(updated_options.get("event_screenshot_options", "") == "wait")
+            LOGGER.debug("Configuration Updated: %s", str(updated_options))
+            store = storage.Store(hass, 1, DATA_STORAGE_KEY)
+            stored_data: dict = await store.async_load() # type: ignore
+            for key, value in updated_options.items():
+                stored_data[key] = value
+            await store.async_save(stored_data)
+    except Exception as error:
+        LOGGER.warning("Unlable to update configuration: %s", str(error))
