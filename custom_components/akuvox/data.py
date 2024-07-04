@@ -49,7 +49,7 @@ class AkuvoxData:
                  phone_number: str,
                  wait_for_image_url: bool = False):
         """Initialize the Akuvox API client."""
-       
+
         self.hass = self.hass if self.hass else hass
         self.host = host if host else self.get_value_for_key(entry, "host", host) # type: ignore
         self.auth_token = auth_token if auth_token else self.get_value_for_key(entry, "auth_token", auth_token) # type: ignore

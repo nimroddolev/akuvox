@@ -159,7 +159,7 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_app_tokens_sign_in(self, user_input=None):
         """Step 1c: User enters app tokens and phone number to sign in."""
-        data_schema = self.get_app_tokens_sign_in_schema(user_input)
+        data_schema = self.get_app_tokens_sign_in_schema(user_input) # type: ignore
         if user_input is not None:
             country_code = helpers.get_country_phone_code_from_name(user_input.get("country_code"))
             phone_number = user_input.get(
@@ -294,7 +294,7 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         user_input = user_input or {}
 
         default_country_name_code = helpers.find_country_name_code(str(COUNTRY_PHONE.get(self.hass.config.country,"")))
-        default_country_name = LOCATIONS_DICT.get(default_country_name_code, {}).get("country")
+        default_country_name = LOCATIONS_DICT.get(default_country_name_code, {}).get("country") # type: ignore
         country_names_list:list = helpers.get_country_names_list()
 
         return {
@@ -319,7 +319,7 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         user_input = user_input or {}
 
         default_country_name_code = helpers.find_country_name_code(str(COUNTRY_PHONE.get(self.hass.config.country,"")))
-        default_country_name = LOCATIONS_DICT.get(default_country_name_code, {}).get("country")
+        default_country_name = LOCATIONS_DICT.get(default_country_name_code, {}).get("country") # type: ignore
         country_names_list:list = helpers.get_country_names_list()
 
         return {
@@ -360,7 +360,6 @@ class AkuvoxOptionsFlowHandler(config_entries.OptionsFlow):
 
     async def async_step_init(self, user_input=None):
         """Initialize the options flow."""
-
         # Define the options schema
         config_options = dict(self.config_entry.options)
         config_data = dict(self.config_entry.data)
@@ -371,7 +370,7 @@ class AkuvoxOptionsFlowHandler(config_entries.OptionsFlow):
         }
 
         default_country_name_code = helpers.find_country_name_code(config_data.get('country_code', self.hass.config.country))
-        default_country_name = LOCATIONS_DICT.get(default_country_name_code, {}).get("country")
+        default_country_name = LOCATIONS_DICT.get(default_country_name_code, {}).get("country") # type: ignore
         country_names_list:list = []
         for _country, country_dict in LOCATIONS_DICT.items():
             country_names_list.append(country_dict.get("country"))

@@ -63,17 +63,17 @@ class AkuvoxApiClient:
         self._session = session
         self.hass = hass
         if entry:
-            LOGGER.debug("Initializing AkuvoxData from API client init")
+            LOGGER.debug("▶️ Initializing AkuvoxData from API client init")
             self._data = AkuvoxData(
                 entry=entry,
                 hass=hass,
-                host=None,
-                subdomain=None,
-                auth_token=None,
-                token=None,
-                country_code=None,
-                phone_number=None,
-                wait_for_image_url=None)
+                host=None, # type: ignore
+                subdomain=None, # type: ignore
+                auth_token=None, # type: ignore
+                token=None, # type: ignore
+                country_code=None, # type: ignore
+                phone_number=None, # type: ignore
+                wait_for_image_url=None) # type: ignore
 
     async def async_init_api(self) -> bool:
         """Initialize API configuration data."""
@@ -122,21 +122,21 @@ class AkuvoxApiClient:
                            country_code:int=-1):
         """"Initialize values from saved data/options."""
         if not self._data:
-            LOGGER.debug("Initializing AkuvoxData from API client init_api_with_data")
+            LOGGER.debug("▶️ Initializing AkuvoxData from API client init_api_with_data")
             self._data = AkuvoxData(
-                entry=None,
+                entry=None, # type: ignore
                 hass=hass,
-                host=host,
-                subdomain=subdomain,
-                auth_token=auth_token,
-                token=token,
-                phone_number=phone_number,
-                country_code=country_code)
+                host=host, # type: ignore
+                subdomain=subdomain, # type: ignore
+                auth_token=auth_token, # type: ignore
+                token=token, # type: ignore
+                phone_number=phone_number, # type: ignore
+                country_code=country_code) # type: ignore
         self.hass = self.hass if self.hass else hass
         if host is not None:
             self._data.host = host # type: ignore
         if country_code and country_code != -1:
-            location_dict = LOCATIONS_DICT.get(country_code, None)
+            location_dict = LOCATIONS_DICT.get(country_code, None) # type: ignore
             if location_dict and not subdomain:
                 subdomain = location_dict.get("subdomain")
         if subdomain is not None and len(subdomain) > 0:
@@ -457,14 +457,20 @@ class AkuvoxApiClient:
             "sec-fetch-dest": "empty"
         }
 
-        json_data: list = await self._async_api_wrapper(method="get", url=url, headers=headers, data=data) # type: ignore
+        json_data: list = await self._async_api_wrapper(method="get",
+                                                        url=url,
+                                                        headers=headers,
+                                                        data=data) # type: ignore
 
         # Response empty, try changing app type "single" <--> "community"
         if json_data is not None and len(json_data) == 0:
             self.switch_activities_host()
             host = self.get_activities_host()
             url = f"https://{host}/{API_GET_PERSONAL_DOOR_LOG}"
-            json_data = await self._async_api_wrapper(method="get", url=url, headers=headers, data=data) # type: ignore
+            json_data = await self._async_api_wrapper(method="get",
+                                                      url=url,
+                                                      headers=headers,
+                                                      data=data) # type: ignore
 
         if json_data is not None and len(json_data) > 0:
             return json_data
@@ -497,13 +503,19 @@ class AkuvoxApiClient:
             app_type_1 = "community"
             app_type_2 = "single"
             if f"app/{app_type_1}/" in url:
-                LOGGER.warning(f"Timeout occured for 'app/{app_type_1}' API %s request: %s - Retry using '{app_type_2}'...",
-                               method, url)
+                LOGGER.warning("Request 'app/%s' API %s request timed out: %s - Retry using '%s'",
+                               app_type_1,
+                               method,
+                               url,
+                               app_type_2)
                 self._data.app_type = app_type_2
                 url = url.replace("app/"+app_type_1+"/", "app/"+app_type_2+"/")
                 return await self._async_api_wrapper(method, url, data, headers)
             if f"app/{app_type_2}/" in url:
-                LOGGER.error("Timeout occured for 'app/%s' API %s request: %s", app_type_2, method, url)
+                LOGGER.error("Timeout occured for 'app/%s' API %s request: %s",
+                             app_type_2,
+                             method,
+                             url)
                 self._data.app_type = app_type_1
             raise AkuvoxApiClientCommunicationError(
                 f"Timeout error fetching information: {exception}",
@@ -577,12 +589,18 @@ class AkuvoxApiClient:
 
     def post_request(self, url, headers, data="", timeout=10):
         """Make a synchronous post request."""
-        response: requests.Response = requests.post(url, headers=headers, data=data, timeout=timeout)
+        response: requests.Response = requests.post(url,
+                                                    headers=headers,
+                                                    data=data,
+                                                    timeout=timeout)
         return response
 
     def get_request(self, url, headers, data, timeout=10):
         """Make a synchronous post request."""
-        response: requests.Response = requests.get(url, headers=headers, data=data, timeout=timeout)
+        response: requests.Response = requests.get(url,
+                                                   headers=headers,
+                                                   data=data,
+                                                   timeout=timeout)
         return response
 
     ###########
@@ -605,7 +623,9 @@ class AkuvoxApiClient:
         try:
             num_str = str(phone_number)
         except Exception as error:
-            LOGGER.error("Unable to get obfuscated phone number from %s: %s", str(phone_number), str(error))
+            LOGGER.error("Unable to get obfuscated phone number from %s: %s",
+                         str(phone_number),
+                         str(error))
             return False
         transformed_str = ""
         # Iterate through each digit in the input number
