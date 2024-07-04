@@ -2,11 +2,12 @@
 from __future__ import annotations
 
 from homeassistant import config_entries
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers import selector
 
 import voluptuous as vol
 from .api import AkuvoxApiClient
+from .coordinator import AkuvoxDataUpdateCoordinator
+
 from .const import (
     DOMAIN,
     DEFAULT_PHONE_NUMBER,

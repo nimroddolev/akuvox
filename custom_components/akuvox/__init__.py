@@ -107,12 +107,21 @@ async def async_update_configuration(hass: HomeAssistant, entry: ConfigEntry) ->
     try:
         if entry.options:
             updated_options: dict = entry.options.copy()
+
+            # Wait for image URL?
             updated_options["wait_for_image_url"] = bool(updated_options.get("event_screenshot_options", "") == "wait")
-            LOGGER.debug("Configuration Updated: %s", str(updated_options))
-            store = storage.Store(hass, 1, DATA_STORAGE_KEY)
-            stored_data: dict = await store.async_load() # type: ignore
             for key, value in updated_options.items():
-                stored_data[key] = value
-            await store.async_save(stored_data)
+                await store_value_for_key(hass=hass,
+                                          key=key,
+                                          value=value)
     except Exception as error:
         LOGGER.warning("Unlable to update configuration: %s", str(error))
+
+###
+
+async def store_value_for_key(hass, key, value):
+    """Store value for key."""
+    store = storage.Store(hass, 1, DATA_STORAGE_KEY)
+    stored_data: dict = await store.async_load() # type: ignore
+    stored_data[key] = value
+    await store.async_save(stored_data)
