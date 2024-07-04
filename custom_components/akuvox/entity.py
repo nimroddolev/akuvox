@@ -25,6 +25,7 @@ class AkuvoxEntity(Entity):
         phone_number = self.get_saved_value("phone_number")
         country_code = self.get_saved_value("country_code") if len(self.get_saved_value("country_code")) > 0 else None
         self.client.init_api_with_data(
+            hass=self.hass,
             host=host,
             subdomain=None,
             auth_token=auth_token,

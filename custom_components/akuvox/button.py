@@ -2,9 +2,9 @@
 from homeassistant.components.button import ButtonEntity
 from homeassistant.helpers import storage
 from homeassistant.helpers.entity import DeviceInfo
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import AkuvoxApiClient
+from .coordinator import AkuvoxDataUpdateCoordinator
 from .const import (
     DOMAIN,
     LOGGER,
@@ -16,11 +16,11 @@ from .entity import AkuvoxEntity
 
 async def async_setup_entry(hass, entry, async_add_devices):
     """Set up the door relay platform."""
-    client = AkuvoxApiClient(
-        session=async_get_clientsession(hass),
-        hass=hass,
-        entry=entry
-    )
+    coordinator: AkuvoxDataUpdateCoordinator
+    for _key, value in hass.data[DOMAIN].items():
+        coordinator = value
+    client = coordinator.client
+
     store = storage.Store(hass, 1, DATA_STORAGE_KEY)
     device_data: dict = await store.async_load() # type: ignore
     door_relay_data = device_data["door_relay_data"]

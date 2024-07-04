@@ -39,11 +39,10 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
 
         # Initialize the API client
         if self.akuvox_api_client is None:
-            self.akuvox_api_client = AkuvoxApiClient(
-                session=async_get_clientsession(self.hass),
-                hass=self.hass,
-                entry=None,
-            )
+            coordinator: AkuvoxDataUpdateCoordinator
+            for _key, value in self.hass.data[DOMAIN].items():
+                coordinator = value
+            self.akuvox_api_client = coordinator.client
 
         return self.async_show_menu(
             step_id="user",
@@ -409,21 +408,17 @@ class AkuvoxOptionsFlowHandler(config_entries.OptionsFlow):
 
         wait_for_image_url = True if user_input.get("event_screenshot_options", "asap") == "wait" else False
 
-        # Initialize the API client
+        # API client
         if self.akuvox_api_client is None:
-            self.akuvox_api_client = AkuvoxApiClient(
-                session=async_get_clientsession(self.hass),
-                hass=self.hass,
-                entry={
-                    "configured" : {
-                        "host": self.get_data_key_value("host", None),
-                        "auth_token": self.get_data_key_value("auth_token", None),
-                        "token": self.get_data_key_value("token", None),
-                        "phone_number": self.get_data_key_value("phone_number", None),
-                        "wait_for_image_url": wait_for_image_url
-                    }
-                }
-            )
+            coordinator: AkuvoxDataUpdateCoordinator
+            for _key, value in self.hass.data[DOMAIN].items():
+                coordinator = value
+            self.akuvox_api_client = coordinator.client
+            self.akuvox_api_client._data.host = self.get_data_key_value("host") # type: ignore
+            self.akuvox_api_client._data.auth_token = self.get_data_key_value("auth_token") # type: ignore
+            self.akuvox_api_client._data.token = self.get_data_key_value("token") # type: ignore
+            self.akuvox_api_client._data.phone_number = self.get_data_key_value("phone_number") # type: ignore
+            self.akuvox_api_client._data.wait_for_image_url = self.get_data_key_value("wait_for_image_url") # type: ignore
 
         errors = {}
 
