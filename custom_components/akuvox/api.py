@@ -4,16 +4,15 @@ from __future__ import annotations
 import asyncio
 import socket
 import json
-import time
 
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import storage
 
 import aiohttp
 import async_timeout
 import requests
 
 from .data import AkuvoxData
+from .door_poll import DoorLogPoller
 
 from .const import (
     LOGGER,
@@ -32,7 +31,6 @@ from .const import (
     API_APP_HOST,
     API_GET_PERSONAL_TEMP_KEY_LIST,
     API_GET_PERSONAL_DOOR_LOG,
-    DATA_STORAGE_KEY,
     LOCATIONS_DICT
 )
 
@@ -51,8 +49,9 @@ class AkuvoxApiClientAuthenticationError(AkuvoxApiClientError):
 class AkuvoxApiClient:
     """Sample API Client."""
 
-    _data: AkuvoxData = None
-    hass: HomeAssistant = None
+    _data: AkuvoxData
+    hass: HomeAssistant
+    door_log_poller: DoorLogPoller
 
     def __init__(
         self,
@@ -98,11 +97,29 @@ class AkuvoxApiClient:
                 return False
 
         # Begin polling personal door log
-        await self.async_start_polling_personal_door_log()
+        await self.async_start_polling()
 
         return True
 
-    def init_api_with_data(self, hass: HomeAssistant=None, host=None, subdomain=None, auth_token=None, token=None, phone_number=None, country_code:int=-1):
+    async def async_start_polling(self):
+        """Start polling the personal door log API."""
+        self.door_log_poller: DoorLogPoller = DoorLogPoller(
+            hass=self.hass,
+            poll_function=self.async_retrieve_personal_door_log)
+        await self.door_log_poller.async_start()
+
+    async def async_stop_polling(self):
+        """Stop polling the personal door log API."""
+        await self.door_log_poller.async_stop()
+
+    def init_api_with_data(self,
+                           hass: HomeAssistant,
+                           host=None,
+                           subdomain=None,
+                           auth_token=None,
+                           token=None,
+                           phone_number=None,
+                           country_code:int=-1):
         """"Initialize values from saved data/options."""
         if not self._data:
             LOGGER.debug("Initializing AkuvoxData from API client init_api_with_data")
@@ -405,43 +422,20 @@ class AkuvoxApiClient:
     async def async_start_polling_personal_door_log(self):
         """Poll the server contineously for the latest personal door log."""
         # Make sure only 1 instance of the door log polling is running
-        last_polling_time = await self._data.async_get_stored_data_for_key("last_polling_time")
-        if last_polling_time is not None and last_polling_time > 0:
-            current_time = time.time()
-            difference = current_time - last_polling_time
-            if difference < 15:
-                LOGGER.debug("⛔️ Already polling for door events")
-                return
-        LOGGER.debug("🔄 Polling user's personal door log every 2 seconds.")
-        current_time = time.time()
-        await self._data.async_set_stored_data_for_key("last_polling_time", current_time)
         self.hass.async_create_task(self.async_retrieve_personal_door_log())
 
     async def async_retrieve_personal_door_log(self) -> bool:
         """Request and parse the user's door log every 2 seconds."""
         while True:
-            # Store timestamp of polling event
-            store = storage.Store(self.hass, 1, DATA_STORAGE_KEY)
-            stored_data: dict = await store.async_load() # type: ignore
-            current_time = time.time()
-            stored_data["last_polling_time"] = current_time
-            await store.async_save(stored_data)
-
             # Get the latest pesonal door log
             json_data = await self.async_get_personal_door_log()
             if json_data is not None:
                 new_door_log = await self._data.async_parse_personal_door_log(json_data)
                 if new_door_log is not None:
-
                     # Fire HA event
                     LOGGER.debug("🚪 New door open event occurred. Firing akuvox_door_update event")
                     event_name = "akuvox_door_update"
                     self.hass.bus.async_fire(event_name, new_door_log)
-
-                    # Save
-                    stored_data["latest_door_log"] = new_door_log
-                    await store.async_save(stored_data)
-
             await asyncio.sleep(2)  # Wait for 2 seconds before calling again
 
     async def async_get_personal_door_log(self):

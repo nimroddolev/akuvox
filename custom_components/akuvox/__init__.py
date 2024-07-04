@@ -28,7 +28,6 @@ PLATFORMS: list[Platform] = [
     Platform.SENSOR
 ]
 
-
 # https://developers.home-assistant.io/docs/config_entries_index/#setting-up-an-entry
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up this integration using UI."""
@@ -42,7 +41,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             entry=entry,
         ),
     )
-    await coordinator.client.async_init_api()
 
     # https://developers.home-assistant.io/docs/integration_fetching_data#coordinated-single-api-poll-for-data-for-all-entities
     await coordinator.async_config_entry_first_refresh()
@@ -55,6 +53,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Handle removal of an entry."""
+    await async_stop_polling(hass)
     if unloaded := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
         hass.data[DOMAIN].pop(entry.entry_id)
     return unloaded
@@ -62,9 +61,29 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Reload config entry."""
+    await async_stop_polling(hass)
     await async_unload_entry(hass, entry)
     await async_setup_entry(hass, entry)
     await async_update_configuration(hass, entry)
+    await async_start_polling(hass)
+
+# Polling
+
+async def async_stop_polling(hass: HomeAssistant):
+    """Stop polling the personal door log API."""
+    api_client: AkuvoxApiClient = get_api_client(hass=hass) # type: ignore
+    await api_client.async_stop_polling()
+
+async def async_start_polling(hass: HomeAssistant):
+    """Stop polling the personal door log API."""
+    api_client: AkuvoxApiClient = get_api_client(hass=hass)
+    await api_client.async_start_polling_personal_door_log()
+
+def get_api_client(hass: HomeAssistant):
+    """Akuvox API Client."""
+    for _key, value in hass.data[DOMAIN].items():
+        coordinator: AkuvoxDataUpdateCoordinator = value
+        return coordinator.client
 
 # Integration options
 
