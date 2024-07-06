@@ -49,7 +49,7 @@ class AkuvoxApiClientAuthenticationError(AkuvoxApiClientError):
 class AkuvoxApiClient:
     """Sample API Client."""
 
-    _data: AkuvoxData
+    _data: AkuvoxData = None # type: ignore
     hass: HomeAssistant
     door_log_poller: DoorLogPoller
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from homeassistant import config_entries
 from homeassistant.helpers import selector
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 import voluptuous as vol
 from .api import AkuvoxApiClient
@@ -39,10 +40,18 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
 
         # Initialize the API client
         if self.akuvox_api_client is None:
-            coordinator: AkuvoxDataUpdateCoordinator
-            for _key, value in self.hass.data[DOMAIN].items():
-                coordinator = value
-            self.akuvox_api_client = coordinator.client
+            coordinator: AkuvoxDataUpdateCoordinator = None # type: ignore
+            if DOMAIN in self.hass.data:
+                for _key, value in self.hass.data[DOMAIN].items():
+                    coordinator = value
+            if coordinator:
+                self.akuvox_api_client = coordinator.client
+            else:
+                self.akuvox_api_client = AkuvoxApiClient(
+                    session=async_get_clientsession(self.hass),
+                    hass=self.hass,
+                    entry=None)
+
 
         return self.async_show_menu(
             step_id="user",
