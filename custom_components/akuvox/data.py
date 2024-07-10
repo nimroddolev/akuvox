@@ -90,7 +90,7 @@ class AkuvoxData:
 
     def parse_rest_server_response(self, json_data: dict):
         """Parse the rest_server API response."""
-        if json_data is not None and json_data is not {}:
+        if json_data is not None and json_data != {}:
             self.host = json_data["rest_server_https"]
             return True
         return self.host is None or len(self.host) == 0
