@@ -41,24 +41,24 @@ class AkuvoxData:
     def __init__(self,
                  entry: ConfigEntry,
                  hass: HomeAssistant,
-                 host: str,
-                 subdomain: str,
-                 auth_token: str,
-                 token: str,
-                 country_code: str,
-                 phone_number: str,
+                 host: str = None, # type: ignore
+                 subdomain: str = None, # type: ignore
+                 auth_token: str = None, # type: ignore
+                 token: str = None, # type: ignore
+                 country_code: str = None, # type: ignore
+                 phone_number: str = None, # type: ignore
                  wait_for_image_url: bool = False):
         """Initialize the Akuvox API client."""
 
-        self.hass = self.hass if self.hass else hass
+        self.hass = hass if hass else self.hass
         self.host = host if host else self.get_value_for_key(entry, "host", host) # type: ignore
-        self.auth_token = auth_token if auth_token else self.get_value_for_key(entry, "auth_token", auth_token) # type: ignore
-        self.token = token if token else self.get_value_for_key(entry, "token", token) # type: ignore
-        self.phone_number = phone_number if phone_number else self.get_value_for_key(entry, "phone_number", phone_number) # type: ignore
+        self.auth_token = auth_token if auth_token else self.get_value_for_key(entry, "auth_token", self.host) # type: ignore
+        self.token = token if token else self.get_value_for_key(entry, "token", self.token) # type: ignore
+        self.phone_number = phone_number if phone_number else self.get_value_for_key(entry, "phone_number", self.phone_number) # type: ignore
         self.wait_for_image_url = wait_for_image_url if wait_for_image_url is not None else bool(self.get_value_for_key(entry, "event_screenshot_options", False) == "wait") # type: ignore
-        if subdomain:
-            self.subdomain = subdomain
-        else:
+
+        self.subdomain = subdomain if subdomain else self.get_value_for_key(entry, "subdomain", self.subdomain) # type: ignore
+        if subdomain is None:
             if not country_code:
                 try:
                     if entry.data:
@@ -69,7 +69,8 @@ class AkuvoxData:
                             self.subdomain = self.location_dict.get("subdomain", "ecloud") # type: ignore
                 except Exception as error:
                     LOGGER.debug("Unable to use country due to error: %s", error)
-            self.subdomain = self.subdomain if self.subdomain else "ecloud"
+        if subdomain is None:
+            self.subdomain = "ecloud"
 
         self.hass.add_job(self.async_set_stored_data_for_key, "wait_for_image_url", self.wait_for_image_url)
 

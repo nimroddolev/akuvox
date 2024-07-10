@@ -9,11 +9,8 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.helpers import storage
 
 from .config_flow import AkuvoxOptionsFlowHandler
-
-
 from .api import AkuvoxApiClient
 from .const import (
     DOMAIN,
@@ -32,7 +29,6 @@ PLATFORMS: list[Platform] = [
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up this integration using UI."""
     hass.data.setdefault(DOMAIN, {})
-    await async_update_configuration(hass=hass, entry=entry)
     hass.data[DOMAIN][entry.entry_id] = coordinator = AkuvoxDataUpdateCoordinator(
         hass=hass,
         client=AkuvoxApiClient(
@@ -41,6 +37,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             entry=entry,
         ),
     )
+    await async_update_configuration(hass=hass, entry=entry)
 
     # https://developers.home-assistant.io/docs/integration_fetching_data#coordinated-single-api-poll-for-data-for-all-entities
     await coordinator.async_config_entry_first_refresh()
@@ -76,7 +73,7 @@ async def async_stop_polling(hass: HomeAssistant):
 
 async def async_start_polling(hass: HomeAssistant):
     """Stop polling the personal door log API."""
-    api_client: AkuvoxApiClient = get_api_client(hass=hass)
+    api_client: AkuvoxApiClient = get_api_client(hass=hass) # type: ignore
     await api_client.async_start_polling_personal_door_log()
 
 def get_api_client(hass: HomeAssistant):
@@ -110,18 +107,19 @@ async def async_update_configuration(hass: HomeAssistant, entry: ConfigEntry) ->
 
             # Wait for image URL?
             updated_options["wait_for_image_url"] = bool(updated_options.get("event_screenshot_options", "") == "wait")
+
+            # Update API & data classes
+            coordinator: AkuvoxDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
+            client: AkuvoxApiClient = coordinator.client
+
+            LOGGER.debug("Configured values:")
             for key, value in updated_options.items():
-                await store_value_for_key(hass=hass,
-                                          key=key,
-                                          value=value)
+                #                           value=value)
+                if value:
+                    LOGGER.debug(" - %s = %s", key, str(value))
+                    client.update_data(key, value)
     except Exception as error:
-        LOGGER.warning("Unlable to update configuration: %s", str(error))
+        LOGGER.warning("Unable to update configuration: %s", str(error))
 
 ###
 
-async def store_value_for_key(hass, key, value):
-    """Store value for key."""
-    store = storage.Store(hass, 1, DATA_STORAGE_KEY)
-    stored_data: dict = await store.async_load() # type: ignore
-    stored_data[key] = value
-    await store.async_save(stored_data)

@@ -123,16 +123,16 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
 
             subdomain = helpers.get_subdomain_from_country_code(country_code)
             location_dict = helpers.get_location_dict(country_code)
-            LOGGER.debug("User will use the API subdomain '%s' for %s", location_dict.get("subdomain"), location_dict.get("country"))
+            LOGGER.debug("User will use the API subdomain '%s' for %s", subdomain, location_dict.get("country"))
 
             self.data = {
                 "full_phone_number": f"(+{country_code}) {phone_number}",
                 "country_code": country_code,
                 "phone_number": phone_number,
-                "subdomain": location_dict.get("subdomain")
+                "subdomain": subdomain
             }
 
-            if len(country_code) > 0 and len(phone_number) > 0:
+            if len(country_code) > 0 and len(phone_number) > 0: # type: ignore
                 # Request SMS code for login
                 request_sms_code = await self.akuvox_api_client.async_send_sms(self.hass, country_code, phone_number, subdomain)
                 if request_sms_code:
@@ -170,12 +170,12 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         """Step 1c: User enters app tokens and phone number to sign in."""
         data_schema = self.get_app_tokens_sign_in_schema(user_input) # type: ignore
         if user_input is not None:
-            country_code = helpers.get_country_phone_code_from_name(user_input.get("country_code"))
-            phone_number = user_input.get(
+            country_code: str = helpers.get_country_phone_code_from_name(user_input.get("country_code")) # type: ignore
+            phone_number: str = user_input.get(
                 "phone_number", "").replace("-", "").replace(" ", "")
-            token = user_input.get("token", "")
-            auth_token = user_input.get("auth_token", "")
-            subdomain = helpers.get_subdomain_from_country_code(country_code)
+            token: str = user_input.get("token", "")
+            auth_token: str = user_input.get("auth_token", "")
+            subdomain: str = helpers.get_subdomain_from_country_code(country_code)
 
             self.data = {
                 "full_phone_number": f"(+{country_code}) {phone_number}",
@@ -302,6 +302,7 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         """Get the schema for sms_sign_in step."""
         user_input = user_input or {}
 
+        # List of countries
         default_country_name_code = helpers.find_country_name_code(str(COUNTRY_PHONE.get(self.hass.config.country,"")))
         default_country_name = LOCATIONS_DICT.get(default_country_name_code, {}).get("country") # type: ignore
         country_names_list:list = helpers.get_country_names_list()

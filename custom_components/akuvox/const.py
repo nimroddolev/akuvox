@@ -46,7 +46,6 @@ LOCATIONS_DICT = {
         "flag": "🇧🇭",
         "subdomain": "ecloud"
     },
-
     "BY": {
         "country": "Belarus",
         "phone_number": "375",

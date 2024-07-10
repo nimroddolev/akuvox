@@ -53,7 +53,7 @@ class AkuvoxHelpers:
         return country_names_list
 
     def get_country_phone_code_from_name(self, country_name):
-        """Country code corresponding to the country name."""
+        """Country code (eg: "41") corresponding to the country name."""
         for _key, value in LOCATIONS_DICT.items():
             if value.get("country") == country_name:
                 return value.get("phone_number")

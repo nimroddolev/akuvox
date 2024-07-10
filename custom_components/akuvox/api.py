@@ -66,14 +66,7 @@ class AkuvoxApiClient:
             LOGGER.debug("▶️ Initializing AkuvoxData from API client init")
             self._data = AkuvoxData(
                 entry=entry,
-                hass=hass,
-                host=None, # type: ignore
-                subdomain=None, # type: ignore
-                auth_token=None, # type: ignore
-                token=None, # type: ignore
-                country_code=None, # type: ignore
-                phone_number=None, # type: ignore
-                wait_for_image_url=None) # type: ignore
+                hass=hass) # type: ignore
 
     async def async_init_api(self) -> bool:
         """Initialize API configuration data."""
@@ -119,7 +112,7 @@ class AkuvoxApiClient:
                            auth_token=None,
                            token=None,
                            phone_number=None,
-                           country_code:int=-1):
+                           country_code=None):
         """"Initialize values from saved data/options."""
         if not self._data:
             LOGGER.debug("▶️ Initializing AkuvoxData from API client init_api_with_data")
@@ -133,20 +126,6 @@ class AkuvoxApiClient:
                 phone_number=phone_number, # type: ignore
                 country_code=country_code) # type: ignore
         self.hass = self.hass if self.hass else hass
-        if host is not None:
-            self._data.host = host # type: ignore
-        if country_code and country_code != -1:
-            location_dict = LOCATIONS_DICT.get(country_code, None) # type: ignore
-            if location_dict and not subdomain:
-                subdomain = location_dict.get("subdomain")
-        if subdomain is not None and len(subdomain) > 0:
-            self.hass.add_job(self._data.async_set_stored_data_for_key, "subdomain", subdomain)
-        if auth_token is not None:
-            self._data.auth_token = auth_token
-        if token is not None:
-            self._data.auth_token = token
-        if phone_number is not None:
-            self._data.phone_number = phone_number
 
     ####################
     # API Call Methods #
@@ -179,8 +158,9 @@ class AkuvoxApiClient:
             subdomain=subdomain,
             country_code=country_code,
             phone_number=phone_number)
+        url = f"https://{self._data.host}/{API_SEND_SMS}".replace(".subdomain", f".{subdomain}")
+        LOGGER.debug("url = %s", url)
         if await self.async_init_api():
-            url = f"https://{self._data.host}/{API_SEND_SMS}"
             headers = {
                 "Host": self._data.host,
                 "Content-Type": "application/x-www-form-urlencoded",
@@ -208,7 +188,7 @@ class AkuvoxApiClient:
                     LOGGER.debug("✅ SMS code request successful")
                     return True
 
-            LOGGER.error("❌ SMS code request unsuccessful")
+            LOGGER.error("❌ SMS code request unsuccessful. Request URL: %s", url)
         else:
             LOGGER.error("❌ Unable to initialize API. Did you login again from your device? Try logging in/adding tokens again.")
         return False
@@ -231,10 +211,6 @@ class AkuvoxApiClient:
         if await self.async_init_api() is False:
             return False
 
-        # Store tokens
-        self._data.auth_token = auth_token
-        self._data.token = token
-        self._data.phone_number = phone_number
 
         url = f"https://{REST_SERVER_ADDR}:{REST_SERVER_PORT}/{API_SERVERS_LIST}"
         headers = {
@@ -374,7 +350,7 @@ class AkuvoxApiClient:
             "x-cloud-lang": "en",
         }
         response = self.post_request(url=url, headers=headers, data=data)
-        json_data = self.process_response(response)
+        json_data = self.process_response(response, url)
         if json_data is not None:
             LOGGER.debug("✅ Door open request sent successfully.")
             return json_data
@@ -394,7 +370,7 @@ class AkuvoxApiClient:
         """Request the user's configuration data."""
         LOGGER.debug("📡 Retrieving list of user's temporary keys...")
         host = self.get_activities_host()
-        subdomain = await self._data.async_get_stored_data_for_key("subdomain")
+        subdomain = self._data.subdomain # await self._data.async_get_stored_data_for_key("subdomain")
         url = f"https://{host}/{API_GET_PERSONAL_TEMP_KEY_LIST}"
         data = {}
         headers = {
@@ -495,8 +471,9 @@ class AkuvoxApiClient:
                 func = self.post_request if method == "post" else self.get_request
                 subdomain = self._data.subdomain
                 url = url.replace("subdomain.", f"{subdomain}.")
+                LOGGER.debug("⏳ Sending request to %s", url)
                 response = await self.hass.async_add_executor_job(func, url, headers, data, 10)
-                return self.process_response(response)
+                return self.process_response(response, url)
 
         except asyncio.TimeoutError as exception:
             # Fix for accounts which use the "single" endpoint instead of "community"
@@ -530,7 +507,7 @@ class AkuvoxApiClient:
             ) from exception
         return None
 
-    def process_response(self, response):
+    def process_response(self, response, url):
         """Process response and return dict with data."""
         if response.status_code == 200:
             # Assuming the response is valid JSON, parse it
@@ -553,11 +530,13 @@ class AkuvoxApiClient:
 
                 LOGGER.warning("🤨 Response: %s", str(json_data))
             except Exception as error:
-                LOGGER.error("❌ Error occurred when parsing JSON: %s",
-                             error)
+                LOGGER.error("❌ Error occurred when parsing JSON: %s\nRequest: %s",
+                             error,
+                             url)
         else:
-            LOGGER.debug("❌ Error: HTTP status code %s",
-                         response.status_code)
+            LOGGER.debug("❌ Error: HTTP status code = %s for request to %s",
+                         response.status_code,
+                         url)
         return None
 
     async def async_make_get_request(self, url, headers, data=None):
@@ -650,3 +629,10 @@ class AkuvoxApiClient:
         else:
             self._data.app_type = "single"
             LOGGER.debug("Switching API address from 'community' to 'single'")
+
+    def update_data(self, key, value):
+        """Update the data model."""
+        self._data.subdomain = value if key == "subdomain" else self._data.subdomain
+        self._data.auth_token = value if key == "auth_token" else self._data.auth_token
+        self._data.token = value if key == "token" else self._data.token
+        self._data.wait_for_image_url = value if key == "wait_for_image_url" else self._data.wait_for_image_url
