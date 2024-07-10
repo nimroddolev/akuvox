@@ -18,7 +18,8 @@
                 "description": "Please enter your mobile phone number to receive your verification SMS:",
                 "data": {
                     "country_code": "Country",
-                    "phone_number": "Phone Number (without the country code)"
+                    "phone_number": "Phone Number (without the country code)",
+                    "subdomain": "Manually set the regional API subdomain"
                 }
             },
             "app_tokens_sign_in": {
@@ -28,7 +29,8 @@
                     "country_code": "Country",
                     "phone_number": "Phone Number (without the country code)",
                     "token": "Token",
-                    "auth_token": "Auth Token"
+                    "auth_token": "Auth Token",
+                    "subdomain": "Manually set the regional API subdomain"
                 }
             },
             "verify_sms_code": {
@@ -53,6 +55,7 @@
                     "override": "Use the following SmartLife account tokens:",
                     "auth_token": "Your SmartLife `auth_token` value",
                     "token": "Your SmartLife `token` value",
+                    "subdomain": "Manually set the regional API subdomain",
                     "event_screenshot_options": "Screenshot URLS for `akuvox_door_update` events:"
                 }
             }

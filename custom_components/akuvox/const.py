@@ -14,12 +14,23 @@ DEFAULT_APP_TOKEN = ""
 DEFAULT_TOKEN = ""
 
 SUBDOMAIN_AU = "aucloud"
-SUBDOMAIN_CH = "ccloud"
-SUBDOMAIN_JA = "jcloud"
+SUBDOMAIN_C = "ccloud"
+SUBDOMAIN_J = "jcloud"
 SUBDOMAIN_RU = "rucloud"
-SUBDOMAIN_SI = "scloud"
-SUBDOMAIN_US = "ucloud"
-SUBDOMAIN_EU = "ecloud"
+SUBDOMAIN_S = "scloud"
+SUBDOMAIN_U = "ucloud"
+SUBDOMAIN_E = "ecloud"
+
+SUBDOMAINS_LIST: list = [
+    "Default",
+    SUBDOMAIN_AU,
+    SUBDOMAIN_C,
+    SUBDOMAIN_J,
+    SUBDOMAIN_RU,
+    SUBDOMAIN_S,
+    SUBDOMAIN_U,
+    SUBDOMAIN_E,
+]
 
 LOCATIONS_DICT = {
     "AR": {

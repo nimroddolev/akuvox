@@ -11,12 +11,12 @@ from .coordinator import AkuvoxDataUpdateCoordinator
 
 from .const import (
     DOMAIN,
-    DEFAULT_PHONE_NUMBER,
     DEFAULT_TOKEN,
     DEFAULT_APP_TOKEN,
     LOGGER,
     LOCATIONS_DICT,
     COUNTRY_PHONE,
+    SUBDOMAINS_LIST,
 )
 from .helpers import AkuvoxHelpers
 
@@ -120,8 +120,9 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             country_code = helpers.get_country_phone_code_from_name(user_input.get("country_code"))
             phone_number = user_input.get(
                 "phone_number", "").replace("-", "").replace(" ", "")
+            subdomain: str = user_input.get("subdomain", "Default")
+            subdomain = subdomain if subdomain != "Default" else helpers.get_subdomain_from_country_code(country_code)
 
-            subdomain = helpers.get_subdomain_from_country_code(country_code)
             location_dict = helpers.get_location_dict(country_code)
             LOGGER.debug("User will use the API subdomain '%s' for %s", subdomain, location_dict.get("country"))
 
@@ -175,7 +176,8 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                 "phone_number", "").replace("-", "").replace(" ", "")
             token: str = user_input.get("token", "")
             auth_token: str = user_input.get("auth_token", "")
-            subdomain: str = helpers.get_subdomain_from_country_code(country_code)
+            subdomain: str = user_input.get("subdomain", "Default")
+            subdomain = subdomain if subdomain != "Default" else helpers.get_subdomain_from_country_code(country_code)
 
             self.data = {
                 "full_phone_number": f"(+{country_code}) {phone_number}",
@@ -320,8 +322,17 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             vol.Required(
                 "phone_number",
                 msg=None,
-                default=user_input.get("phone_number", DEFAULT_PHONE_NUMBER),  # type: ignore
+                default=user_input.get("phone_number"),  # type: ignore
                 description="Your phone number"): str,
+            vol.Optional("subdomain",
+                default="Default", # type: ignore
+                description="Manually set the regional API subdomain"):
+                selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=SUBDOMAINS_LIST,
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                        custom_value=True),
+                        )
         }
 
     def get_app_tokens_sign_in_schema(self, user_input: dict = {}):
@@ -345,7 +356,7 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             vol.Required(
                 "phone_number",
                 msg=None,
-                default=user_input.get("phone_number", DEFAULT_PHONE_NUMBER),  # type: ignore
+                default=user_input.get("phone_number"),  # type: ignore
                 description="Your phone number"): str,
             vol.Required(
                 "auth_token",
@@ -357,6 +368,15 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                 msg=None,
                 default=user_input.get("token", DEFAULT_TOKEN),  # type: ignore
                 description="Your SmartPlus account's token string"): str,
+            vol.Optional("subdomain",
+                         default="Default", # type: ignore
+                         description="Manually set the regional API subdomain"):
+                         selector.SelectSelector(
+                             selector.SelectSelectorConfig(
+                                 options=SUBDOMAINS_LIST,
+                                 mode=selector.SelectSelectorMode.DROPDOWN,
+                                 custom_value=True),
+                                 )
         }
 
 class AkuvoxOptionsFlowHandler(config_entries.OptionsFlow):
@@ -381,6 +401,11 @@ class AkuvoxOptionsFlowHandler(config_entries.OptionsFlow):
 
         default_country_name_code = helpers.find_country_name_code(config_data.get('country_code', self.hass.config.country))
         default_country_name = LOCATIONS_DICT.get(default_country_name_code, {}).get("country") # type: ignore
+        default_subdomain = LOCATIONS_DICT.get(default_country_name_code, {}).get("subdomain") # type: ignore
+        subdomain_list = list(SUBDOMAINS_LIST)
+        del subdomain_list[0]
+        current_subdomain = self.get_data_key_value("subdomain") or default_subdomain
+
         country_names_list:list = []
         for _country, country_dict in LOCATIONS_DICT.items():
             country_names_list.append(country_dict.get("country"))
@@ -401,6 +426,15 @@ class AkuvoxOptionsFlowHandler(config_entries.OptionsFlow):
             vol.Optional("token",
                          default=self.get_data_key_value("token", False) # type: ignore
             ): str,
+            vol.Optional("subdomain",
+                default=current_subdomain, # type: ignore
+                description="Manually set the regional API subdomain"):
+                selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=subdomain_list,
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                        custom_value=True),
+                        ),
             vol.Required("event_screenshot_options",
                          default=self.get_data_key_value("event_screenshot_options", "asap") # type: ignore
             ): vol.In(event_screenshot_options),
@@ -423,6 +457,7 @@ class AkuvoxOptionsFlowHandler(config_entries.OptionsFlow):
             for _key, value in self.hass.data[DOMAIN].items():
                 coordinator = value
             self.akuvox_api_client = coordinator.client
+            self.akuvox_api_client._data.subdomain = current_subdomain # type: ignore
             self.akuvox_api_client._data.host = self.get_data_key_value("host") # type: ignore
             self.akuvox_api_client._data.auth_token = self.get_data_key_value("auth_token") # type: ignore
             self.akuvox_api_client._data.token = self.get_data_key_value("token") # type: ignore
@@ -473,6 +508,15 @@ class AkuvoxOptionsFlowHandler(config_entries.OptionsFlow):
                     default=user_input.get("token", ""),
                     description="Your SmartPlus user's token."
                 ): str,
+                vol.Optional("subdomain",
+                    default="Default", # type: ignore
+                    description="Manually set the regional API subdomain"):
+                    selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=SUBDOMAINS_LIST,
+                            mode=selector.SelectSelectorMode.DROPDOWN,
+                            custom_value=True),
+                            ),
                 vol.Required(
                     "wait_for_image_url",
                     msg=None,

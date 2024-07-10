@@ -50,6 +50,7 @@ class AkuvoxHelpers:
         country_names_list:list = []
         for _country, country_dict in LOCATIONS_DICT.items():
             country_names_list.append(country_dict.get("country"))
+        country_names_list.sort()
         return country_names_list
 
     def get_country_phone_code_from_name(self, country_name):
