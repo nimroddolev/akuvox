@@ -125,7 +125,6 @@ class AkuvoxData:
                             "video_url": f"rtsp://ak:{password}@{self.rtsp_ip}:554/{mac}"
                         }
                         self.camera_data.append(camera_dict)
-                        LOGGER.debug("🎥 Camera parsed: %s", str(camera_dict))
 
                     # Door Relay
                     if "relay" in dev_data:
@@ -139,8 +138,15 @@ class AkuvoxData:
                                 "mac": mac
                             })
 
-                            LOGGER.debug("🚪 Door relay parsed: %s-%s",
-                                         name, door_name)
+        # Log parsed entities
+        if len(self.camera_data) > 0:
+            LOGGER.debug("🎥 Cameras parsed:")
+            for camera_dict in self.camera_data:
+                LOGGER.debug(" - %s", camera_dict.get("name", ""))
+        if len(self.door_relay_data) > 0:
+            LOGGER.debug("🚪 Door relays parsed:")
+            for relay_dict in self.door_relay_data:
+                LOGGER.debug(" - %s", relay_dict.get("name", ""))
 
     def parse_temp_keys_data(self, json_data: list):
         """Parse the getPersonalTempKeyList API response."""
@@ -170,12 +176,15 @@ class AkuvoxData:
 
             self.door_keys_data.append(door_keys_data)
 
-
-            LOGGER.debug("🔑 %s parsed, opening %s door%s",
-                         door_keys_data["description"],
-                         str(len(door_keys_data["doors"])),
-                         "" if len(door_keys_data["doors"]) == 1 else "s")
-
+        if len(self.door_keys_data) > 0:
+            LOGGER.debug("🔑 %s Temp key%s parsed:",
+                        str(len(self.door_keys_data)),
+                        "s" if len(self.door_keys_data) > 1 else "")
+            for door_relay_dict in self.door_relay_data:
+                LOGGER.debug(" - '%s', with access to %s door%s",
+                             door_relay_dict.get("name", ""),
+                             str(len(door_keys_data["doors"])),
+                             "" if len(door_keys_data["doors"]) == 1 else "s")
 
     async def async_parse_personal_door_log(self, json_data: list):
         """Parse the getDoorLog API response."""

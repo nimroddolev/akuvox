@@ -14,8 +14,7 @@ from .config_flow import AkuvoxOptionsFlowHandler
 from .api import AkuvoxApiClient
 from .const import (
     DOMAIN,
-    LOGGER,
-    DATA_STORAGE_KEY
+    LOGGER
 )
 from .coordinator import AkuvoxDataUpdateCoordinator
 
@@ -116,10 +115,12 @@ async def async_update_configuration(hass: HomeAssistant, entry: ConfigEntry) ->
             for key, value in updated_options.items():
                 #                           value=value)
                 if value:
-                    LOGGER.debug(" - %s = %s", key, str(value))
                     client.update_data(key, value)
+                    str_value: str = str(value)
+                    if key in ["auth_token", "token"]:
+                        length: int = len(str_value)
+                        str_value = f"{str_value[0:3]}{'*'*int(length-6)}{str_value[int(length-3):length]}" # type: ignore
+                    LOGGER.debug(" - %s = %s", key, str_value)
     except Exception as error:
         LOGGER.warning("Unable to update configuration: %s", str(error))
-
-###
 

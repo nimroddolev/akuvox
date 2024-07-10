@@ -53,7 +53,7 @@ class AkuvoxCameraEntity(GenericCamera):
         name: str,
         rtsp_url: str) -> None:
         """Initialize the Akuvox camera class."""
-        LOGGER.debug("Initializing Akuvox camera '%s'", name)
+        LOGGER.debug("Adding Akuvox camera '%s'", name)
 
         super().__init__(
             hass=hass,

@@ -30,8 +30,7 @@ from .const import (
     API_OPENDOOR,
     API_APP_HOST,
     API_GET_PERSONAL_TEMP_KEY_LIST,
-    API_GET_PERSONAL_DOOR_LOG,
-    LOCATIONS_DICT
+    API_GET_PERSONAL_DOOR_LOG
 )
 
 
@@ -471,7 +470,8 @@ class AkuvoxApiClient:
                 func = self.post_request if method == "post" else self.get_request
                 subdomain = self._data.subdomain
                 url = url.replace("subdomain.", f"{subdomain}.")
-                LOGGER.debug("⏳ Sending request to %s", url)
+                if not url.endswith(API_GET_PERSONAL_DOOR_LOG):
+                    LOGGER.debug("⏳ Sending request to %s", url)
                 response = await self.hass.async_add_executor_job(func, url, headers, data, 10)
                 return self.process_response(response, url)
 
