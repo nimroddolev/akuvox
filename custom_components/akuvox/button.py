@@ -30,7 +30,6 @@ async def async_setup_entry(hass, entry, async_add_devices):
         name = door_relay["name"]
         mac = door_relay["mac"]
         relay_id = door_relay["relay_id"]
-        data = f"mac={mac}&relay={relay_id}"
 
         entities.append(
             AkuvoxDoorRelayEntity(
@@ -38,7 +37,7 @@ async def async_setup_entry(hass, entry, async_add_devices):
                 entry=entry,
                 name=name,
                 relay_id=relay_id,
-                data=data,
+                mac=mac,
             )
         )
 
@@ -52,7 +51,8 @@ class AkuvoxDoorRelayEntity(ButtonEntity, AkuvoxEntity):
     _name: str = ""
     _host: str = ""
     _token: str = ""
-    _data: str = ""
+    _relay_id: str = ""
+    _mac: str = ""
 
     def __init__(
         self,
@@ -60,7 +60,7 @@ class AkuvoxDoorRelayEntity(ButtonEntity, AkuvoxEntity):
         entry,
         name: str,
         relay_id: str,
-        data: str,
+        mac: str,
     ) -> None:
         """Initialize the Akuvox door relay class."""
         super(ButtonEntity, self).__init__(client=client, entry=entry)
@@ -74,7 +74,8 @@ class AkuvoxDoorRelayEntity(ButtonEntity, AkuvoxEntity):
         self._name = unique_name
         self._host = self.get_saved_value("host")
         self._token = self.get_saved_value("token")
-        self._data = data
+        self._relay_id = relay_id
+        self._mac = mac
 
         self._attr_unique_id = unique_name
         self._attr_name = unique_name
@@ -93,6 +94,6 @@ class AkuvoxDoorRelayEntity(ButtonEntity, AkuvoxEntity):
             name=self._name,
             host=self._host,
             token=self._token,
-            data=self._data
+            data=f"mac={self._mac}&relay={self._relay_id}"
         )
 
