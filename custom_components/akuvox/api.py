@@ -30,7 +30,8 @@ from .const import (
     API_OPENDOOR,
     API_APP_HOST,
     API_GET_PERSONAL_TEMP_KEY_LIST,
-    API_GET_PERSONAL_DOOR_LOG
+    API_GET_PERSONAL_DOOR_LOG,
+    API_GET_PERSONAL_CALL_LOG
 )
 
 
@@ -51,6 +52,7 @@ class AkuvoxApiClient:
     _data: AkuvoxData = None # type: ignore
     hass: HomeAssistant
     door_log_poller: DoorLogPoller
+    call_log_poller: DoorLogPoller
 
     def __init__(
         self,
@@ -69,6 +71,9 @@ class AkuvoxApiClient:
         self.door_log_poller: DoorLogPoller = DoorLogPoller(
             hass=self.hass,
             poll_function=self.async_retrieve_personal_door_log)
+        self.call_log_poller: DoorLogPoller = DoorLogPoller(
+            hass=self.hass,
+            poll_function=self.async_retrieve_personal_call_log)
 
     async def async_init_api(self) -> bool:
         """Initialize API configuration data."""
@@ -99,9 +104,11 @@ class AkuvoxApiClient:
     async def async_start_polling(self):
         """Start polling the personal door log API."""
         await self.door_log_poller.async_start()
+        await self.call_log_poller.async_start()
 
     async def async_stop_polling(self):
         """Stop polling the personal door log API."""
+        await self.call_log_poller.async_stop()
         await self.door_log_poller.async_stop()
 
     def init_api_with_data(self,
@@ -448,6 +455,60 @@ class AkuvoxApiClient:
         LOGGER.error("❌ Unable to retrieve user's personal door log")
         return None
 
+    async def async_retrieve_personal_call_log(self) -> bool:
+        """Request and parse the user's call log every 2 seconds."""
+        while True:
+            # Get the latest pesonal call log
+            json_data = await self.async_get_personal_call_log()
+            if json_data is not None:
+                new_call_log = await self._data.async_parse_personal_call_log(json_data)
+                if new_call_log is not None:
+                    # Fire HA event
+                    LOGGER.debug("🚪 New call event occurred. Firing akuvox_door_update event")
+                    event_name = "akuvox_door_update"
+                    self.hass.bus.async_fire(event_name, new_call_log)
+            await asyncio.sleep(2)  # Wait for 2 seconds before calling again
+
+    async def async_get_personal_call_log(self):
+        """Request the user's personal call log data."""
+        # LOGGER.debug("📡 Retrieving list of user's personal call log...")
+        host = self.get_activities_host()
+        url = f"https://{host}/{API_GET_PERSONAL_CALL_LOG}"
+        data = {}
+        headers = {
+            "x-cloud-version": "6.4",
+            "accept": "application/json, text/plain, */*",
+            "sec-fetch-site": "same-origin",
+            "accept-language": "en-AU,en;q=0.9",
+            "sec-fetch-mode": "cors",
+            "x-cloud-lang": "en",
+            "user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) SmartPlus/6.2",
+            "referer": f"https://{self._data.subdomain}.akuvox.com/smartplus/Activities.html?TOKEN={self._data.token}",
+            "x-auth-token": self._data.token,
+            "sec-fetch-dest": "empty"
+        }
+
+        json_data: list = await self._async_api_wrapper(method="get",
+                                                        url=url,
+                                                        headers=headers,
+                                                        data=data) # type: ignore
+
+        # Response empty, try changing app type "single" <--> "community"
+        if json_data is not None and len(json_data) == 0:
+            self.switch_activities_host()
+            host = self.get_activities_host()
+            url = f"https://{host}/{API_GET_PERSONAL_CALL_LOG}"
+            json_data = await self._async_api_wrapper(method="get",
+                                                      url=url,
+                                                      headers=headers,
+                                                      data=data) # type: ignore
+
+        if json_data is not None and len(json_data) > 0:
+            return json_data
+
+        LOGGER.error("❌ Unable to retrieve user's personal call log")
+        return None
+
     ###################
     # Request Methods #
     ###################
@@ -465,7 +526,7 @@ class AkuvoxApiClient:
                 func = self.post_request if method == "post" else self.get_request
                 subdomain = self._data.subdomain
                 url = url.replace("subdomain.", f"{subdomain}.")
-                if not url.endswith(API_GET_PERSONAL_DOOR_LOG):
+                if not url.endswith(API_GET_PERSONAL_DOOR_LOG) and not url.endswith(API_GET_PERSONAL_CALL_LOG):
                     LOGGER.debug("⏳ Sending request to %s", url)
                 response = await self.hass.async_add_executor_job(func, url, headers, data, 10)
                 return self.process_response(response, url)
