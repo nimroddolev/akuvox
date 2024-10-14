@@ -66,6 +66,9 @@ class AkuvoxApiClient:
             self._data = AkuvoxData(
                 entry=entry,
                 hass=hass) # type: ignore
+        self.door_log_poller: DoorLogPoller = DoorLogPoller(
+            hass=self.hass,
+            poll_function=self.async_retrieve_personal_door_log)
 
     async def async_init_api(self) -> bool:
         """Initialize API configuration data."""
@@ -95,9 +98,6 @@ class AkuvoxApiClient:
 
     async def async_start_polling(self):
         """Start polling the personal door log API."""
-        self.door_log_poller: DoorLogPoller = DoorLogPoller(
-            hass=self.hass,
-            poll_function=self.async_retrieve_personal_door_log)
         await self.door_log_poller.async_start()
 
     async def async_stop_polling(self):
@@ -393,11 +393,6 @@ class AkuvoxApiClient:
 
         LOGGER.error("❌ Unable to retrieve user's temporary key list.")
         return None
-
-    async def async_start_polling_personal_door_log(self):
-        """Poll the server contineously for the latest personal door log."""
-        # Make sure only 1 instance of the door log polling is running
-        self.hass.async_create_task(self.async_retrieve_personal_door_log())
 
     async def async_retrieve_personal_door_log(self) -> bool:
         """Request and parse the user's door log every 2 seconds."""

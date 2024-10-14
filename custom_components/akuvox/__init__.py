@@ -71,9 +71,9 @@ async def async_stop_polling(hass: HomeAssistant):
     await api_client.async_stop_polling()
 
 async def async_start_polling(hass: HomeAssistant):
-    """Stop polling the personal door log API."""
+    """Start polling the personal door log API."""
     api_client: AkuvoxApiClient = get_api_client(hass=hass) # type: ignore
-    await api_client.async_start_polling_personal_door_log()
+    await api_client.async_start_polling()
 
 def get_api_client(hass: HomeAssistant):
     """Akuvox API Client."""
