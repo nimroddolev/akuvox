@@ -63,9 +63,9 @@ Whenever any of your doors are rung or opened, the `akuvox_door_update` event is
 #### 1. `trigger.event.data.Location`
 The `Location` value represents the name of the Akuvox door that was rung or opened, eg: `Front Door`, `Side Door`, etc.
 
-#### 2. `trigger.event.data.CallType`
-The `CallType` value represents the door event type:
-| `CallType` Value | Meaning |
+#### 2. `trigger.event.data.CaptureType`
+The `CaptureType` value represents the door event type:
+| `CaptureType` Value | Meaning |
 |-|-|
 | `Call` | Someone rang the door. |
 | `Face Unlock` | The door was opened via facial recognition. |
