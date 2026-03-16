@@ -58,7 +58,7 @@ class AkuvoxData:
         self.wait_for_image_url = wait_for_image_url if wait_for_image_url is not None else bool(self.get_value_for_key(entry, "event_screenshot_options", False) == "wait") # type: ignore
 
         self.subdomain = subdomain if subdomain else self.get_value_for_key(entry, "subdomain", self.subdomain) # type: ignore
-        if subdomain is None:
+        if not self.subdomain:
             if not country_code:
                 try:
                     if entry.data:
@@ -69,7 +69,7 @@ class AkuvoxData:
                             self.subdomain = self.location_dict.get("subdomain", "ecloud") # type: ignore
                 except Exception as error:
                     LOGGER.debug("Unable to use country due to error: %s", error)
-        if subdomain is None:
+        if not self.subdomain:
             self.subdomain = "ecloud"
 
         self.hass.add_job(self.async_set_stored_data_for_key, "wait_for_image_url", self.wait_for_image_url)
@@ -98,12 +98,20 @@ class AkuvoxData:
     def parse_sms_login_response(self, json_data: dict):
         """Parse the sms_login API response."""
         if json_data is not None:
+            # Check top-level keys (sms_login response format)
             if "auth_token" in json_data:
                 self.auth_token = json_data["auth_token"]
             if "token" in json_data:
                 self.token = json_data["token"]
             if "rtmp_server" in json_data:
                 self.rtsp_ip = json_data["rtmp_server"].split(':')[0]
+            # Also check nested 'datas' keys (servers_list response format)
+            datas = json_data.get("datas", {})
+            if datas:
+                if "rtmp_server" in datas and self.rtsp_ip is None:
+                    self.rtsp_ip = datas["rtmp_server"].split(':')[0]
+                if "rest_server_https" in datas:
+                    self.host = datas["rest_server_https"]
 
     def parse_userconf_data(self, json_data: dict):
         """Parse the userconf API response."""

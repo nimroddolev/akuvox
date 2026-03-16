@@ -216,11 +216,27 @@ class AkuvoxApiClient:
             "accept": "*/*",
             "content-type": "application/json",
             "x-auth-token": token,
-            "api-version": "6.6",
+            "api-version": "6.8",
             "x-cloud-lang": "en",
-            "user-agent": "VBell/6.61.2 (iPhone; iOS 16.6; Scale/3.00)",
-            "accept-language": "en-AU;q=1, he-AU;q=0.9, ru-RU;q=0.8"
+            "user-agent": "VBell/7.36.2 (iPhone; iOS 26.3.1; Scale/3.00)",
+            "accept-language": "en-US;q=1"
         }
+
+        # Try GET first (used by US/ucloud API)
+        LOGGER.debug("📡 Requesting server list (GET)...")
+        json_data = await self._async_api_wrapper(
+            method="get",
+            url=url,
+            headers=headers,
+            data=None,
+        )
+        if json_data is not None:
+            LOGGER.debug("✅ Server list retrieved successfully (GET)")
+            self._data.parse_sms_login_response(json_data) # type: ignore
+            return True
+
+        # Fall back to POST (used by other regional APIs)
+        LOGGER.debug("📡 Requesting server list (POST fallback)...")
         obfuscated_number = str(self.get_obfuscated_phone_number(phone_number))
         data = json.dumps({
             "auth_token": auth_token,
@@ -228,7 +244,6 @@ class AkuvoxApiClient:
             "token": token,
             "user": obfuscated_number,
         })
-        LOGGER.debug("📡 Requesting server list...")
         json_data = await self._async_api_wrapper(
             method="post",
             url=url,
@@ -236,7 +251,7 @@ class AkuvoxApiClient:
             data=data,
         )
         if json_data is not None:
-            LOGGER.debug("✅ Server list retrieved successfully")
+            LOGGER.debug("✅ Server list retrieved successfully (POST)")
             self._data.parse_sms_login_response(json_data) # type: ignore
             return True
 
@@ -520,6 +535,12 @@ class AkuvoxApiClient:
                         return json_data["datas"]
                     return json_data
 
+                # US API format (err_code instead of result)
+                if "err_code" in json_data and str(json_data["err_code"]) == "0":
+                    if "datas" in json_data:
+                        return json_data["datas"]
+                    return json_data
+
                 # Temp key requests
                 if "code" in json_data:
                     if json_data["code"] == 0:
@@ -613,7 +634,7 @@ class AkuvoxApiClient:
             # Add 3 to the digit and take the result modulo 10
             transformed_digit = (digit + 3) % 10
             transformed_str += str(transformed_digit)
-        return int(transformed_str)
+        return transformed_str
 
     def get_activities_host(self):
         """Get the host address string for activities API requests."""

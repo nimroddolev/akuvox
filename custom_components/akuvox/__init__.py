@@ -86,7 +86,7 @@ def get_api_client(hass: HomeAssistant):
 async def async_options(self, entry: ConfigEntry):
     """Present current configuration options for modification."""
     # Create an options flow handler and return it
-    return AkuvoxOptionsFlowHandler(entry)
+    return AkuvoxOptionsFlowHandler()
 
 async def async_options_updated(self, entry: ConfigEntry):
     """Handle updated configuration options and update the entry."""
@@ -123,4 +123,3 @@ async def async_update_configuration(hass: HomeAssistant, entry: ConfigEntry) ->
                     LOGGER.debug(" - %s = %s", key, str_value)
     except Exception as error:
         LOGGER.warning("Unable to update configuration: %s", str(error))
-
