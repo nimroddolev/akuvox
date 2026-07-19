@@ -61,11 +61,16 @@ class AkuvoxCameraEntity(GenericCamera):
                 ATTR_IDENTIFIERS: {(DOMAIN, name)},
                 CONF_NAME: name,
                 "stream_source": rtsp_url,
-                "limit_refetch_to_url_change": True,
-                "framerate": 2,
                 "content_type": "",
-                CONF_VERIFY_SSL: False,
-                "rtsp_transport": "udp"
+                # HA's generic camera moved these options into a nested
+                # "advanced" section (SECTION_ADVANCED). Passing them flat
+                # raises KeyError: 'advanced' on current HA versions.
+                "advanced": {
+                    "limit_refetch_to_url_change": True,
+                    "framerate": 2,
+                    CONF_VERIFY_SSL: False,
+                    "rtsp_transport": "udp",
+                },
             },
             identifier=name,
             title=name,
