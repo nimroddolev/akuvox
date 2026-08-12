@@ -27,6 +27,8 @@ from .const import (
     API_REFRESH_TOKEN,
     TOKEN_REFRESH_INTERVAL,
     TOKEN_REFRESHED_AT,
+    DOOR_LOG_POLL_INTERVAL,
+    DOOR_LOG_MAX_BACKOFF,
     REST_SERVER_API_VERSION,
     API_REST_SERVER_DATA,
     USERCONF_API_VERSION,
@@ -53,6 +55,11 @@ class AkuvoxApiClientCommunicationError(AkuvoxApiClientError):
 class AkuvoxApiClientAuthenticationError(AkuvoxApiClientError):
     """Exception to indicate an authentication error."""
 
+
+class AkuvoxApiClientRateLimitError(AkuvoxApiClientError):
+    """Exception to indicate SmartPlus rate limiting."""
+
+
 class AkuvoxApiClient:
     """Sample API Client."""
 
@@ -73,6 +80,7 @@ class AkuvoxApiClient:
         self._entry = entry
         self._token_refresh_lock = asyncio.Lock()
         self._door_log_failure_logged = False
+        self._door_log_backoff = DOOR_LOG_POLL_INTERVAL
         self._token_refresh_unsub: Callable[[], None] | None = None
         self._skip_next_entry_reload = False
         if entry:
@@ -136,23 +144,31 @@ class AkuvoxApiClient:
         """Poll the server continuously for the latest personal door log, can be stopped."""
         assert self._polling_task_stop_event is not None
         while not self._polling_task_stop_event.is_set():
-            poll_interval = 2
+            poll_interval = DOOR_LOG_POLL_INTERVAL
             try:
                 if not await self.async_retrieve_personal_door_log():
                     self._note_door_log_failure()
-                    poll_interval = 30
+                    poll_interval = self._increase_door_log_backoff()
                 elif self._door_log_failure_logged:
                     LOGGER.info("Personal door-log polling recovered")
                     self._door_log_failure_logged = False
+                    self._door_log_backoff = DOOR_LOG_POLL_INTERVAL
             except AkuvoxApiClientError as error:
                 self._note_door_log_failure(error)
-                poll_interval = 30
+                poll_interval = self._increase_door_log_backoff()
             try:
                 await asyncio.wait_for(
                     self._polling_task_stop_event.wait(), timeout=poll_interval
                 )
             except asyncio.TimeoutError:
                 continue
+
+    def _increase_door_log_backoff(self) -> int:
+        """Return the next quiet retry interval for a failed activity request."""
+        self._door_log_backoff = min(
+            self._door_log_backoff * 2, DOOR_LOG_MAX_BACKOFF
+        )
+        return self._door_log_backoff
 
     def _note_door_log_failure(
         self, error: AkuvoxApiClientError | None = None
@@ -647,16 +663,7 @@ class AkuvoxApiClient:
             method="get", url=url, headers=headers, data=data
         )
 
-        # Response empty, try changing app type "single" <--> "community"
-        if isinstance(json_data, list) and not json_data:
-            self.switch_activities_host()
-            host = self.get_activities_host()
-            url = f"https://{host}/{API_GET_PERSONAL_DOOR_LOG}"
-            json_data = await self._async_api_wrapper(
-                method="get", url=url, headers=headers, data=data
-            )
-
-        if isinstance(json_data, list) and json_data:
+        if isinstance(json_data, list):
             return json_data
         LOGGER.debug("No personal door log data returned")
         return None
@@ -721,6 +728,8 @@ class AkuvoxApiClient:
                 self._replace_request_token(headers, failed_token),
                 allow_token_refresh=False,
             )
+        except AkuvoxApiClientRateLimitError:
+            raise
         except Exception as exception:  # Final fallback
             LOGGER.exception("❌ Unexpected error during SmartPlus API call")
             raise AkuvoxApiClientError(
@@ -757,6 +766,8 @@ class AkuvoxApiClient:
             raise AkuvoxApiClientAuthenticationError(
                 f"SmartPlus rejected the session with HTTP {response.status}"
             )
+        if response.status == 429:
+            raise AkuvoxApiClientRateLimitError("SmartPlus rate limited the request")
         if response.status == 200:
             try:
                 json_data = await response.json()

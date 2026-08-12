@@ -467,6 +467,8 @@ API_SERVERS_LIST = "servers_list"
 API_REFRESH_TOKEN = "refresh_token"
 TOKEN_REFRESH_INTERVAL = timedelta(hours=6)
 TOKEN_REFRESHED_AT = "token_refreshed_at"
+DOOR_LOG_POLL_INTERVAL = 60
+DOOR_LOG_MAX_BACKOFF = 900
 API_SMS_LOGIN = "sms_login"
 API_USERCONF = "userconf"
 API_OPENDOOR = "opendoor"
