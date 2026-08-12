@@ -302,8 +302,6 @@ class AkuvoxData:
         """Device data dictionary."""
         return {
             "host": self.host,
-            "token": self.token,
-            "auth_token": self.auth_token,
             "camera_data": self.camera_data,
             "door_relay_data": self.door_relay_data,
             "door_keys_data": self.door_keys_data

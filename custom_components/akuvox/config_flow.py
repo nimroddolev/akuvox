@@ -10,6 +10,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 import voluptuous as vol
 from .api import AkuvoxApiClient
 from .coordinator import AkuvoxDataUpdateCoordinator
+from .credentials import async_get_credentials, async_store_credentials
 
 from .const import (
     DOMAIN,
@@ -34,6 +35,7 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
     """Config flow for Akuvox."""
 
     VERSION = 1
+    MINOR_VERSION = 2
     data: dict = {}
     rest_server_data: dict = {}
     akuvox_api_client: AkuvoxApiClient = None  # type: ignore
@@ -144,16 +146,20 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         devices = self.akuvox_api_client.get_devices_json()
         data = dict(self._reauth_entry.data)
         options = dict(self._reauth_entry.options)
-        refreshed_credentials = {
-            "auth_token": devices["auth_token"],
-            "token": devices["token"],
+        for target in (data, options):
+            target.pop("auth_token", None)
+            target.pop("token", None)
+        credentials = self.akuvox_api_client.get_credentials()
+        await async_store_credentials(
+            self.hass,
+            self._reauth_entry.entry_id,
+            credentials["auth_token"],
+            credentials["token"],
+        )
+        data.update({
             "host": devices["host"],
             TOKEN_REFRESHED_AT: datetime.now(timezone.utc).isoformat(),
-        }
-        if options.get("override", False):
-            options.update(refreshed_credentials)
-        else:
-            data.update(refreshed_credentials)
+        })
         data.update(self.data)
         data.update(
             {
@@ -502,8 +508,8 @@ class AkuvoxOptionsFlowHandler(config_entries.OptionsFlow):
     async def async_step_init(self, user_input=None):
         """Initialize the options flow."""
         # Define the options schema
-        config_options = dict(self.config_entry.options)
         config_data = dict(self.config_entry.data)
+        credentials = await async_get_credentials(self.hass, self.config_entry.entry_id)
 
         event_screenshot_options = {
             "asap": "Receive events once generated, without waiting for camera screenshot URLs.",
@@ -531,11 +537,15 @@ class AkuvoxOptionsFlowHandler(config_entries.OptionsFlow):
                                  mode=selector.SelectSelectorMode.DROPDOWN,
                                  custom_value=False),
                                  ),
-            vol.Optional("auth_token",
-                         default=self.get_data_key_value("auth_token", False) # type: ignore
+            vol.Optional(
+                "auth_token",
+                default=credentials.get("auth_token", ""),
+                description="Your SmartPlus auth_token",
             ): str,
-            vol.Optional("token",
-                         default=self.get_data_key_value("token", False) # type: ignore
+            vol.Optional(
+                "token",
+                default=credentials.get("token", ""),
+                description="Your SmartPlus token",
             ): str,
             vol.Optional("subdomain",
                 default=current_subdomain, # type: ignore
@@ -578,7 +588,14 @@ class AkuvoxOptionsFlowHandler(config_entries.OptionsFlow):
                 last_step=True
             )
 
-        wait_for_image_url = True if user_input.get("event_screenshot_options", "asap") == "wait" else False
+        auth_token = str(user_input.pop("auth_token", "")).strip()
+        token = str(user_input.pop("token", "")).strip()
+        if bool(auth_token) != bool(token):
+            return self.async_show_form(
+                step_id="init",
+                data_schema=options_schema,
+                errors={"base": "token_pair_required"},
+            )
 
         # API client
         if self.akuvox_api_client is None:
@@ -588,75 +605,15 @@ class AkuvoxOptionsFlowHandler(config_entries.OptionsFlow):
             self.akuvox_api_client = coordinator.client
             self.akuvox_api_client._data.subdomain = current_subdomain # type: ignore
             self.akuvox_api_client._data.host = self.get_data_key_value("host") # type: ignore
-            self.akuvox_api_client._data.auth_token = self.get_data_key_value("auth_token") # type: ignore
-            self.akuvox_api_client._data.token = self.get_data_key_value("token") # type: ignore
             self.akuvox_api_client._data.phone_number = self.get_data_key_value("phone_number") # type: ignore
             self.akuvox_api_client._data.wait_for_image_url = self.get_data_key_value("wait_for_image_url") # type: ignore
 
-        errors = {}
-
-        # User wishes to use other SmartLife account tokens
-        if user_input.get("override", False) is True:
-            LOGGER.debug("Use custom token strings...")
-            if await self.akuvox_api_client.async_init_api() is True:
-
-                # Retrieve device data
-                await self.akuvox_api_client.async_retrieve_user_data_with_tokens(
-                    user_input["auth_token"],
-                    user_input["token"])
-                devices_json = self.akuvox_api_client.get_devices_json()
-                if devices_json is not None and all(key in devices_json for key in (
-                    "camera_data",
-                    "door_relay_data",
-                    "door_keys_data")
-                ):
-                    camera_data = devices_json["camera_data"]
-                    door_relay_data = devices_json["door_relay_data"]
-                    door_keys_data = devices_json["door_keys_data"]
-                    options_schema = vol.Schema({
-                        vol.Required("token", default=config_options.get("token", None)): str,
-                        vol.Optional("camera_data", default=camera_data): dict,
-                        vol.Optional("door_relay_data", default=door_relay_data): dict,
-                        vol.Optional("door_keys_data", default=door_keys_data): dict,
-                    })
-                else:
-                    errors["token"] = "Unable to receive device list. Check your token."
-            else:
-                errors["bad_tokens"] = "Unable to initialize API. Did you login again from your device? Try logging in/adding tokens again."
-
-            data_schema = {
-                vol.Optional(
-                    "auth_token",
-                    msg=None,
-                    default=user_input.get("auth_token", ""),
-                    description="Your SmartPlus user's auth_token."
-                ): str,
-                vol.Optional(
-                    "token",
-                    msg=None,
-                    default=user_input.get("token", ""),
-                    description="Your SmartPlus user's token."
-                ): str,
-                vol.Optional("subdomain",
-                    default="Default", # type: ignore
-                    description="Manually set the regional API subdomain"):
-                    selector.SelectSelector(
-                        selector.SelectSelectorConfig(
-                            options=SUBDOMAINS_LIST,
-                            mode=selector.SelectSelectorMode.DROPDOWN,
-                            custom_value=True),
-                            ),
-                vol.Required(
-                    "wait_for_image_url",
-                    msg=None,
-                    default=bool(wait_for_image_url) # type: ignore
-                ): bool
-            }
-            return self.async_show_form(
-                step_id="init",
-                data_schema=vol.Schema(data_schema),
-                errors=errors
+        if auth_token:
+            await async_store_credentials(
+                self.hass, self.config_entry.entry_id, auth_token, token
             )
+            self.akuvox_api_client._data.auth_token = auth_token # type: ignore
+            self.akuvox_api_client._data.token = token # type: ignore
 
         # User input is valid, update the options
         LOGGER.debug("Updating configuration...")

@@ -17,6 +17,7 @@ from .const import (
     LOGGER
 )
 from .coordinator import AkuvoxDataUpdateCoordinator
+from .credentials import async_load_and_migrate_credentials
 
 PLATFORMS: list[Platform] = [
     Platform.CAMERA,
@@ -27,6 +28,7 @@ PLATFORMS: list[Platform] = [
 # https://developers.home-assistant.io/docs/config_entries_index/#setting-up-an-entry
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up this integration using UI."""
+    credentials = await async_load_and_migrate_credentials(hass, entry)
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = coordinator = AkuvoxDataUpdateCoordinator(
         hass=hass,
@@ -34,6 +36,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             session=async_get_clientsession(hass),
             hass=hass,
             entry=entry,
+            credentials=credentials,
         ),
     )
     await async_update_configuration(hass=hass, entry=entry)
@@ -46,6 +49,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
     entry.async_on_unload(coordinator.client.async_stop_proactive_token_refresh)
 
+    return True
+
+
+async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Migrate credentials from config-entry storage to private storage."""
+    await async_load_and_migrate_credentials(hass, entry)
     return True
 
 

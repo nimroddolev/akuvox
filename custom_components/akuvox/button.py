@@ -72,8 +72,9 @@ class AkuvoxDoorRelayEntity(ButtonEntity, AkuvoxEntity):
         unique_name = name + ", " + relay_id
         self._client = client
         self._name = unique_name
-        self._host = self.get_saved_value("host")
-        self._token = self.get_saved_value("token")
+        client_data = getattr(client, "_data", None)
+        self._host = client_data.host if client_data else self.get_saved_value("host")
+        self._token = client_data.token if client_data else self.get_saved_value("token")
         self._data = data
 
         self._attr_unique_id = unique_name

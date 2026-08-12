@@ -7,6 +7,7 @@ the tests never require a real SmartPlus account or expose credentials.
 from __future__ import annotations
 
 import unittest
+from unittest.mock import ANY, AsyncMock, patch
 
 from custom_components.akuvox.api import (
     AkuvoxApiClient,
@@ -70,6 +71,7 @@ class _Entry:
     """Minimal config entry containing private SmartPlus credentials."""
 
     def __init__(self) -> None:
+        self.entry_id = "entry-id"
         self.data = {
             "token": "expired-token",
             "auth_token": "refresh-credential",
@@ -95,7 +97,8 @@ class TestSmartPlusSessionRefreshE2E(unittest.IsolatedAsyncioTestCase):
         self.session = _Session(responses)
         return AkuvoxApiClient(self.session, _Hass(), self.entry)
 
-    async def test_expired_request_refreshed_and_retried(self) -> None:
+    @patch("custom_components.akuvox.api.async_store_credentials", new_callable=AsyncMock)
+    async def test_expired_request_refreshed_and_retried(self, store_credentials) -> None:
         """A rejected authenticated request renewed and retried once."""
         client = self._client(
             [
@@ -113,8 +116,11 @@ class TestSmartPlusSessionRefreshE2E(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertEqual(result, {"devices": []})
-        self.assertEqual(self.entry.data["token"], "replacement-token")
+        self.assertNotIn("token", self.entry.data)
         self.assertIn("token_refreshed_at", self.entry.data)
+        store_credentials.assert_awaited_once_with(
+            ANY, "entry-id", "refresh-credential", "replacement-token"
+        )
         self.assertEqual(self.session.requests[1]["method"], "post")
         self.assertEqual(
             self.session.requests[2]["headers"]["x-auth-token"], "replacement-token"
@@ -137,14 +143,16 @@ class TestSmartPlusSessionRefreshE2E(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(len(self.session.requests), 2)
 
-    async def test_scheduled_refresh_persisted_a_new_token(self) -> None:
+    @patch("custom_components.akuvox.api.async_store_credentials", new_callable=AsyncMock)
+    async def test_scheduled_refresh_persisted_a_new_token(self, store_credentials) -> None:
         """A proactive refresh renewed the session before an API rejection."""
         client = self._client([_success({"token": "scheduled-token"})])
 
         await client._async_proactive_token_refresh(None)
 
-        self.assertEqual(self.entry.data["token"], "scheduled-token")
+        self.assertNotIn("token", self.entry.data)
         self.assertIn("token_refreshed_at", self.entry.data)
+        store_credentials.assert_awaited_once()
         self.assertEqual(len(self.session.requests), 1)
 
     async def test_failed_proactive_refresh_started_reauthentication(self) -> None:

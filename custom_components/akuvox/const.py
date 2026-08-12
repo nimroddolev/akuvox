@@ -489,6 +489,8 @@ API_GET_PERSONAL_DOOR_LOG = "log/getDoorLog?row=1"
 TEMP_KEY_QR_HOST = "subdomain.akuvox.com"
 
 DATA_STORAGE_KEY = "akuvox_data_storage_key"
+CREDENTIAL_STORAGE_KEY = "akuvox_credentials"
+CREDENTIAL_STORAGE_VERSION = 1
 
 CAPTURE_TIME_KEY = "CaptureTime"
 PIC_URL_KEY = "PicUrl"

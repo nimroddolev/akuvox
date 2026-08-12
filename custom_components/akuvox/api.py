@@ -15,6 +15,7 @@ import aiohttp
 import async_timeout
 
 from .data import AkuvoxData
+from .credentials import async_store_credentials
 
 from .const import (
     LOGGER,
@@ -73,6 +74,7 @@ class AkuvoxApiClient:
         session: aiohttp.ClientSession,
         hass: HomeAssistant,
         entry,
+        credentials: dict[str, str] | None = None,
     ) -> None:
         """Akuvox API Client."""
         self._session = session
@@ -87,7 +89,10 @@ class AkuvoxApiClient:
             LOGGER.debug("▶️ Initializing AkuvoxData from API client init")
             self._data = AkuvoxData(
                 entry=entry,
-                hass=hass) # type: ignore
+                hass=hass,
+                auth_token=(credentials or {}).get("auth_token"),
+                token=(credentials or {}).get("token"),
+            ) # type: ignore
             self._door_log_backoff = self._data.door_log_poll_interval
 
     async def async_init_api(self) -> bool:
@@ -387,20 +392,25 @@ class AkuvoxApiClient:
             self._data.token = str(response["token"])
             if response.get("auth_token"):
                 self._data.auth_token = str(response["auth_token"])
-            self._async_persist_refreshed_credentials()
+            await self._async_persist_refreshed_credentials()
             LOGGER.debug("SmartPlus session token refreshed successfully")
             return True
 
-    def _async_persist_refreshed_credentials(self) -> None:
+    async def _async_persist_refreshed_credentials(self) -> None:
         """Persist refreshed credentials to the active config entry."""
         if self._entry is None or self._data is None:
             return
 
         data = dict(self._entry.data)
         options = dict(self._entry.options)
+        data.pop("auth_token", None)
+        data.pop("token", None)
+        options.pop("auth_token", None)
+        options.pop("token", None)
+        await async_store_credentials(
+            self.hass, self._entry.entry_id, self._data.auth_token, self._data.token
+        )
         target = options if options.get("override", False) else data
-        target["token"] = self._data.token
-        target["auth_token"] = self._data.auth_token
         target[TOKEN_REFRESHED_AT] = datetime.now(timezone.utc).isoformat()
         self._skip_next_entry_reload = True
         self.hass.config_entries.async_update_entry(
@@ -852,6 +862,12 @@ class AkuvoxApiClient:
     def get_devices_json(self) -> dict:
         """Device data dictionary."""
         return self._data.get_device_data()
+
+    def get_credentials(self) -> dict[str, str]:
+        """Return the current credentials for private persistence only."""
+        if self._data is None:
+            return {}
+        return {"auth_token": self._data.auth_token, "token": self._data.token}
 
     def get_obfuscated_phone_number(self, phone_number):
         """Obfuscate the user's phone number for API requests."""

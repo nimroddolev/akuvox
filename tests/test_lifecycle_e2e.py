@@ -101,6 +101,7 @@ class TestIntegrationLifecycleE2E(unittest.IsolatedAsyncioTestCase):
         hass = _Hass()
         entry = _Entry()
         with (
+            patch("custom_components.akuvox.async_load_and_migrate_credentials", new=AsyncMock(return_value={})),
             patch("custom_components.akuvox.AkuvoxApiClient", _Client),
             patch("custom_components.akuvox.AkuvoxDataUpdateCoordinator", _Coordinator),
             patch("custom_components.akuvox.async_get_clientsession", return_value=object()),

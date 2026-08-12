@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import unittest
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from custom_components.akuvox.config_flow import AkuvoxFlowHandler
 
@@ -42,6 +42,7 @@ class _ReauthEntry:
     """Represents an existing account which needs a new SmartPlus session."""
 
     def __init__(self) -> None:
+        self.entry_id = "entry-id"
         self.data = {
             "country_code": "972",
             "phone_number": "5551234",
@@ -60,19 +61,21 @@ class _ReauthClient:
 
     def get_devices_json(self) -> dict:
         return {
-            "auth_token": "new-auth-token",
-            "token": "new-session-token",
             "host": "api.example",
             "camera_data": [{"name": "Lobby"}],
             "door_relay_data": [{"name": "Lobby", "relay_id": "1"}],
             "door_keys_data": [],
         }
 
+    def get_credentials(self) -> dict:
+        return {"auth_token": "new-auth-token", "token": "new-session-token"}
+
 
 class TestReauthFlowE2E(unittest.IsolatedAsyncioTestCase):
     """Verify reauthentication renewed the active config entry in place."""
 
-    async def test_sms_code_updated_and_reloaded_existing_entry(self) -> None:
+    @patch("custom_components.akuvox.config_flow.async_store_credentials", new_callable=AsyncMock)
+    async def test_sms_code_updated_and_reloaded_existing_entry(self, store_credentials) -> None:
         """A valid reauth SMS code replaced credentials without creating an entry."""
         flow = AkuvoxFlowHandler()
         flow.hass = _Hass()
@@ -88,8 +91,11 @@ class TestReauthFlowE2E(unittest.IsolatedAsyncioTestCase):
             "5551234", "972", "123456", start_polling=False
         )
         update = flow.async_update_reload_and_abort.call_args.kwargs
-        self.assertEqual(update["data"]["token"], "new-session-token")
-        self.assertEqual(update["data"]["auth_token"], "new-auth-token")
+        self.assertNotIn("token", update["data"])
+        self.assertNotIn("auth_token", update["data"])
+        store_credentials.assert_awaited_once_with(
+            flow.hass, flow._reauth_entry.entry_id, "new-auth-token", "new-session-token"
+        )
         self.assertEqual(update["data"]["camera_data"], [{"name": "Lobby"}])
         self.assertIn("token_refreshed_at", update["data"])
         self.assertEqual(update["reason"], "reauth_successful")
