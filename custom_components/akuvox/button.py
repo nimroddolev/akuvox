@@ -1,8 +1,12 @@
 """Button platform for akuvox."""
+from typing import Any
+
 from homeassistant.components.button import ButtonEntity
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers import storage
 from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .api import AkuvoxApiClient
 from .coordinator import AkuvoxDataUpdateCoordinator
@@ -15,7 +19,9 @@ from .const import (
 )
 from .entity import AkuvoxEntity
 
-async def async_setup_entry(hass, entry, async_add_devices):
+async def async_setup_entry(
+    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+) -> None:
     """Set up the door relay platform."""
     coordinator: AkuvoxDataUpdateCoordinator
     for _key, value in hass.data[DOMAIN].items():
@@ -23,14 +29,31 @@ async def async_setup_entry(hass, entry, async_add_devices):
     client = coordinator.client
 
     store = storage.Store(hass, 1, DATA_STORAGE_KEY)
-    device_data: dict = await store.async_load() # type: ignore
-    door_relay_data = device_data["door_relay_data"]
+    try:
+        device_data: Any = await store.async_load()
+    except (OSError, ValueError) as error:
+        LOGGER.warning("Unable to load saved door relay data: %s", error)
+        return
+    if not isinstance(device_data, dict):
+        LOGGER.warning("Saved door relay data was missing or invalid")
+        return
+    door_relay_data = device_data.get("door_relay_data")
+    if not isinstance(door_relay_data, list):
+        LOGGER.warning("Saved door relay list was missing or invalid")
+        return
 
-    entities = []
+    entities: list[AkuvoxDoorRelayEntity] = []
     for door_relay in door_relay_data:
-        name = door_relay["name"]
-        mac = door_relay["mac"]
-        relay_id = door_relay["relay_id"]
+        if not isinstance(door_relay, dict):
+            LOGGER.warning("Skipping malformed saved door relay")
+            continue
+        try:
+            name = str(door_relay["name"])
+            mac = str(door_relay["mac"])
+            relay_id = str(door_relay["relay_id"])
+        except (KeyError, TypeError, ValueError) as error:
+            LOGGER.warning("Skipping malformed saved door relay: %s", error)
+            continue
         data = f"mac={mac}&relay={relay_id}"
 
         entities.append(
@@ -43,7 +66,7 @@ async def async_setup_entry(hass, entry, async_add_devices):
             )
         )
 
-    async_add_devices(entities)
+    async_add_entities(entities)
 
 
 class AkuvoxDoorRelayEntity(ButtonEntity, AkuvoxEntity):

@@ -1,8 +1,13 @@
 """Sensor platform for akuvox."""
 from datetime import datetime
+from typing import Any
+
 from homeassistant.components.sensor import SensorEntity
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers import storage
 from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .api import AkuvoxApiClient
 from .coordinator import AkuvoxDataUpdateCoordinator
@@ -15,19 +20,34 @@ from .const import (
 )
 from .entity import AkuvoxEntity
 
-async def async_setup_entry(hass, entry, async_add_devices):
+async def async_setup_entry(
+    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+) -> None:
     """Set up the temporary door key platform."""
     coordinator: AkuvoxDataUpdateCoordinator
     for _key, value in hass.data[DOMAIN].items():
         coordinator = value
     client = coordinator.client
     store = storage.Store(hass, 1, DATA_STORAGE_KEY)
-    device_data: dict = await store.async_load() # type: ignore
-    door_keys_data = device_data["door_keys_data"]
+    try:
+        device_data: Any = await store.async_load()
+    except (OSError, ValueError) as error:
+        LOGGER.warning("Unable to load saved temporary door key data: %s", error)
+        return
+    if not isinstance(device_data, dict):
+        LOGGER.warning("Saved temporary door key data was missing or invalid")
+        return
+    door_keys_data = device_data.get("door_keys_data")
+    if not isinstance(door_keys_data, list):
+        LOGGER.warning("Saved temporary door key list was missing or invalid")
+        return
     date_format = "%d-%m-%Y %H:%M:%S"
 
-    entities = []
+    entities: list[AkuvoxTemporaryDoorKey] = []
     for door_key_data in door_keys_data:
+        if not isinstance(door_key_data, dict):
+            LOGGER.warning("Skipping malformed temporary door key")
+            continue
         try:
             key_id = door_key_data["key_id"]
             description = door_key_data["description"]
@@ -56,7 +76,7 @@ async def async_setup_entry(hass, entry, async_add_devices):
             )
         )
 
-    async_add_devices(entities)
+    async_add_entities(entities)
 
 class AkuvoxTemporaryDoorKey(SensorEntity, AkuvoxEntity):
     """Akuvox temporary door key class."""
@@ -64,7 +84,7 @@ class AkuvoxTemporaryDoorKey(SensorEntity, AkuvoxEntity):
     def __init__(
         self,
         client: AkuvoxApiClient,
-        entry,
+        entry: ConfigEntry,
         key_id: str,
         description: str,
         key_code: str,
@@ -72,7 +92,8 @@ class AkuvoxTemporaryDoorKey(SensorEntity, AkuvoxEntity):
         end_time: datetime,
         allowed_times: int,
         access_times: int,
-        qr_code_url) -> None:
+        qr_code_url: str,
+    ) -> None:
         """Initialize the Akuvox door relay class."""
         super(SensorEntity, self).__init__(client=client, entry=entry)
         AkuvoxEntity.__init__(

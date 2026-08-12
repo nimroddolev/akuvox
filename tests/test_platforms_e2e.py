@@ -87,6 +87,23 @@ class TestPlatformSetupE2E(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(added_buttons.call_args.args[0][0]["data"], "mac=AABBCC&relay=1")
         self.assertEqual(added_sensors.call_args.args[0][0]["key_code"], "1234")
 
+    async def test_button_and_sensor_ignored_missing_or_corrupt_saved_data(self) -> None:
+        """Missing or malformed cached platform data did not prevent setup."""
+        hass = _Hass()
+        entry = _Entry()
+        added_buttons = MagicMock()
+        added_sensors = MagicMock()
+
+        with (
+            patch("custom_components.akuvox.button.storage.Store", return_value=_Store(None)),
+            patch("custom_components.akuvox.sensor.storage.Store", return_value=_Store({"door_keys_data": {}})),
+        ):
+            await button.async_setup_entry(hass, entry, added_buttons)
+            await sensor.async_setup_entry(hass, entry, added_sensors)
+
+        added_buttons.assert_not_called()
+        added_sensors.assert_not_called()
+
     async def test_actual_entities_used_saved_credentials_and_async_actions(self) -> None:
         """Camera, relay, and temporary-key entities completed their public paths."""
         client = _EntityClient()
