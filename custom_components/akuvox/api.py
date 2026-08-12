@@ -4,9 +4,12 @@ from __future__ import annotations
 import asyncio
 import json
 import socket
+from collections.abc import Callable
+from datetime import datetime, timezone
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.event import async_track_time_interval
 
 import aiohttp
 import async_timeout
@@ -21,6 +24,9 @@ from .const import (
     SMS_LOGIN_API_VERSION,
     API_SMS_LOGIN,
     API_SERVERS_LIST,
+    API_REFRESH_TOKEN,
+    TOKEN_REFRESH_INTERVAL,
+    TOKEN_REFRESHED_AT,
     REST_SERVER_API_VERSION,
     API_REST_SERVER_DATA,
     USERCONF_API_VERSION,
@@ -64,6 +70,11 @@ class AkuvoxApiClient:
         """Akuvox API Client."""
         self._session = session
         self.hass = hass
+        self._entry = entry
+        self._token_refresh_lock = asyncio.Lock()
+        self._door_log_failure_logged = False
+        self._token_refresh_unsub: Callable[[], None] | None = None
+        self._skip_next_entry_reload = False
         if entry:
             LOGGER.debug("▶️ Initializing AkuvoxData from API client init")
             self._data = AkuvoxData(
@@ -128,9 +139,13 @@ class AkuvoxApiClient:
             poll_interval = 2
             try:
                 if not await self.async_retrieve_personal_door_log():
+                    self._note_door_log_failure()
                     poll_interval = 30
+                elif self._door_log_failure_logged:
+                    LOGGER.info("Personal door-log polling recovered")
+                    self._door_log_failure_logged = False
             except AkuvoxApiClientError as error:
-                LOGGER.error("Unable to retrieve personal door log: %s", error)
+                self._note_door_log_failure(error)
                 poll_interval = 30
             try:
                 await asyncio.wait_for(
@@ -138,6 +153,25 @@ class AkuvoxApiClient:
                 )
             except asyncio.TimeoutError:
                 continue
+
+    def _note_door_log_failure(
+        self, error: AkuvoxApiClientError | None = None
+    ) -> None:
+        """Log one failed poll cycle, then suppress identical retry failures."""
+        if self._door_log_failure_logged:
+            return
+        if error is None:
+            LOGGER.warning(
+                "Unable to retrieve personal door log after retry; "
+                "further failures will be suppressed until it recovers"
+            )
+        else:
+            LOGGER.warning(
+                "Unable to retrieve personal door log after retry: %s; "
+                "further failures will be suppressed until it recovers",
+                error,
+            )
+        self._door_log_failure_logged = True
 
     def init_api_with_data(self,
                            hass: HomeAssistant,
@@ -296,6 +330,127 @@ class AkuvoxApiClient:
 
         LOGGER.error("❌ Unable to retrieve server list. Try sigining in again / check that your tokens are valid.")
         return False
+
+    async def async_refresh_token(self, failed_token: str) -> bool:
+        """Refresh a SmartPlus session token and persist the replacement.
+
+        SmartPlus uses ``auth_token`` as the credential for this private endpoint
+        and returns a new short-lived ``token``.  Only one request may refresh at
+        a time so concurrent API calls cannot overwrite a newer session.
+        """
+        if self._data is None or not self._data.auth_token:
+            raise AkuvoxApiClientAuthenticationError("No SmartPlus refresh credential is available")
+
+        async with self._token_refresh_lock:
+            # Another failed request may already have completed the refresh.
+            if self._data.token and self._data.token != failed_token:
+                return True
+
+            url = f"https://{REST_SERVER_ADDR}:{REST_SERVER_PORT}/{API_REFRESH_TOKEN}"
+            headers = {
+                "accept": "*/*",
+                "content-type": "application/json",
+                "x-auth-token": self._data.token,
+                "api-version": "6.8",
+                "x-cloud-lang": "en",
+                "user-agent": SMARTPLUS_USER_AGENT,
+            }
+            response = await self._async_api_wrapper(
+                method="post",
+                url=url,
+                headers=headers,
+                data=json.dumps({"auth_token": self._data.auth_token}),
+                allow_token_refresh=False,
+            )
+            if not isinstance(response, dict) or not response.get("token"):
+                raise AkuvoxApiClientAuthenticationError(
+                    "SmartPlus did not return a refreshed session token"
+                )
+
+            self._data.token = str(response["token"])
+            if response.get("auth_token"):
+                self._data.auth_token = str(response["auth_token"])
+            self._async_persist_refreshed_credentials()
+            LOGGER.debug("SmartPlus session token refreshed successfully")
+            return True
+
+    def _async_persist_refreshed_credentials(self) -> None:
+        """Persist refreshed credentials to the active config entry."""
+        if self._entry is None or self._data is None:
+            return
+
+        data = dict(self._entry.data)
+        options = dict(self._entry.options)
+        target = options if options.get("override", False) else data
+        target["token"] = self._data.token
+        target["auth_token"] = self._data.auth_token
+        target[TOKEN_REFRESHED_AT] = datetime.now(timezone.utc).isoformat()
+        self._skip_next_entry_reload = True
+        self.hass.config_entries.async_update_entry(
+            self._entry,
+            data=data,
+            options=options,
+        )
+
+    def consume_entry_reload_skip(self) -> bool:
+        """Return whether the next config-entry update needs no reload."""
+        if not self._skip_next_entry_reload:
+            return False
+        self._skip_next_entry_reload = False
+        return True
+
+    def async_start_proactive_token_refresh(self) -> None:
+        """Keep the SmartPlus session fresh before its undocumented expiry.
+
+        SmartPlus does not return an expiry timestamp, so renewal is scheduled
+        conservatively.  The timestamp is persisted to avoid resetting the
+        interval whenever Home Assistant restarts.
+        """
+        if self._entry is None or self._data is None or self._token_refresh_unsub:
+            return
+
+        self._token_refresh_unsub = async_track_time_interval(
+            self.hass,
+            self._async_proactive_token_refresh,
+            TOKEN_REFRESH_INTERVAL,
+        )
+        if self._is_token_refresh_due():
+            self.hass.async_create_task(self._async_proactive_token_refresh(None))
+
+    def async_stop_proactive_token_refresh(self) -> None:
+        """Cancel the periodic SmartPlus token-refresh callback."""
+        if self._token_refresh_unsub:
+            self._token_refresh_unsub()
+            self._token_refresh_unsub = None
+
+    def _is_token_refresh_due(self) -> bool:
+        """Return whether a persisted session has reached its refresh interval."""
+        if self._entry is None:
+            return False
+        source = self._entry.options if self._entry.options.get("override", False) else self._entry.data
+        refreshed_at = source.get(TOKEN_REFRESHED_AT)
+        if not isinstance(refreshed_at, str):
+            return True
+        try:
+            last_refresh = datetime.fromisoformat(refreshed_at)
+            if last_refresh.tzinfo is None:
+                return True
+        except ValueError:
+            return True
+        return datetime.now(timezone.utc) - last_refresh >= TOKEN_REFRESH_INTERVAL
+
+    async def _async_proactive_token_refresh(self, _now) -> None:
+        """Refresh the session before expiry and surface a non-recoverable failure."""
+        if self._data is None or not self._data.token:
+            return
+        try:
+            await self.async_refresh_token(self._data.token)
+        except AkuvoxApiClientAuthenticationError:
+            LOGGER.error("SmartPlus token refresh failed; reauthentication is required")
+            if self._entry is not None:
+                self._entry.async_start_reauth_if_available(self.hass)
+        except AkuvoxApiClientError as error:
+            LOGGER.warning("Scheduled SmartPlus token refresh failed: %s", error)
 
     async def async_sms_sign_in(self, phone_number, country_code, sms_code) -> bool:
         """Sign user in with their phone number and SMS code."""
@@ -516,8 +671,10 @@ class AkuvoxApiClient:
         url: str,
         data,
         headers: dict | None = None,
+        allow_token_refresh: bool = True,
     ):
         """Get information from the API with aiohttp (fully async)."""
+        failed_token = self._data.token if self._data else ""
         try:
             async with async_timeout.timeout(10):
                 subdomain = self._data.subdomain
@@ -541,7 +698,7 @@ class AkuvoxApiClient:
                                app_type_2)
                 self._data.app_type = app_type_2
                 url = url.replace("app/"+app_type_1+"/", "app/"+app_type_2+"/")
-                return await self._async_api_wrapper(method, url, data, headers)
+                return await self._async_api_wrapper(method, url, data, headers, allow_token_refresh)
             if f"app/{app_type_2}/" in url:
                 LOGGER.error("Timeout occured for 'app/%s' API %s request: %s",
                              app_type_2,
@@ -553,12 +710,36 @@ class AkuvoxApiClient:
             raise AkuvoxApiClientCommunicationError(
                 f"Error fetching SmartPlus API data: {type(exception).__name__}",
             ) from exception
+        except AkuvoxApiClientAuthenticationError:
+            if not allow_token_refresh or not failed_token:
+                raise
+            await self.async_refresh_token(failed_token)
+            return await self._async_api_wrapper(
+                method,
+                self._replace_request_token(url, failed_token),
+                self._replace_request_token(data, failed_token),
+                self._replace_request_token(headers, failed_token),
+                allow_token_refresh=False,
+            )
         except Exception as exception:  # Final fallback
             LOGGER.exception("❌ Unexpected error during SmartPlus API call")
             raise AkuvoxApiClientError(
                 f"Unexpected SmartPlus API error: {type(exception).__name__}"
             ) from exception
         return None
+
+    def _replace_request_token(self, value, previous_token: str):
+        """Replace an expired token in a URL, headers, or JSON request body."""
+        if self._data is None or not previous_token:
+            return value
+        if isinstance(value, str):
+            return value.replace(previous_token, self._data.token)
+        if isinstance(value, dict):
+            return {
+                key: self._replace_request_token(item, previous_token)
+                for key, item in value.items()
+            }
+        return value
 
     @staticmethod
     def _redact_url(url: str) -> str:
@@ -572,6 +753,10 @@ class AkuvoxApiClient:
 
     async def _async_process_async_response(self, response: aiohttp.ClientResponse, url: str):
         """Process aiohttp response and return dict with data (non-blocking)."""
+        if response.status in (401, 403):
+            raise AkuvoxApiClientAuthenticationError(
+                f"SmartPlus rejected the session with HTTP {response.status}"
+            )
         if response.status == 200:
             try:
                 json_data = await response.json()
@@ -610,8 +795,9 @@ class AkuvoxApiClient:
 
                 # Invalid identity information error
                 elif json_data["code"] == 2:
-                    LOGGER.error("❌ SmartPlus returned invalid identity information")
-                    await self.async_stop_polling()
+                    raise AkuvoxApiClientAuthenticationError(
+                        "SmartPlus returned invalid identity information"
+                    )
 
                 else:
                     LOGGER.error("❌ SmartPlus API returned error code %s", json_data["code"])

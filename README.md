@@ -219,6 +219,10 @@ Sigining in via SMS verification will sign you out from the SmartPlus app on you
 
 Signing in using your SmartPlus app session tokens allows you to remain signed in to the SmartPlus app on your device. These are private app-session credentials, not Akuvox OpenAPI OAuth tokens. Do not share them in issues, logs, or screenshots.
 
+When SmartPlus rejects an expired session, the integration refreshes the short-lived `token` using the paired `auth_token`, stores the replacement securely in the Home Assistant config entry, and retries the failed request once. If the refresh credential is no longer valid, Home Assistant will report the authentication failure.
+
+As SmartPlus does not report a token expiry time, the integration also proactively refreshes the session every six hours. The refresh time is persisted so Home Assistant restarts do not postpone renewal indefinitely.
+
 1. Obtain your `auth_token` and `token` values (see the [Finding you SmartPlus Account Tokens](#finding-your-smartplus-account-tokens) section below).
 
 1. Enter your phone number, `auth_token` and `token` values and click `SUBMIT`:

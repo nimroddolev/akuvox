@@ -40,9 +40,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # https://developers.home-assistant.io/docs/integration_fetching_data#coordinated-single-api-poll-for-data-for-all-entities
     await coordinator.async_config_entry_first_refresh()
+    coordinator.client.async_start_proactive_token_refresh()
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
+    entry.async_on_unload(coordinator.client.async_stop_proactive_token_refresh)
 
     return True
 
@@ -50,6 +52,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Handle removal of an entry."""
     await async_stop_polling(hass)
+    hass.data[DOMAIN][entry.entry_id].client.async_stop_proactive_token_refresh()
     if unloaded := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
         hass.data[DOMAIN].pop(entry.entry_id)
     return unloaded
@@ -57,11 +60,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Reload config entry."""
-    await async_stop_polling(hass)
-    await async_unload_entry(hass, entry)
-    await async_setup_entry(hass, entry)
-    await async_update_configuration(hass, entry)
-    await async_start_polling(hass)
+    coordinator: AkuvoxDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
+    if coordinator.client.consume_entry_reload_skip():
+        LOGGER.debug("Skipping reload after routine SmartPlus token refresh")
+        return
+    await hass.config_entries.async_reload(entry.entry_id)
 
 # Polling
 

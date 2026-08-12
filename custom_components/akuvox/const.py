@@ -1,4 +1,5 @@
 """Constants for akuvox."""
+from datetime import timedelta
 from logging import Logger, getLogger
 
 LOGGER: Logger = getLogger(__package__)
@@ -463,6 +464,9 @@ REST_SERVER_PORT = 8600
 API_REST_SERVER_DATA = "rest_server"
 API_SEND_SMS = "send_mobile_checkcode"
 API_SERVERS_LIST = "servers_list"
+API_REFRESH_TOKEN = "refresh_token"
+TOKEN_REFRESH_INTERVAL = timedelta(hours=6)
+TOKEN_REFRESHED_AT = "token_refreshed_at"
 API_SMS_LOGIN = "sms_login"
 API_USERCONF = "userconf"
 API_OPENDOOR = "opendoor"
