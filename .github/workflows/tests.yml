@@ -9,16 +9,22 @@ on:
       - main
 
 jobs:
-  session-refresh:
-    name: SmartPlus session refresh tests
+  integration-tests:
+    name: Integration tests (supported HA, Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.14"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: ${{ matrix.python-version }}
           cache: pip
       - name: Install requirements
-        run: python3 -m pip install -r requirements.txt
-      - name: Run end-to-end tests
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install -r requirements.txt
+      - name: Run integration E2E suite
         run: python3 -m unittest discover -s tests -v
