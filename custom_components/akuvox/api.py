@@ -94,7 +94,7 @@ class AkuvoxApiClient:
         if not await self._async_ensure_rest_server():
             return False
 
-        if not self._data.rtsp_ip:
+        if not self._data.rtsp_server:
             if not await self.async_make_servers_list_request(
                 hass=self.hass,
                 auth_token=self._data.auth_token,
@@ -104,7 +104,7 @@ class AkuvoxApiClient:
             ):
                 LOGGER.error("❌ API request for servers list failed.")
                 return False
-        return bool(self._data.rtsp_ip)
+        return bool(self._data.rtsp_server)
 
     async def _async_ensure_rest_server(self) -> bool:
         """Resolve the SmartPlus REST server before making account requests."""
@@ -321,7 +321,7 @@ class AkuvoxApiClient:
         if json_data is not None:
             LOGGER.debug("✅ Server list retrieved successfully (GET)")
             self._data.parse_sms_login_response(json_data)
-            if self._data.rtsp_ip:
+            if self._data.rtsp_server:
                 return True
 
         # Fall back to POST (used by other regional APIs)
@@ -342,7 +342,7 @@ class AkuvoxApiClient:
         if json_data is not None:
             LOGGER.debug("✅ Server list retrieved successfully (POST)")
             self._data.parse_sms_login_response(json_data)
-            return bool(self._data.rtsp_ip)
+            return bool(self._data.rtsp_server)
 
         LOGGER.error("❌ Unable to retrieve server list. Try sigining in again / check that your tokens are valid.")
         return False
@@ -474,7 +474,7 @@ class AkuvoxApiClient:
         login_data = await self.async_validate_sms_code(phone_number, country_code, sms_code)
         if login_data is not None:
             self._data.parse_sms_login_response(login_data)
-            if not self._data.rtsp_ip:
+            if not self._data.rtsp_server:
                 return await self.async_retrieve_user_data()
             device_data_loaded = await self.async_retrieve_device_data()
             await self.async_retrieve_temp_keys_data()

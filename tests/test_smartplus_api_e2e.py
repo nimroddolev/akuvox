@@ -46,6 +46,7 @@ class TestSmartPlusApiE2E(unittest.IsolatedAsyncioTestCase):
                     {
                         "rest_server_https": "api.example",
                         "rtmp_server": "rtsp.example:554",
+                        "vrtsp_server": "virtual-rtsp.example:554",
                     }
                 ),
                 _success(
@@ -86,6 +87,7 @@ class TestSmartPlusApiE2E(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(devices["host"], "api.example")
         self.assertEqual(devices["camera_data"][0]["name"], "Lobby")
+        self.assertIn("virtual-rtsp.example", devices["camera_data"][0]["video_url"])
         self.assertIn("p%40ss%20word", devices["camera_data"][0]["video_url"])
         self.assertEqual(devices["door_relay_data"][0]["door_name"], "Front door")
         self.assertEqual(devices["door_keys_data"][0]["doors"][0]["mac"], "AABBCC")

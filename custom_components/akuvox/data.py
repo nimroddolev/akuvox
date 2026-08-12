@@ -1,6 +1,6 @@
 """Akuvox Data Class."""
 from __future__ import annotations
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
@@ -36,7 +36,7 @@ class AkuvoxData:
         self.hass = hass
         self.location_dict: dict = {}
         self.app_type = "community"
-        self.rtsp_ip = ""
+        self.rtsp_server = ""
         self.project_name = "Akuvox SmartPlus"
         self.camera_data: list[dict] = []
         self.door_relay_data: list[dict] = []
@@ -97,10 +97,24 @@ class AkuvoxData:
             return
         self.auth_token = str(payload.get("auth_token", self.auth_token))
         self.token = str(payload.get("token", self.token))
-        rtmp_server = str(payload.get("rtmp_server", "")).strip()
-        if rtmp_server:
-            self.rtsp_ip = rtmp_server.rsplit(":", 1)[0]
+        self.rtsp_server = self._normalise_rtsp_server(
+            payload.get("vrtsp_server")
+            or payload.get("rtsp_server")
+            or payload.get("rtmp_server")
+            or self.rtsp_server
+        )
         self.host = str(payload.get("rest_server_https", self.host)).strip()
+
+    @staticmethod
+    def _normalise_rtsp_server(value) -> str:
+        """Return the advertised RTSP host and port in URL-authority form."""
+        server = str(value or "").strip()
+        if not server:
+            return ""
+        parsed = urlsplit(server if "://" in server else f"rtsp://{server}")
+        if not parsed.hostname:
+            return ""
+        return f"{parsed.hostname}:{parsed.port or 554}"
 
     def parse_userconf_data(self, json_data: dict):
         """Parse the userconf API response."""
@@ -119,11 +133,11 @@ class AkuvoxData:
                         continue
 
                     # Camera
-                    if dev_data.get("rtsp_pwd") and self.rtsp_ip:
+                    if dev_data.get("rtsp_pwd") and self.rtsp_server:
                         password = quote(str(dev_data["rtsp_pwd"]), safe="")
                         camera_dict = {
                             "name": name,
-                            "video_url": f"rtsp://ak:{password}@{self.rtsp_ip}:554/{mac}"
+                            "video_url": f"rtsp://ak:{password}@{self.rtsp_server}/{mac}"
                         }
                         self.camera_data.append(camera_dict)
 
