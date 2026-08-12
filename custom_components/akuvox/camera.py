@@ -87,4 +87,3 @@ class AkuvoxCameraEntity(GenericCamera):
             model=VERSION,
             manufacturer=NAME,
         )
-

@@ -191,13 +191,18 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             # Perform login via auth_token, token and phone number
             if all(len(value) > 0 for value in (country_code, phone_number, token, auth_token)):
                 # Retrieve servers_list data.
-                login_successful = await self.akuvox_api_client.async_make_servers_list_request(
-                    hass=self.hass,
-                    auth_token=auth_token,
-                    token=token,
-                    country_code=country_code,
-                    phone_number=phone_number,
-                    subdomain=subdomain)
+                login_successful = False
+                try:
+                    login_successful = await self.akuvox_api_client.async_make_servers_list_request(
+                        hass=self.hass,
+                        auth_token=auth_token,
+                        token=token,
+                        country_code=country_code,
+                        phone_number=phone_number,
+                        subdomain=subdomain)
+                except Exception as error:
+                    LOGGER.error("❌ Error calling async_make_servers_list_request: %s", str(error))
+
                 if login_successful is True:
                     # Retrieve connected device data
                     await self.akuvox_api_client.async_retrieve_user_data()

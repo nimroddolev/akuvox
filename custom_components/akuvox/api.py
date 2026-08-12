@@ -9,10 +9,8 @@ from homeassistant.core import HomeAssistant
 
 import aiohttp
 import async_timeout
-import requests
 
 from .data import AkuvoxData
-from .door_poll import DoorLogPoller
 
 from .const import (
     LOGGER,
@@ -30,7 +28,10 @@ from .const import (
     API_OPENDOOR,
     API_APP_HOST,
     API_GET_PERSONAL_TEMP_KEY_LIST,
-    API_GET_PERSONAL_DOOR_LOG
+    API_GET_PERSONAL_DOOR_LOG,
+    USER_AGENT,
+    SMARTPLUS_USER_AGENT,
+    SMARTPLUS_USER_AGENT_ALT,
 )
 
 
@@ -48,9 +49,10 @@ class AkuvoxApiClientAuthenticationError(AkuvoxApiClientError):
 class AkuvoxApiClient:
     """Sample API Client."""
 
-    _data: AkuvoxData = None # type: ignore
+    _data: AkuvoxData | None = None
     hass: HomeAssistant
-    door_log_poller: DoorLogPoller
+    _polling_task: asyncio.Task | None = None
+    _polling_task_stop_event: asyncio.Event | None = None
 
     def __init__(
         self,
@@ -95,14 +97,42 @@ class AkuvoxApiClient:
 
     async def async_start_polling(self):
         """Start polling the personal door log API."""
-        self.door_log_poller: DoorLogPoller = DoorLogPoller(
-            hass=self.hass,
-            poll_function=self.async_retrieve_personal_door_log)
-        await self.door_log_poller.async_start()
+        if self._polling_task_stop_event is None:
+            self._polling_task_stop_event = asyncio.Event()
+        if self._polling_task is not None and not self._polling_task.done():
+            LOGGER.debug("Polling already running, not restarting.")
+            return
+        self._polling_task_stop_event.clear()
+        self._polling_task = self.hass.async_create_task(self._poll_personal_door_log())
 
     async def async_stop_polling(self):
         """Stop polling the personal door log API."""
-        await self.door_log_poller.async_stop()
+        if self._polling_task_stop_event is not None:
+            self._polling_task_stop_event.set()
+        if self._polling_task is None:
+            return
+        if asyncio.current_task() is self._polling_task:
+            return
+        self._polling_task.cancel()
+        try:
+            await self._polling_task
+        except asyncio.CancelledError:
+            pass
+        finally:
+            self._polling_task = None
+
+    async def _poll_personal_door_log(self):
+        """Poll the server continuously for the latest personal door log, can be stopped."""
+        assert self._polling_task_stop_event is not None
+        while not self._polling_task_stop_event.is_set():
+            try:
+                await self.async_retrieve_personal_door_log()
+            except AkuvoxApiClientError as error:
+                LOGGER.error("Unable to retrieve personal door log: %s", error)
+            try:
+                await asyncio.wait_for(self._polling_task_stop_event.wait(), timeout=2)
+            except asyncio.TimeoutError:
+                continue
 
     def init_api_with_data(self,
                            hass: HomeAssistant,
@@ -130,7 +160,7 @@ class AkuvoxApiClient:
     # API Call Methods #
     ####################
 
-    async def async_fetch_rest_server(self):
+    async def async_fetch_rest_server(self) -> bool:
         """Retrieve the Akuvox REST server addresses and data."""
         LOGGER.debug("📡 Fetching REST server data...")
         json_data = await self._async_api_wrapper(
@@ -150,7 +180,7 @@ class AkuvoxApiClient:
             LOGGER.error("❌ Unable to fetch Akuvox server rest API data.")
         return False
 
-    async def async_send_sms(self, hass:HomeAssistant, country_code, phone_number, subdomain):
+    async def async_send_sms(self, hass: HomeAssistant, country_code: str, phone_number: str, subdomain: str) -> bool:
         """Request SMS code to user's device."""
         self.init_api_with_data(
             hass=hass,
@@ -166,7 +196,7 @@ class AkuvoxApiClient:
                 "X-AUTH-TOKEN": "",
                 "Connection": "keep-alive",
                 "Accept": "*/*",
-                "User-Agent": "VBell/6.61.2 (iPhone; iOS 16.6; Scale/3.00)",
+                "User-Agent": USER_AGENT,
                 "Accept-Language": "en-AU;q=1, he-AU;q=0.9, ru-RU;q=0.8",
                 "x-cloud-lang": "en"
             }
@@ -192,13 +222,15 @@ class AkuvoxApiClient:
             LOGGER.error("❌ Unable to initialize API. Did you login again from your device? Try logging in/adding tokens again.")
         return False
 
-    async def async_make_servers_list_request(self,
-                                              hass: HomeAssistant,
-                                              auth_token: str,
-                                              token: str,
-                                              country_code,
-                                              phone_number: str,
-                                              subdomain: str = "") -> bool:
+    async def async_make_servers_list_request(
+        self,
+        hass: HomeAssistant,
+        auth_token: str,
+        token: str,
+        country_code: str,
+        phone_number: str,
+        subdomain: str = ""
+    ) -> bool:
         """Request server list data."""
         self.init_api_with_data(
             hass=hass,
@@ -273,7 +305,7 @@ class AkuvoxApiClient:
 
         return False
 
-    async def async_validate_sms_code(self, phone_number, country_code, sms_code):
+    async def async_validate_sms_code(self, phone_number: str, country_code: str, sms_code: str) -> dict | None:
         """Validate the SMS code received by the user."""
         LOGGER.debug("📡 Logging in user with phone number and SMS code...")
 
@@ -283,7 +315,7 @@ class AkuvoxApiClient:
         data = {}
         headers = {
             'api-version': SMS_LOGIN_API_VERSION,
-            'User-Agent': 'VBell/6.61.2 (iPhone; iOS 16.6; Scale/3.00)'
+            'User-Agent': USER_AGENT
         }
         response = await self._async_api_wrapper(method="get", url=url, headers=headers, data=data)
 
@@ -321,7 +353,7 @@ class AkuvoxApiClient:
         self._data.token = token
         return await self.async_retrieve_user_data()
 
-    async def async_user_conf(self):
+    async def async_user_conf(self) -> dict | None:
         """Request the user's configuration data."""
         LOGGER.debug("📡 Retrieving list of user's devices...")
         url = f"https://{self._data.host}/{API_USERCONF}?token={self._data.token}"
@@ -332,7 +364,7 @@ class AkuvoxApiClient:
             "Connection": "keep-alive",
             "api-version": USERCONF_API_VERSION,
             "Accept": "*/*",
-            "User-Agent": "VBell/6.61.2 (iPhone; iOS 16.6; Scale/3.00)",
+            "User-Agent": USER_AGENT,
             "Accept-Language": "en-AU;q=1, he-AU;q=0.9, ru-RU;q=0.8",
             "x-cloud-lang": "en"
         }
@@ -345,8 +377,10 @@ class AkuvoxApiClient:
         LOGGER.error("❌ Unable to retrieve user's device list.")
         return None
 
-    def make_opendoor_request(self, name: str, host: str, token: str, data: str):
-        """Request the user's configuration data."""
+    async def async_make_opendoor_request(
+        self, name: str, host: str, token: str, data: str
+    ) -> dict | list | None:
+        """Send an asynchronous request to open a door relay."""
         LOGGER.debug("📡 Sending request to open door '%s'...", name)
         LOGGER.debug("Request data = %s", str(data))
         url = f"https://{host}/{API_OPENDOOR}?token={token}"
@@ -358,17 +392,16 @@ class AkuvoxApiClient:
             "Accept-Encoding": "gzip, deflate, br",
             "Connection": "keep-alive",
             "Accept": "*/*",
-            "User-Agent": "VBell/6.61.2 (iPhone; iOS 16.6; Scale/3.00)",
+            "User-Agent": USER_AGENT,
             "Accept-Language": "en-AU;q=1, he-AU;q=0.9, ru-RU;q=0.8",
-            "Content-Length": "24",
             "x-cloud-lang": "en",
         }
-        response = self.post_request(url=url, headers=headers, data=data)
-        json_data = self.process_response(response, url)
+        json_data = await self._async_api_wrapper(
+            method="post", url=url, headers=headers, data=data
+        )
         if json_data is not None:
             LOGGER.debug("✅ Door open request sent successfully.")
             return json_data
-
         LOGGER.error("❌ Request to open door failed.")
         return None
 
@@ -394,7 +427,7 @@ class AkuvoxApiClient:
             "accept-language": "en-AU,en;q=0.9",
             "sec-fetch-mode": "cors",
             "x-cloud-lang": "en",
-            "user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) SmartPlus/6.2",
+            "user-agent": SMARTPLUS_USER_AGENT,
             "referer": f"https://{subdomain}.akuvox.com/smartplus/TmpKey.html?TOKEN={self._data.token}&USERTYPE=20&VERSION=6.6",
             "x-auth-token": self._data.token,
             "sec-fetch-dest": "empty"
@@ -410,23 +443,18 @@ class AkuvoxApiClient:
         return None
 
     async def async_start_polling_personal_door_log(self):
-        """Poll the server contineously for the latest personal door log."""
-        # Make sure only 1 instance of the door log polling is running
-        self.hass.async_create_task(self.async_retrieve_personal_door_log())
+        """Poll the server continuously for the latest personal door log (calls improved polling)."""
+        await self.async_start_polling()
 
-    async def async_retrieve_personal_door_log(self) -> bool:
-        """Request and parse the user's door log every 2 seconds."""
-        while True:
-            # Get the latest pesonal door log
-            json_data = await self.async_get_personal_door_log()
-            if json_data is not None:
-                new_door_log = await self._data.async_parse_personal_door_log(json_data)
-                if new_door_log is not None:
-                    # Fire HA event
-                    LOGGER.debug("🚪 New door open event occurred. Firing akuvox_door_update event")
-                    event_name = "akuvox_door_update"
-                    self.hass.bus.async_fire(event_name, new_door_log)
-            await asyncio.sleep(2)  # Wait for 2 seconds before calling again
+    async def async_retrieve_personal_door_log(self) -> None:
+        """Fetch, parse, and publish one personal-door-log update."""
+        json_data = await self.async_get_personal_door_log()
+        if json_data is None:
+            return
+        new_door_log = await self._data.async_parse_personal_door_log(json_data)
+        if new_door_log is not None:
+            LOGGER.debug("🚪 New door open event occurred. Firing akuvox_door_update event")
+            self.hass.bus.async_fire("akuvox_door_update", new_door_log)
 
     async def async_get_personal_door_log(self):
         """Request the user's personal door log data."""
@@ -441,7 +469,7 @@ class AkuvoxApiClient:
             "accept-language": "en-AU,en;q=0.9",
             "sec-fetch-mode": "cors",
             "x-cloud-lang": "en",
-            "user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) SmartPlus/6.2",
+            "user-agent": SMARTPLUS_USER_AGENT_ALT,
             "referer": f"https://{self._data.subdomain}.akuvox.com/smartplus/Activities.html?TOKEN={self._data.token}",
             "x-auth-token": self._data.token,
             "sec-fetch-dest": "empty"
@@ -479,16 +507,17 @@ class AkuvoxApiClient:
         data,
         headers: dict | None = None,
     ):
-        """Get information from the API."""
+        """Get information from the API with aiohttp (fully async)."""
         try:
             async with async_timeout.timeout(10):
-                func = self.post_request if method == "post" else self.get_request
                 subdomain = self._data.subdomain
                 url = url.replace("subdomain.", f"{subdomain}.")
                 if not url.endswith(API_GET_PERSONAL_DOOR_LOG):
-                    LOGGER.debug("⏳ Sending request to %s", url)
-                response = await self.hass.async_add_executor_job(func, url, headers, data, 10)
-                return self.process_response(response, url)
+                    LOGGER.debug("⏳ Sending request to: %s", url)
+                async with self._session.request(
+                    method, url, headers=headers, data=data
+                ) as response:
+                    return await self._async_process_async_response(response, url)
 
         except asyncio.TimeoutError as exception:
             # Fix for accounts which use the "single" endpoint instead of "community"
@@ -516,92 +545,71 @@ class AkuvoxApiClient:
             raise AkuvoxApiClientCommunicationError(
                 f"Error fetching information: {exception}",
             ) from exception
-        except Exception as exception:  # pylint: disable=broad-except
+        except Exception as exception:  # Final fallback
+            LOGGER.exception("❌ Unexpected error during API call: %s", url)
             raise AkuvoxApiClientError(
                 f"Something really wrong happened! {exception}. URL = {url}"
             ) from exception
         return None
 
-    def process_response(self, response, url):
-        """Process response and return dict with data."""
-        if response.status_code == 200:
-            # Assuming the response is valid JSON, parse it
+    async def _async_process_async_response(self, response: aiohttp.ClientResponse, url: str):
+        """Process aiohttp response and return dict with data (non-blocking)."""
+        if response.status == 200:
             try:
-                json_data = response.json()
-
-                # Standard requests
-                if "result" in json_data and json_data["result"] == 0:
-                    if "datas" in json_data:
-                        return json_data["datas"]
-                    return json_data
-
-                # US API format (err_code instead of result)
-                if "err_code" in json_data and str(json_data["err_code"]) == "0":
-                    if "datas" in json_data:
-                        return json_data["datas"]
-                    return json_data
-
-                # Temp key requests
-                if "code" in json_data:
-                    if json_data["code"] == 0:
-                        if "data" in json_data:
-                            return json_data["data"]
-                        return json_data
-                    return []
-
-                LOGGER.warning("🤨 Response: %s", str(json_data))
-            except Exception as error:
-                LOGGER.error("❌ Error occurred when parsing JSON: %s\nRequest: %s",
-                             error,
-                             url)
-        else:
-            LOGGER.debug("❌ Error: HTTP status code = %s for request to %s",
-                         response.status_code,
-                         url)
-        return None
-
-    async def async_make_get_request(self, url, headers, data=None):
-        """Make an HTTP get request."""
-        return await self.async_make_request("get", url, headers, data)
-
-    async def async_make_post_request(self, url, headers, data=None):
-        """Make an HTTP post request."""
-        return await self.async_make_request("post", url, headers, data)
-
-    async def async_make_request(self, request_type, url, headers, data=None):
-        """Make an HTTP request."""
-        func = self._session.post if request_type == "post" else self._session.get
-
-        response = await func(url=url, headers=headers, data=data)
-        if response is not None:
-            if response.status == 200:
-                # Assuming the response is valid JSON, parse it
+                json_data = await response.json()
+            except (aiohttp.ContentTypeError, ValueError):
                 try:
-                    json_data = response.json()
-                    return json_data
-                except Exception as error:
-                    LOGGER.warning(
-                        "❌ Error occurred when parsing JSON: %s", error)
-            else:
-                LOGGER.debug("❌ Error: HTTP status code %s",
-                             response.status)
+                    text = await response.text()
+                    json_data = json.loads(text)
+                except (TypeError, ValueError) as error:
+                    LOGGER.error(
+                        "❌ Error parsing JSON response: %s; request URL: %s",
+                        error,
+                        url,
+                    )
+                    return None
+
+            if not isinstance(json_data, dict):
+                LOGGER.warning("🤨 Unexpected response type from %s: %s", url, json_data)
                 return None
 
-    def post_request(self, url, headers, data="", timeout=10):
-        """Make a synchronous post request."""
-        response: requests.Response = requests.post(url,
-                                                    headers=headers,
-                                                    data=data,
-                                                    timeout=timeout)
-        return response
+            # Standard requests
+            if json_data and "result" in json_data and json_data["result"] == 0:
+                if "datas" in json_data:
+                    return json_data["datas"]
+                return json_data
 
-    def get_request(self, url, headers, data, timeout=10):
-        """Make a synchronous post request."""
-        response: requests.Response = requests.get(url,
-                                                   headers=headers,
-                                                   data=data,
-                                                   timeout=timeout)
-        return response
+            # US API format (err_code instead of result)
+            if "err_code" in json_data and str(json_data["err_code"]) == "0":
+                if "datas" in json_data:
+                    return json_data["datas"]
+                return json_data
+
+            # Temp key requests
+            if "code" in json_data:
+                if json_data["code"] == 0:
+                    if "data" in json_data:
+                        return json_data["data"]
+                    return json_data
+
+                # Request returned an error
+
+                # Invalid identity information error
+                elif json_data["code"] == 2:
+                    LOGGER.error("❌ Invalid identity information error: %s", json_data)
+                    await self.async_stop_polling()
+
+                else:
+                    LOGGER.error("❌ Error returned from Akuvox API: %s", json_data)
+
+                return []
+
+            LOGGER.warning("🤨 Response: %s", str(json_data))
+        else:
+            LOGGER.debug("❌ Error: HTTP status code = %s for request to %s",
+                         response.status,
+                         url)
+        return None
 
     ###########
     # Getters #

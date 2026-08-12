@@ -87,12 +87,11 @@ class AkuvoxDoorRelayEntity(ButtonEntity, AkuvoxEntity):
             manufacturer=NAME,
         )
 
-    def press(self) -> None:
-        """Trigger the door relay."""
-        self._client.make_opendoor_request(
+    async def async_press(self) -> None:
+        """Trigger the door relay without blocking Home Assistant's event loop."""
+        await self._client.async_make_opendoor_request(
             name=self._name,
             host=self._host,
             token=self._token,
-            data=self._data
+            data=self._data,
         )
-
