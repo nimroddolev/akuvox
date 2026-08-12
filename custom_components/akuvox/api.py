@@ -28,7 +28,6 @@ from .const import (
     TOKEN_REFRESH_INTERVAL,
     TOKEN_REFRESHED_AT,
     DOOR_LOG_POLL_INTERVAL,
-    DOOR_LOG_MAX_BACKOFF,
     REST_SERVER_API_VERSION,
     API_REST_SERVER_DATA,
     USERCONF_API_VERSION,
@@ -88,6 +87,7 @@ class AkuvoxApiClient:
             self._data = AkuvoxData(
                 entry=entry,
                 hass=hass) # type: ignore
+            self._door_log_backoff = self._data.door_log_poll_interval
 
     async def async_init_api(self) -> bool:
         """Initialize API configuration data."""
@@ -144,7 +144,7 @@ class AkuvoxApiClient:
         """Poll the server continuously for the latest personal door log, can be stopped."""
         assert self._polling_task_stop_event is not None
         while not self._polling_task_stop_event.is_set():
-            poll_interval = DOOR_LOG_POLL_INTERVAL
+            poll_interval = self._data.door_log_poll_interval
             try:
                 if not await self.async_retrieve_personal_door_log():
                     self._note_door_log_failure()
@@ -152,7 +152,7 @@ class AkuvoxApiClient:
                 elif self._door_log_failure_logged:
                     LOGGER.info("Personal door-log polling recovered")
                     self._door_log_failure_logged = False
-                    self._door_log_backoff = DOOR_LOG_POLL_INTERVAL
+                    self._door_log_backoff = self._data.door_log_poll_interval
             except AkuvoxApiClientError as error:
                 self._note_door_log_failure(error)
                 poll_interval = self._increase_door_log_backoff()
@@ -166,7 +166,7 @@ class AkuvoxApiClient:
     def _increase_door_log_backoff(self) -> int:
         """Return the next quiet retry interval for a failed activity request."""
         self._door_log_backoff = min(
-            self._door_log_backoff * 2, DOOR_LOG_MAX_BACKOFF
+            self._door_log_backoff * 2, self._data.door_log_max_backoff
         )
         return self._door_log_backoff
 
@@ -878,3 +878,10 @@ class AkuvoxApiClient:
         self._data.auth_token = value if key == "auth_token" else self._data.auth_token
         self._data.token = value if key == "token" else self._data.token
         self._data.wait_for_image_url = value if key == "wait_for_image_url" else self._data.wait_for_image_url
+        if key == "door_log_poll_interval":
+            self._data.door_log_poll_interval = int(value)
+            self._door_log_backoff = self._data.door_log_poll_interval
+        if key == "door_log_max_backoff":
+            self._data.door_log_max_backoff = max(
+                self._data.door_log_poll_interval, int(value)
+            )

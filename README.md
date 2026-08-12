@@ -223,6 +223,8 @@ When SmartPlus rejects an expired session, the integration refreshes the short-l
 
 As SmartPlus does not report a token expiry time, the integration also proactively refreshes the session every six hours. The refresh time is persisted so Home Assistant restarts do not postpone renewal indefinitely.
 
+The integration options allow the door-log polling interval and maximum retry backoff to be adjusted. The default 60-second interval is intentionally conservative to avoid SmartPlus rate limits; values below 30 seconds are not permitted.
+
 1. Obtain your `auth_token` and `token` values (see the [Finding you SmartPlus Account Tokens](#finding-your-smartplus-account-tokens) section below).
 
 1. Enter your phone number, `auth_token` and `token` values and click `SUBMIT`:

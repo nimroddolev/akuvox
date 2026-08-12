@@ -70,7 +70,9 @@
                     "auth_token": "Your SmartLife `auth_token` value",
                     "token": "Your SmartLife `token` value",
                     "subdomain": "Manually set the regional API subdomain",
-                    "event_screenshot_options": "Screenshot URLS for `akuvox_door_update` events:"
+                    "event_screenshot_options": "Screenshot URLS for `akuvox_door_update` events:",
+                    "door_log_poll_interval": "Door-log polling interval (seconds)",
+                    "door_log_max_backoff": "Maximum door-log retry backoff (seconds)"
                 }
             }
         }

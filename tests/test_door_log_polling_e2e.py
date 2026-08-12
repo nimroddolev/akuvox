@@ -27,6 +27,19 @@ class TestDoorLogPollingE2E(unittest.IsolatedAsyncioTestCase):
             client._increase_door_log_backoff()
         self.assertEqual(client._door_log_backoff, DOOR_LOG_MAX_BACKOFF)
 
+    def test_saved_options_overrode_polling_defaults(self) -> None:
+        """Configured polling settings were restored with the config entry."""
+        entry = _Entry()
+        entry.options = {
+            "door_log_poll_interval": 120,
+            "door_log_max_backoff": 600,
+        }
+        client = AkuvoxApiClient(_Session([]), _Hass(), entry)
+
+        self.assertEqual(client._data.door_log_poll_interval, 120)
+        self.assertEqual(client._data.door_log_max_backoff, 600)
+        self.assertEqual(client._increase_door_log_backoff(), 240)
+
     async def test_rate_limit_response_was_reported_as_a_retryable_failure(self) -> None:
         """HTTP 429 became a client error so the poller applied backoff."""
         client = self._client()

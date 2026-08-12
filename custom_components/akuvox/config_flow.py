@@ -20,6 +20,11 @@ from .const import (
     COUNTRY_PHONE,
     SUBDOMAINS_LIST,
     TOKEN_REFRESHED_AT,
+    DOOR_LOG_POLL_INTERVAL,
+    DOOR_LOG_MAX_BACKOFF,
+    DOOR_LOG_MIN_POLL_INTERVAL,
+    DOOR_LOG_MIN_MAX_BACKOFF,
+    DOOR_LOG_MAX_CONFIGURED_BACKOFF,
 )
 from .helpers import AkuvoxHelpers
 
@@ -544,6 +549,24 @@ class AkuvoxOptionsFlowHandler(config_entries.OptionsFlow):
             vol.Required("event_screenshot_options",
                          default=self.get_data_key_value("event_screenshot_options", "asap") # type: ignore
             ): vol.In(event_screenshot_options),
+            vol.Required(
+                "door_log_poll_interval",
+                default=self.get_data_key_value(
+                    "door_log_poll_interval", DOOR_LOG_POLL_INTERVAL
+                ),
+            ): vol.All(vol.Coerce(int), vol.Range(min=DOOR_LOG_MIN_POLL_INTERVAL, max=3600)),
+            vol.Required(
+                "door_log_max_backoff",
+                default=self.get_data_key_value(
+                    "door_log_max_backoff", DOOR_LOG_MAX_BACKOFF
+                ),
+            ): vol.All(
+                vol.Coerce(int),
+                vol.Range(
+                    min=DOOR_LOG_MIN_MAX_BACKOFF,
+                    max=DOOR_LOG_MAX_CONFIGURED_BACKOFF,
+                ),
+            ),
         })
 
         # Show the form with the current options

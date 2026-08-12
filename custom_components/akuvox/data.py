@@ -13,6 +13,8 @@ from .const import (
     CAPTURE_TIME_KEY,
     DATA_STORAGE_KEY,
     LOCATIONS_DICT,
+    DOOR_LOG_POLL_INTERVAL,
+    DOOR_LOG_MAX_BACKOFF,
 )
 from .helpers import AkuvoxHelpers
 
@@ -41,6 +43,15 @@ class AkuvoxData:
         self.camera_data: list[dict] = []
         self.door_relay_data: list[dict] = []
         self.door_keys_data: list[dict] = []
+        self.door_log_poll_interval = self._get_positive_option(
+            entry, "door_log_poll_interval", DOOR_LOG_POLL_INTERVAL
+        )
+        self.door_log_max_backoff = max(
+            self.door_log_poll_interval,
+            self._get_positive_option(
+                entry, "door_log_max_backoff", DOOR_LOG_MAX_BACKOFF
+            ),
+        )
 
         self.host = host or self.get_value_for_key(entry, "host", "")
         self.auth_token = auth_token or self.get_value_for_key(entry, "auth_token", "")
@@ -80,6 +91,17 @@ class AkuvoxData:
                 return entry.options.get(key, placeholder)
             return placeholder
         return default
+
+    @staticmethod
+    def _get_positive_option(entry: ConfigEntry | None, key: str, default: int) -> int:
+        """Return a positive integer option without changing credential precedence."""
+        if entry is None or isinstance(entry, dict):
+            return default
+        try:
+            value = int(entry.options.get(key, entry.data.get(key, default)))
+        except (TypeError, ValueError):
+            return default
+        return value if value > 0 else default
 
     def parse_rest_server_response(self, json_data: dict) -> bool:
         """Parse the rest_server API response."""
