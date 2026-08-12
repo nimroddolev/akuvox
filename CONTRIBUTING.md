@@ -56,6 +56,14 @@ Home Assistant instance running and already configured with the included
 [`configuration.yaml`](./config/configuration.yaml)
 file.
 
+Run the SmartPlus API end-to-end tests with:
+
+```sh
+python3 -m unittest discover -s tests -v
+```
+
+The tests simulate SmartPlus responses and never contact a live account.
+
 ## License
 
 By contributing, you agree that your contributions will be licensed under its MIT License.
