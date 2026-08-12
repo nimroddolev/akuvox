@@ -1,6 +1,6 @@
 """Akuvox Data Class."""
 from __future__ import annotations
-# from dataclasses import dataclass
+from urllib.parse import quote
 
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
@@ -18,67 +18,60 @@ from .helpers import AkuvoxHelpers
 
 helpers = AkuvoxHelpers()
 
-# @dataclass
 class AkuvoxData:
     """Data class holding key data from API requests."""
 
-    hass: HomeAssistant = None # type: ignore
-    host: str = ""
-    location_dict: dict = {}
-    subdomain: str = ""
-    app_type: str = ""
-    auth_token: str = ""
-    token: str = ""
-    phone_number: str = ""
-    wait_for_image_url: bool = False
-    rtsp_ip: str = ""
-    project_name: str = ""
-    camera_data = []
-    door_relay_data = []
-    door_keys_data = []
-
-
     def __init__(self,
-                 entry: ConfigEntry,
+                 entry: ConfigEntry | None,
                  hass: HomeAssistant,
-                 host: str = None, # type: ignore
-                 subdomain: str = None, # type: ignore
-                 auth_token: str = None, # type: ignore
-                 token: str = None, # type: ignore
-                 country_code: str = None, # type: ignore
-                 phone_number: str = None, # type: ignore
-                 wait_for_image_url: bool = False):
+                 host: str | None = None,
+                 subdomain: str | None = None,
+                 auth_token: str | None = None,
+                 token: str | None = None,
+                 country_code: str | None = None,
+                 phone_number: str | None = None,
+                 wait_for_image_url: bool | None = None):
         """Initialize the Akuvox API client."""
 
-        self.hass = hass if hass else self.hass
-        self.host = host if host else self.get_value_for_key(entry, "host", host) # type: ignore
-        self.auth_token = auth_token if auth_token else self.get_value_for_key(entry, "auth_token", self.host) # type: ignore
-        self.token = token if token else self.get_value_for_key(entry, "token", self.token) # type: ignore
-        self.phone_number = phone_number if phone_number else self.get_value_for_key(entry, "phone_number", self.phone_number) # type: ignore
-        self.wait_for_image_url = wait_for_image_url if wait_for_image_url is not None else bool(self.get_value_for_key(entry, "event_screenshot_options", False) == "wait") # type: ignore
+        self.hass = hass
+        self.location_dict: dict = {}
+        self.app_type = "community"
+        self.rtsp_ip = ""
+        self.project_name = "Akuvox SmartPlus"
+        self.camera_data: list[dict] = []
+        self.door_relay_data: list[dict] = []
+        self.door_keys_data: list[dict] = []
 
-        self.subdomain = subdomain if subdomain else self.get_value_for_key(entry, "subdomain", self.subdomain) # type: ignore
+        self.host = host or self.get_value_for_key(entry, "host", "")
+        self.auth_token = auth_token or self.get_value_for_key(entry, "auth_token", "")
+        self.token = token or self.get_value_for_key(entry, "token", "")
+        self.phone_number = phone_number or self.get_value_for_key(entry, "phone_number", "")
+        self.wait_for_image_url = (
+            wait_for_image_url
+            if wait_for_image_url is not None
+            else self.get_value_for_key(entry, "event_screenshot_options", "") == "wait"
+        )
+        self.subdomain = subdomain or self.get_value_for_key(entry, "subdomain", "")
         if not self.subdomain:
-            if not country_code:
+            if country_code:
+                self.location_dict = LOCATIONS_DICT.get(country_code, {})
+            elif entry:
                 try:
-                    if entry.data:
-                        entry_data = dict(entry.data)
-                        country_name_code = str(entry_data.get("country", hass.config.country))
-                        if country_name_code in LOCATIONS_DICT:
-                            self.location_dict = LOCATIONS_DICT.get(country_name_code) # type: ignore
-                            self.subdomain = self.location_dict.get("subdomain", "ecloud") # type: ignore
+                    country_name_code = str(entry.data.get("country", hass.config.country))
+                    self.location_dict = LOCATIONS_DICT.get(country_name_code, {})
                 except Exception as error:
                     LOGGER.debug("Unable to use country due to error: %s", error)
+            self.subdomain = self.location_dict.get("subdomain", "")
         if not self.subdomain:
             self.subdomain = "ecloud"
 
         self.hass.add_job(self.async_set_stored_data_for_key, "wait_for_image_url", self.wait_for_image_url)
 
-    def get_value_for_key(self, entry: ConfigEntry, key: str, default):
+    def get_value_for_key(self, entry: ConfigEntry | None, key: str, default):
         """Get the value for a given key. 1st check: configured, 2nd check: options, 3rd check: data."""
         if entry is not None:
             if isinstance(entry, dict):
-                if key in entry["configured"]: # type: ignore
+                if key in entry["configured"]:
                     return entry["configured"][key] # type: ignore
                 return default
             override = entry.options.get("override", False) or key == "event_screenshot_options"
@@ -88,46 +81,46 @@ class AkuvoxData:
             return placeholder
         return default
 
-    def parse_rest_server_response(self, json_data: dict):
+    def parse_rest_server_response(self, json_data: dict) -> bool:
         """Parse the rest_server API response."""
-        if json_data is not None and json_data != {}:
-            self.host = json_data["rest_server_https"]
-            return True
-        return self.host is None or len(self.host) == 0
+        if not isinstance(json_data, dict):
+            return False
+        self.host = str(json_data.get("rest_server_https", "")).strip()
+        return bool(self.host)
 
-    def parse_sms_login_response(self, json_data: dict):
+    def parse_sms_login_response(self, json_data: dict) -> None:
         """Parse the sms_login API response."""
-        if json_data is not None:
-            # Check top-level keys (sms_login response format)
-            if "auth_token" in json_data:
-                self.auth_token = json_data["auth_token"]
-            if "token" in json_data:
-                self.token = json_data["token"]
-            if "rtmp_server" in json_data:
-                self.rtsp_ip = json_data["rtmp_server"].split(':')[0]
-            # Also check nested 'datas' keys (servers_list response format)
-            datas = json_data.get("datas", {})
-            if datas:
-                if "rtmp_server" in datas and self.rtsp_ip is None:
-                    self.rtsp_ip = datas["rtmp_server"].split(':')[0]
-                if "rest_server_https" in datas:
-                    self.host = datas["rest_server_https"]
+        if not isinstance(json_data, dict):
+            return
+        payload = json_data.get("datas", json_data)
+        if not isinstance(payload, dict):
+            return
+        self.auth_token = str(payload.get("auth_token", self.auth_token))
+        self.token = str(payload.get("token", self.token))
+        rtmp_server = str(payload.get("rtmp_server", "")).strip()
+        if rtmp_server:
+            self.rtsp_ip = rtmp_server.rsplit(":", 1)[0]
+        self.host = str(payload.get("rest_server_https", self.host)).strip()
 
     def parse_userconf_data(self, json_data: dict):
         """Parse the userconf API response."""
         self.door_relay_data = []
         self.camera_data = []
-        if json_data is not None:
-            if "app_conf" in json_data:
-                self.project_name = json_data["app_conf"]["project_name"].strip()
-            if "dev_list" in json_data:
+        if isinstance(json_data, dict):
+            if isinstance(json_data.get("app_conf"), dict):
+                self.project_name = str(json_data["app_conf"].get("project_name", self.project_name)).strip()
+            if isinstance(json_data.get("dev_list"), list):
                 for dev_data in json_data["dev_list"]:
-                    name = dev_data["location"].strip()
-                    mac = dev_data["mac"]
+                    if not isinstance(dev_data, dict):
+                        continue
+                    name = str(dev_data.get("location", "")).strip()
+                    mac = str(dev_data.get("mac", "")).strip()
+                    if not name or not mac:
+                        continue
 
                     # Camera
-                    if "location" in dev_data and "rtsp_pwd" in dev_data and "mac" in dev_data:
-                        password = dev_data["rtsp_pwd"]
+                    if dev_data.get("rtsp_pwd") and self.rtsp_ip:
+                        password = quote(str(dev_data["rtsp_pwd"]), safe="")
                         camera_dict = {
                             "name": name,
                             "video_url": f"rtsp://ak:{password}@{self.rtsp_ip}:554/{mac}"
@@ -135,10 +128,12 @@ class AkuvoxData:
                         self.camera_data.append(camera_dict)
 
                     # Door Relay
-                    if "relay" in dev_data:
+                    if isinstance(dev_data.get("relay"), list):
                         for relay in dev_data["relay"]:
-                            relay_id = relay["relay_id"]
-                            door_name = relay["door_name"].strip()
+                            if not isinstance(relay, dict) or "relay_id" not in relay:
+                                continue
+                            relay_id = str(relay["relay_id"])
+                            door_name = str(relay.get("door_name", name)).strip()
                             self.door_relay_data.append({
                                 "name": name,
                                 "door_name": door_name,
@@ -156,25 +151,35 @@ class AkuvoxData:
             for relay_dict in self.door_relay_data:
                 LOGGER.debug(" - %s", relay_dict.get("name", ""))
 
-    def parse_temp_keys_data(self, json_data: list):
+    def parse_temp_keys_data(self, json_data: list) -> None:
         """Parse the getPersonalTempKeyList API response."""
         self.door_keys_data = []
         for door_keys_json in json_data:
+            if not isinstance(door_keys_json, dict):
+                continue
+            required_keys = ("ID", "Description", "TmpKey", "BeginTime", "EndTime")
+            if any(key not in door_keys_json for key in required_keys):
+                LOGGER.warning("Skipping temporary key with incomplete data")
+                continue
             door_keys_data = {}
             door_keys_data["key_id"] = door_keys_json["ID"]
             door_keys_data["description"] = door_keys_json["Description"]
             door_keys_data["key_code"] = door_keys_json["TmpKey"]
             door_keys_data["begin_time"] = door_keys_json["BeginTime"]
             door_keys_data["end_time"] = door_keys_json["EndTime"]
-            door_keys_data["access_times"] = door_keys_json["AccessTimes"]
-            door_keys_data["allowed_times"] = door_keys_json["AllowedTimes"]
-            door_keys_data["each_allowed_times"] = door_keys_json["EachAllowedTimes"]
-            door_keys_data["qr_code_url"] = f"https://{TEMP_KEY_QR_HOST}{door_keys_json['QrCodeUrl']}"
-            door_keys_data["expired"] = False if door_keys_json["Expired"] else True
+            door_keys_data["access_times"] = door_keys_json.get("AccessTimes", 0)
+            door_keys_data["allowed_times"] = door_keys_json.get("AllowedTimes", 0)
+            door_keys_data["each_allowed_times"] = door_keys_json.get("EachAllowedTimes", 0)
+            door_keys_data["qr_code_url"] = f"https://{TEMP_KEY_QR_HOST}{door_keys_json.get('QrCodeUrl', '')}"
+            door_keys_data["expired"] = not bool(door_keys_json.get("Expired", False))
 
             door_keys_data["doors"] = []
-            if "Doors" in door_keys_json:
+            if isinstance(door_keys_json.get("Doors"), list):
                 for door_key_json in door_keys_json["Doors"]:
+                    if not isinstance(door_key_json, dict):
+                        continue
+                    if not {"ID", "KeyID", "Relay", "MAC"}.issubset(door_key_json):
+                        continue
                     door_keys_data["doors"].append({
                         "door_id": door_key_json["ID"],
                         "key_id": door_key_json["KeyID"],  # Reference to key
@@ -188,11 +193,11 @@ class AkuvoxData:
             LOGGER.debug("🔑 %s Temp key%s parsed:",
                         str(len(self.door_keys_data)),
                         "s" if len(self.door_keys_data) > 1 else "")
-            for door_relay_dict in self.door_relay_data:
+            for door_key in self.door_keys_data:
                 LOGGER.debug(" - '%s', with access to %s door%s",
-                             door_relay_dict.get("name", ""),
-                             str(len(door_keys_data["doors"])),
-                             "" if len(door_keys_data["doors"]) == 1 else "s")
+                             door_key.get("description", ""),
+                             len(door_key["doors"]),
+                             "" if len(door_key["doors"]) == 1 else "s")
 
     async def async_parse_personal_door_log(self, json_data: list):
         """Parse the getDoorLog API response."""
@@ -220,7 +225,6 @@ class AkuvoxData:
                     LOGGER.debug(" - Location: %s", new_door_log["Location"])
                     LOGGER.debug(" - Door MAC: %s", new_door_log["MAC"])
                     LOGGER.debug(" - Door Relay: %s", new_door_log["Relay"])
-                    LOGGER.debug(" - Camera screenshot URL: %s", new_door_log["PicUrl"])
                     ret_value = new_door_log
 
             await self.async_set_stored_data_for_key("latest_door_log", new_door_log)

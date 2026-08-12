@@ -9,7 +9,7 @@
 
 Integrate your Akuvox SmartPlus mobile app with Home Assistant. With this integration you can access you door camera feeds, trigger door relays to open doors, be notified when doors are opened, and view your temporary keys _(support for adding temporary keys comming soon)_.
 
-**Disclaimer:** This integration is not affiliated with or endorsed by Akuvox. It is a community-contributed project and is provided as-is without any warranty or guarantee. Use it at your own discretion and responsibility.
+**Important:** This is an unofficial, community-maintained integration. It uses the SmartPlus app's private cloud API, based on observed app traffic; it does **not** use Akuvox's documented OpenAPI and is not affiliated with or endorsed by Akuvox. App tokens are sensitive credentials and may expire or stop working when Akuvox changes the service. Use it only with your own account and at your own risk.
 
 For troubleshooting and general discussion please join the [discussion in the Home Assistant forum](https://community.home-assistant.io/t/akuvox-smartplus-view-door-camera-feeds-open-doors-and-manage-temporary-keys/623187).
 
@@ -217,7 +217,7 @@ Sigining in via SMS verification will sign you out from the SmartPlus app on you
 
 ### Method 2: App Tokens (Advanced)
 
-Sigining in using your SmartLife app tokens will allow you to remain signed in to the SmartLife app on your device.
+Signing in using your SmartPlus app session tokens allows you to remain signed in to the SmartPlus app on your device. These are private app-session credentials, not Akuvox OpenAPI OAuth tokens. Do not share them in issues, logs, or screenshots.
 
 1. Obtain your `auth_token` and `token` values (see the [Finding you SmartPlus Account Tokens](#finding-your-smartplus-account-tokens) section below).
 
@@ -235,13 +235,15 @@ Once configured, Akuvox cameras & door buttons will appear as a device with a ca
 
 Via the integration's `CONFIGURE` button you can adjust the following:
 
-1. Update your SmartLife account's tokens used to communicate with the Akuvox API. This is particularly useful if you logged into the SmartLife app on your device after adding the integration. For help accessing your account's tokens, please refer to the [Finding you SmartPlus Account Tokens](#finding-your-smartplus-account-tokens) section below.
+1. Update your SmartPlus app session tokens used to communicate with the private SmartPlus API. This is particularly useful if you logged into the SmartPlus app on your device after adding the integration. For help accessing your account's tokens, please refer to the [Finding you SmartPlus Account Tokens](#finding-your-smartplus-account-tokens) section below.
    
 1. Choose between two options for `akuvox_door_update` event handling:
    - Wait for camera screenshots to become available before triggering the event.
    - Receive the event as soon as it is generated, without waiting for camera screenshots.
 
 ## Finding your SmartPlus Account Tokens
+
+The `auth_token` and `token` values are private credentials. Keep them out of bug reports, Home Assistant logs, screenshots, and public discussions. They are not interchangeable with the OAuth credentials described in Akuvox's official OpenAPI documentation.
 
 To obtain your SmartPlus account tokens you can use an HTTP proxy (such as [mitmproxy](https://mitmproxy.org/))
 
