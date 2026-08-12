@@ -80,7 +80,7 @@ class TestSmartPlusApiE2E(unittest.IsolatedAsyncioTestCase):
                 ),
             ]
         )
-        client.async_start_polling = AsyncMock()
+        client.async_start_polling_personal_door_log = AsyncMock()
 
         self.assertTrue(await client.async_retrieve_user_data())
         devices = client.get_devices_json()

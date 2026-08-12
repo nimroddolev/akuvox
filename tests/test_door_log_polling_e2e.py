@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import unittest
+from unittest.mock import AsyncMock, patch
 
 from custom_components.akuvox.api import AkuvoxApiClient, AkuvoxApiClientRateLimitError
 from custom_components.akuvox.const import DOOR_LOG_MAX_BACKOFF, DOOR_LOG_POLL_INTERVAL
@@ -54,3 +55,22 @@ class TestDoorLogPollingE2E(unittest.IsolatedAsyncioTestCase):
 
         with self.assertRaisesRegex(AkuvoxApiClientRateLimitError, "rate limited"):
             await client._async_process_async_response(_Response(429, {}), "https://api.example/log")
+
+    async def test_activity_poller_waited_for_home_assistant_startup(self) -> None:
+        """The long-lived poller did not run while Home Assistant booted."""
+        client = self._client()
+        client.async_start_polling = AsyncMock()
+
+        with patch("custom_components.akuvox.api.async_at_started") as at_started:
+            cancel = lambda: None
+            at_started.return_value = cancel
+            await client.async_start_polling_personal_door_log()
+
+            at_started.assert_called_once_with(
+                client.hass, client._async_start_polling_after_hass_started
+            )
+            client.async_start_polling.assert_not_awaited()
+
+            await at_started.call_args.args[1](client.hass)
+
+        client.async_start_polling.assert_awaited_once()

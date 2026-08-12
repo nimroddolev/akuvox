@@ -5,12 +5,14 @@ import asyncio
 import json
 import socket
 from collections.abc import Callable
+from typing import Any
 from datetime import datetime, timezone
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from homeassistant.core import HomeAssistant
+from homeassistant.core import CALLBACK_TYPE, HomeAssistant
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.event import async_track_time_interval
+from homeassistant.helpers.start import async_at_started
 
 import aiohttp
 import async_timeout
@@ -31,6 +33,7 @@ from .const import (
     TOKEN_REFRESHED_AT,
     DOOR_LOG_POLL_INTERVAL,
     ACTIVITY_ENDPOINT_TYPE,
+    ACTIVITY_HISTORY_LIMIT,
     REST_SERVER_API_VERSION,
     API_REST_SERVER_DATA,
     USERCONF_API_VERSION,
@@ -39,6 +42,8 @@ from .const import (
     API_OPENDOOR,
     API_APP_HOST,
     API_GET_PERSONAL_TEMP_KEY_LIST,
+    API_CREATE_TEMP_KEY,
+    API_DELETE_TEMP_KEY,
     API_GET_PERSONAL_DOOR_LOG,
     USER_AGENT,
     SMARTPLUS_USER_AGENT,
@@ -79,11 +84,13 @@ class AkuvoxApiClient:
         self._data: AkuvoxData | None = None
         self._polling_task: asyncio.Task[None] | None = None
         self._polling_task_stop_event: asyncio.Event | None = None
+        self._polling_start_unsub: CALLBACK_TYPE | None = None
         self._token_refresh_lock = asyncio.Lock()
         self._door_log_failure_logged = False
         self._door_log_backoff = DOOR_LOG_POLL_INTERVAL
         self._token_refresh_unsub: Callable[[], None] | None = None
         self._skip_next_entry_reload = False
+        self._activity_history: list[dict[str, Any]] = []
         if entry:
             LOGGER.debug("▶️ Initializing AkuvoxData from API client init")
             self._data = AkuvoxData(
@@ -131,6 +138,9 @@ class AkuvoxApiClient:
 
     async def async_stop_polling(self):
         """Stop polling the personal door log API."""
+        if self._polling_start_unsub is not None:
+            self._polling_start_unsub()
+            self._polling_start_unsub = None
         if self._polling_task_stop_event is not None:
             self._polling_task_stop_event.set()
         if self._polling_task is None:
@@ -506,7 +516,7 @@ class AkuvoxApiClient:
             device_data_loaded = await self.async_retrieve_device_data()
             await self.async_retrieve_temp_keys_data()
             if device_data_loaded and start_polling:
-                await self.async_start_polling()
+                await self.async_start_polling_personal_door_log()
             return device_data_loaded
 
         return False
@@ -543,7 +553,7 @@ class AkuvoxApiClient:
             device_data_loaded = await self.async_retrieve_device_data()
             temp_keys_loaded = await self.async_retrieve_temp_keys_data()
             if device_data_loaded and start_polling:
-                await self.async_start_polling()
+                await self.async_start_polling_personal_door_log()
             if not temp_keys_loaded:
                 LOGGER.warning("Temporary keys could not be loaded")
             return device_data_loaded
@@ -653,7 +663,20 @@ class AkuvoxApiClient:
         return None
 
     async def async_start_polling_personal_door_log(self):
-        """Poll the server continuously for the latest personal door log (calls improved polling)."""
+        """Start activity polling only after Home Assistant has finished starting."""
+        if self._polling_task is not None and not self._polling_task.done():
+            return
+        if self._polling_start_unsub is not None:
+            return
+        self._polling_start_unsub = async_at_started(
+            self.hass, self._async_start_polling_after_hass_started
+        )
+
+    async def _async_start_polling_after_hass_started(
+        self, _hass: HomeAssistant
+    ) -> None:
+        """Create the long-lived poller after Home Assistant startup."""
+        self._polling_start_unsub = None
         await self.async_start_polling()
 
     async def async_retrieve_personal_door_log(self) -> bool:
@@ -661,11 +684,107 @@ class AkuvoxApiClient:
         json_data = await self.async_get_personal_door_log()
         if json_data is None:
             return False
+        self._record_panel_activity(json_data)
         new_door_log = await self._data.async_parse_personal_door_log(json_data)
         if new_door_log is not None:
             LOGGER.debug("🚪 New door open event occurred. Firing akuvox_door_update event")
             self.hass.bus.async_fire("akuvox_door_update", new_door_log)
         return True
+
+    def _record_panel_activity(self, events: list[dict[str, Any]]) -> None:
+        """Keep the latest cloud activity in memory for the sidebar panel only."""
+        existing = {str(item.get("CaptureTime", "")) for item in self._activity_history}
+        for event in reversed(events):
+            if not isinstance(event, dict):
+                continue
+            event_time = str(event.get("CaptureTime", ""))
+            if event_time and event_time not in existing:
+                self._activity_history.insert(0, dict(event))
+                existing.add(event_time)
+        del self._activity_history[ACTIVITY_HISTORY_LIMIT:]
+
+    def get_panel_data(self) -> dict[str, Any]:
+        """Return non-secret account data for the SmartPlus sidebar panel."""
+        if self._data is None:
+            return {"cameras": [], "relays": [], "temporary_keys": [], "activity": []}
+        return {
+            "project_name": self._data.project_name,
+            "cameras": [{"name": camera.get("name", "")} for camera in self._data.camera_data],
+            "relays": [
+                {
+                    "name": relay.get("name", ""),
+                    "door_name": relay.get("door_name", ""),
+                    "relay_id": relay.get("relay_id", ""),
+                    "mac": relay.get("mac", ""),
+                }
+                for relay in self._data.door_relay_data
+            ],
+            "temporary_keys": [dict(key) for key in self._data.door_keys_data],
+            "activity": [dict(activity) for activity in self._activity_history],
+        }
+
+    def get_stream_url(self, camera_name: str) -> str | None:
+        """Return a camera RTSP URL only after panel authorisation has succeeded."""
+        if self._data is None:
+            return None
+        for camera in self._data.camera_data:
+            if camera.get("name") == camera_name:
+                return str(camera.get("video_url", "")) or None
+        return None
+
+    async def async_open_panel_relay(self, mac: str, relay_id: str) -> None:
+        """Open a relay identified by an authorised sidebar-panel action."""
+        if self._data is None:
+            raise AkuvoxApiClientError("SmartPlus account data is unavailable")
+        for relay in self._data.door_relay_data:
+            if str(relay.get("mac")) == mac and str(relay.get("relay_id")) == relay_id:
+                await self.async_make_opendoor_request(
+                    name=str(relay.get("name", "")),
+                    host=self._data.host,
+                    token=self._data.token,
+                    data=f"mac={mac}&relay={relay_id}",
+                )
+                return
+        raise AkuvoxApiClientError("Requested relay was not found")
+
+    async def async_create_panel_temp_key(
+        self, begin_time: str, end_time: str, counts: int, dev_list: list[dict[str, str]]
+    ) -> None:
+        """Create an end-user temporary key through Akuvox's documented API."""
+        if self._data is None or not self._data.host:
+            raise AkuvoxApiClientError("SmartPlus account data is unavailable")
+        payload = {
+            "begin_time": begin_time,
+            "end_time": end_time,
+            "counts": counts,
+            # The end-user API accepts an empty floor selection, but still
+            # expects the floor object to be present in the request body.
+            "floor": {"isFollowUser": 0, "floors": []},
+            "dev_list": dev_list,
+        }
+        response = await self._async_api_wrapper(
+            method="post",
+            url=f"https://{self._data.host}/{API_CREATE_TEMP_KEY}?token={self._data.token}",
+            data=json.dumps(payload),
+            headers={"content-type": "application/json", "x-auth-token": self._data.token},
+        )
+        if not isinstance(response, dict):
+            raise AkuvoxApiClientError("SmartPlus did not confirm temporary-key creation")
+        await self.async_retrieve_temp_keys_data()
+
+    async def async_delete_panel_temp_key(self, temp_key: str) -> None:
+        """Delete an end-user temporary key through Akuvox's documented API."""
+        if self._data is None or not self._data.host:
+            raise AkuvoxApiClientError("SmartPlus account data is unavailable")
+        response = await self._async_api_wrapper(
+            method="post",
+            url=f"https://{self._data.host}/{API_DELETE_TEMP_KEY}?token={self._data.token}",
+            data=json.dumps({"temp_key": [temp_key]}),
+            headers={"content-type": "application/json", "x-auth-token": self._data.token},
+        )
+        if not isinstance(response, dict):
+            raise AkuvoxApiClientError("SmartPlus did not confirm temporary-key deletion")
+        await self.async_retrieve_temp_keys_data()
 
     async def async_get_personal_door_log(self):
         """Request the user's personal door log data."""
@@ -812,10 +931,15 @@ class AkuvoxApiClient:
                 return None
 
             # Standard requests
-            if json_data and "result" in json_data and json_data["result"] == 0:
+            if json_data and "result" in json_data and str(json_data["result"]) == "0":
                 if "datas" in json_data:
                     return json_data["datas"]
                 return json_data
+
+            if isinstance(json_data, dict) and "result" in json_data:
+                message = str(json_data.get("message", "No message returned"))
+                LOGGER.warning("SmartPlus request was rejected: result=%s, message=%s", json_data["result"], message)
+                return None
 
             # US API format (err_code instead of result)
             if "err_code" in json_data and str(json_data["err_code"]) == "0":
@@ -845,6 +969,10 @@ class AkuvoxApiClient:
 
             LOGGER.warning("🤨 Unexpected SmartPlus API response schema")
         else:
+            if API_CREATE_TEMP_KEY in url or API_DELETE_TEMP_KEY in url:
+                LOGGER.warning(
+                    "SmartPlus temporary-key request returned HTTP %s", response.status
+                )
             LOGGER.debug("❌ Error: HTTP status code = %s for request to %s",
                          response.status,
                          url)
