@@ -468,17 +468,19 @@ class AkuvoxApiClient:
         except AkuvoxApiClientError as error:
             LOGGER.warning("Scheduled SmartPlus token refresh failed: %s", error)
 
-    async def async_sms_sign_in(self, phone_number, country_code, sms_code) -> bool:
+    async def async_sms_sign_in(
+        self, phone_number, country_code, sms_code, start_polling: bool = True
+    ) -> bool:
         """Sign user in with their phone number and SMS code."""
 
         login_data = await self.async_validate_sms_code(phone_number, country_code, sms_code)
         if login_data is not None:
             self._data.parse_sms_login_response(login_data)
             if not self._data.rtsp_server:
-                return await self.async_retrieve_user_data()
+                return await self.async_retrieve_user_data(start_polling=start_polling)
             device_data_loaded = await self.async_retrieve_device_data()
             await self.async_retrieve_temp_keys_data()
-            if device_data_loaded:
+            if device_data_loaded and start_polling:
                 await self.async_start_polling()
             return device_data_loaded
 
@@ -505,7 +507,7 @@ class AkuvoxApiClient:
         LOGGER.error("❌ Unable to log in with SMS code.")
         return None
 
-    async def async_retrieve_user_data(self) -> bool:
+    async def async_retrieve_user_data(self, start_polling: bool = True) -> bool:
         """Retrieve user devices and temp keys data."""
         if await self.async_make_servers_list_request(
             hass=self.hass,
@@ -515,7 +517,7 @@ class AkuvoxApiClient:
             phone_number=self._data.phone_number):
             device_data_loaded = await self.async_retrieve_device_data()
             temp_keys_loaded = await self.async_retrieve_temp_keys_data()
-            if device_data_loaded:
+            if device_data_loaded and start_polling:
                 await self.async_start_polling()
             if not temp_keys_loaded:
                 LOGGER.warning("Temporary keys could not be loaded")

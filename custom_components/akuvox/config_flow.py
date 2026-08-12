@@ -1,6 +1,8 @@
 """Adds config flow for Akuvox."""
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from homeassistant import config_entries
 from homeassistant.helpers import selector
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -17,6 +19,7 @@ from .const import (
     LOCATIONS_DICT,
     COUNTRY_PHONE,
     SUBDOMAINS_LIST,
+    TOKEN_REFRESHED_AT,
 )
 from .helpers import AkuvoxHelpers
 
@@ -57,6 +60,108 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="user",
             menu_options=["sms_sign_in_warning", "app_tokens_sign_in"],
             description_placeholders=user_input,
+        )
+
+    async def async_step_reauth(self, _entry_data):
+        """Begin reauthentication after SmartPlus can no longer refresh a session."""
+        self._reauth_entry = self._get_reauth_entry()
+        entry_data = dict(self._reauth_entry.data)
+        country_code = str(entry_data.get("country_code", ""))
+        phone_number = str(entry_data.get("phone_number", ""))
+        subdomain = str(entry_data.get("subdomain", ""))
+        if not country_code or not phone_number:
+            return self.async_abort(reason="reauth_missing_account_data")
+
+        self.data = {
+            "full_phone_number": entry_data.get(
+                "full_phone_number", f"(+{country_code}) {phone_number}"
+            ),
+            "country_code": country_code,
+            "phone_number": phone_number,
+            "subdomain": subdomain or helpers.get_subdomain_from_country_code(country_code),
+        }
+        self.akuvox_api_client = AkuvoxApiClient(
+            session=async_get_clientsession(self.hass),
+            hass=self.hass,
+            entry=None,
+        )
+        try:
+            code_sent = await self.akuvox_api_client.async_send_sms(
+                self.hass,
+                country_code,
+                phone_number,
+                self.data["subdomain"],
+            )
+        except Exception as error:
+            LOGGER.warning("Unable to send SmartPlus reauthentication SMS: %s", error)
+            code_sent = False
+        if code_sent:
+            return await self.async_step_reauth_confirm()
+        return self.async_show_form(
+            step_id="reauth_confirm",
+            data_schema=vol.Schema({}),
+            errors={"base": "cannot_connect"},
+        )
+
+    async def async_step_reauth_confirm(self, user_input=None):
+        """Validate the reauthentication SMS code and replace stored credentials."""
+        schema = vol.Schema(
+            {
+                vol.Required(
+                    "sms_code",
+                    description="Enter the code sent to your SmartPlus phone number",
+                ): str,
+            }
+        )
+        if user_input is None:
+            return self.async_show_form(
+                step_id="reauth_confirm",
+                data_schema=schema,
+                errors={},
+            )
+        try:
+            signed_in = await self.akuvox_api_client.async_sms_sign_in(
+                self.data["phone_number"],
+                self.data["country_code"],
+                str(user_input["sms_code"]),
+                start_polling=False,
+            )
+        except Exception as error:
+            LOGGER.warning("SmartPlus reauthentication failed: %s", error)
+            signed_in = False
+        if not signed_in:
+            return self.async_show_form(
+                step_id="reauth_confirm",
+                data_schema=schema,
+                errors={"base": "invalid_auth"},
+            )
+
+        devices = self.akuvox_api_client.get_devices_json()
+        data = dict(self._reauth_entry.data)
+        options = dict(self._reauth_entry.options)
+        refreshed_credentials = {
+            "auth_token": devices["auth_token"],
+            "token": devices["token"],
+            "host": devices["host"],
+            TOKEN_REFRESHED_AT: datetime.now(timezone.utc).isoformat(),
+        }
+        if options.get("override", False):
+            options.update(refreshed_credentials)
+        else:
+            data.update(refreshed_credentials)
+        data.update(self.data)
+        data.update(
+            {
+                "camera_data": devices["camera_data"],
+                "door_relay_data": devices["door_relay_data"],
+                "door_keys_data": devices["door_keys_data"],
+            }
+        )
+        return self.async_update_reload_and_abort(
+            self._reauth_entry,
+            data=data,
+            options=options,
+            reason="reauth_successful",
         )
 
     async def async_step_sms_sign_in_warning(self, user_input=None):

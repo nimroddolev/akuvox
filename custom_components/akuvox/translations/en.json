@@ -42,7 +42,21 @@
                 "data_description": {
                     "sms_code": "It may take up to 60 seconds to receive the SMS."
                 }
+            },
+            "reauth_confirm": {
+                "title": "Reauthenticate Akuvox SmartPlus",
+                "description": "Enter the SMS code sent to the phone number registered with SmartPlus.",
+                "data": {
+                    "sms_code": "SMS Code"
+                }
             }
+        },
+        "error": {
+            "cannot_connect": "Unable to request a SmartPlus SMS code. Try again shortly.",
+            "invalid_auth": "The SMS code was invalid or expired."
+        },
+        "abort": {
+            "reauth_missing_account_data": "The saved account does not include a phone number and country code. Reconfigure the integration."
         }
     },
     "options": {
