@@ -1,5 +1,6 @@
 """Button platform for akuvox."""
 from homeassistant.components.button import ButtonEntity
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers import storage
 from homeassistant.helpers.entity import DeviceInfo
 
@@ -48,16 +49,10 @@ async def async_setup_entry(hass, entry, async_add_devices):
 class AkuvoxDoorRelayEntity(ButtonEntity, AkuvoxEntity):
     """Akuvox door relay class."""
 
-    _client: AkuvoxApiClient
-    _name: str = ""
-    _host: str = ""
-    _token: str = ""
-    _data: str = ""
-
     def __init__(
         self,
         client: AkuvoxApiClient,
-        entry,
+        entry: ConfigEntry,
         name: str,
         relay_id: str,
         data: str,

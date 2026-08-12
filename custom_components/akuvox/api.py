@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from homeassistant.core import HomeAssistant
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.event import async_track_time_interval
 
 import aiohttp
@@ -64,22 +65,20 @@ class AkuvoxApiClientRateLimitError(AkuvoxApiClientError):
 class AkuvoxApiClient:
     """Sample API Client."""
 
-    _data: AkuvoxData | None = None
-    hass: HomeAssistant
-    _polling_task: asyncio.Task | None = None
-    _polling_task_stop_event: asyncio.Event | None = None
-
     def __init__(
         self,
         session: aiohttp.ClientSession,
         hass: HomeAssistant,
-        entry,
+        entry: ConfigEntry | None,
         credentials: dict[str, str] | None = None,
     ) -> None:
         """Akuvox API Client."""
         self._session = session
         self.hass = hass
         self._entry = entry
+        self._data: AkuvoxData | None = None
+        self._polling_task: asyncio.Task[None] | None = None
+        self._polling_task_stop_event: asyncio.Event | None = None
         self._token_refresh_lock = asyncio.Lock()
         self._door_log_failure_logged = False
         self._door_log_backoff = DOOR_LOG_POLL_INTERVAL

@@ -37,6 +37,15 @@ class TestConfigFlowE2E(unittest.TestCase):
         self.assertTrue({"country_code", "phone_number", "auth_token", "token"}.issubset(app_fields))
         self.assertTrue({"country_code", "phone_number"}.issubset(sms_fields))
 
+    def test_flow_state_was_not_shared_between_instances(self) -> None:
+        """Concurrent config flows retained independent mutable state."""
+        other_flow = AkuvoxFlowHandler()
+        self.flow.data["phone_number"] = "5551234"
+        self.flow.rest_server_data["host"] = "api.example"
+
+        self.assertEqual(other_flow.data, {})
+        self.assertEqual(other_flow.rest_server_data, {})
+
 
 class _ReauthEntry:
     """Represents an existing account which needs a new SmartPlus session."""

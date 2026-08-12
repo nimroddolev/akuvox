@@ -1,22 +1,20 @@
 """Sensor platform for akuvox."""
 # from homeassistant.components.entity import Entity
 from homeassistant.helpers.entity import Entity
+from homeassistant.config_entries import ConfigEntry
 from .api import AkuvoxApiClient
 
 class AkuvoxEntity(Entity):
     """Akuvox temporary door key class."""
 
-    entry=None
-    client: AkuvoxApiClient
-
     def __init__(
         self,
         client: AkuvoxApiClient,
-        entry
+        entry: ConfigEntry,
         ) -> None:
         """Initialize the Akuvox door relay class."""
         super().__init__()
-        self.entry = entry
+        self.entry: ConfigEntry = entry
         self.client = client
 
         host = self.get_saved_value("host")

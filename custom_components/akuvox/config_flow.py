@@ -36,9 +36,13 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
     MINOR_VERSION = 2
-    data: dict = {}
-    rest_server_data: dict = {}
-    akuvox_api_client: AkuvoxApiClient = None  # type: ignore
+
+    def __init__(self) -> None:
+        """Initialise per-flow state without sharing it between flows."""
+        super().__init__()
+        self.data: dict[str, object] = {}
+        self.rest_server_data: dict[str, object] = {}
+        self.akuvox_api_client: AkuvoxApiClient | None = None
 
     @staticmethod
     def async_get_options_flow(config_entry: config_entries.ConfigEntry) -> config_entries.OptionsFlow:
@@ -503,7 +507,10 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
 class AkuvoxOptionsFlowHandler(config_entries.OptionsFlow):
     """Handle options flow for Akuvox integration."""
 
-    akuvox_api_client: AkuvoxApiClient = None  # type: ignore
+    def __init__(self) -> None:
+        """Initialise per-options-flow state."""
+        super().__init__()
+        self.akuvox_api_client: AkuvoxApiClient | None = None
 
     async def async_step_init(self, user_input=None):
         """Initialize the options flow."""

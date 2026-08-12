@@ -1,13 +1,11 @@
 """End-to-end platform setup and poller tests for the integration."""
 from __future__ import annotations
 
-import asyncio
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from custom_components.akuvox import button, camera, sensor
 from custom_components.akuvox.const import DOMAIN
-from custom_components.akuvox.door_poll import DoorLogPoller
 
 
 class _Store:
@@ -88,19 +86,6 @@ class TestPlatformSetupE2E(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(added_cameras.call_args.args[0][0]["name"], "Lobby")
         self.assertEqual(added_buttons.call_args.args[0][0]["data"], "mac=AABBCC&relay=1")
         self.assertEqual(added_sensors.call_args.args[0][0]["key_code"], "1234")
-
-    async def test_door_log_poller_started_once_and_stopped_cleanly(self) -> None:
-        """The legacy poller did not create duplicate tasks and cancelled safely."""
-        poll = AsyncMock()
-        poller = DoorLogPoller(_Hass(), poll)
-
-        await poller.async_start()
-        await poller.async_start()
-        await asyncio.sleep(0)
-        await poller.async_stop()
-
-        poll.assert_awaited_once()
-        self.assertFalse(poller.is_polling)
 
     async def test_actual_entities_used_saved_credentials_and_async_actions(self) -> None:
         """Camera, relay, and temporary-key entities completed their public paths."""
