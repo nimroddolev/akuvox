@@ -26,8 +26,8 @@ class TestSmartPlusApiE2E(unittest.IsolatedAsyncioTestCase):
     """Exercise a complete simulated SmartPlus account lifecycle."""
 
     def _client(self, responses: list[_Response]) -> AkuvoxApiClient:
-        entry = _Entry()
-        entry.data.update(
+        self.entry = _Entry()
+        self.entry.data.update(
             {
                 "host": "api.example",
                 "phone_number": "5551234",
@@ -36,7 +36,7 @@ class TestSmartPlusApiE2E(unittest.IsolatedAsyncioTestCase):
         )
         self.session = _Session(responses)
         self.hass = _WorkflowHass()
-        return AkuvoxApiClient(self.session, self.hass, entry)
+        return AkuvoxApiClient(self.session, self.hass, self.entry)
 
     async def test_account_bootstrap_parsed_devices_and_temp_keys(self) -> None:
         """Server discovery, device retrieval, and key retrieval completed together."""
@@ -121,6 +121,7 @@ class TestSmartPlusApiE2E(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(await client.async_retrieve_personal_door_log())
         self.hass.bus.async_fire.assert_called_once()
         self.assertEqual(len(self.session.requests), 1)
+        self.assertEqual(self.entry.data["activity_endpoint_type"], "community")
 
     async def test_empty_activity_response_was_a_healthy_poll(self) -> None:
         """An empty activity list did not trigger a fallback request or warning."""

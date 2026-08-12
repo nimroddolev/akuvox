@@ -15,6 +15,7 @@ from .const import (
     LOCATIONS_DICT,
     DOOR_LOG_POLL_INTERVAL,
     DOOR_LOG_MAX_BACKOFF,
+    ACTIVITY_ENDPOINT_TYPE,
 )
 from .helpers import AkuvoxHelpers
 
@@ -37,7 +38,7 @@ class AkuvoxData:
 
         self.hass = hass
         self.location_dict: dict = {}
-        self.app_type = "community"
+        self.app_type = self._get_activity_endpoint_type(entry)
         self.rtsp_server = ""
         self.project_name = "Akuvox SmartPlus"
         self.camera_data: list[dict] = []
@@ -102,6 +103,17 @@ class AkuvoxData:
         except (TypeError, ValueError):
             return default
         return value if value > 0 else default
+
+    @staticmethod
+    def _get_activity_endpoint_type(entry: ConfigEntry | None) -> str:
+        """Restore the previously proven SmartPlus activity endpoint."""
+        if entry is None or isinstance(entry, dict):
+            return "community"
+        value = entry.options.get(
+            ACTIVITY_ENDPOINT_TYPE,
+            entry.data.get(ACTIVITY_ENDPOINT_TYPE, "community"),
+        )
+        return value if value in ("community", "single") else "community"
 
     def parse_rest_server_response(self, json_data: dict) -> bool:
         """Parse the rest_server API response."""

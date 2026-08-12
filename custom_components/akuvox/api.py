@@ -28,6 +28,7 @@ from .const import (
     TOKEN_REFRESH_INTERVAL,
     TOKEN_REFRESHED_AT,
     DOOR_LOG_POLL_INTERVAL,
+    ACTIVITY_ENDPOINT_TYPE,
     REST_SERVER_API_VERSION,
     API_REST_SERVER_DATA,
     USERCONF_API_VERSION,
@@ -408,6 +409,21 @@ class AkuvoxApiClient:
             options=options,
         )
 
+    def _async_persist_activity_endpoint(self) -> None:
+        """Persist the verified activity endpoint without disrupting entities."""
+        if self._entry is None or self._data is None:
+            return
+        data = dict(self._entry.data)
+        if data.get(ACTIVITY_ENDPOINT_TYPE) == self._data.app_type:
+            return
+        data[ACTIVITY_ENDPOINT_TYPE] = self._data.app_type
+        self._skip_next_entry_reload = True
+        self.hass.config_entries.async_update_entry(
+            self._entry,
+            data=data,
+            options=dict(self._entry.options),
+        )
+
     def consume_entry_reload_skip(self) -> bool:
         """Return whether the next config-entry update needs no reload."""
         if not self._skip_next_entry_reload:
@@ -666,6 +682,7 @@ class AkuvoxApiClient:
         )
 
         if isinstance(json_data, list):
+            self._async_persist_activity_endpoint()
             return json_data
         LOGGER.debug("No personal door log data returned")
         return None

@@ -40,6 +40,14 @@ class TestDoorLogPollingE2E(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(client._data.door_log_max_backoff, 600)
         self.assertEqual(client._increase_door_log_backoff(), 240)
 
+    def test_saved_activity_endpoint_was_restored(self) -> None:
+        """A previously proven single endpoint was used after Home Assistant restarted."""
+        entry = _Entry()
+        entry.data["activity_endpoint_type"] = "single"
+        client = AkuvoxApiClient(_Session([]), _Hass(), entry)
+
+        self.assertEqual(client.get_activities_host(), "subdomain.akuvox.com/web-server/v3/app/single")
+
     async def test_rate_limit_response_was_reported_as_a_retryable_failure(self) -> None:
         """HTTP 429 became a client error so the poller applied backoff."""
         client = self._client()
