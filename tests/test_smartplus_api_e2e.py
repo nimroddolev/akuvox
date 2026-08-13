@@ -94,23 +94,25 @@ class TestSmartPlusApiE2E(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(self.session.requests), 3)
 
     async def test_activity_response_published_a_new_door_event(self) -> None:
-        """A valid activity response fired the event without a duplicate request."""
+        """A valid v4 activity response fired the event without a duplicate request."""
         client = self._client(
             [
                 _Response(
                     200,
                     {
                         "code": 0,
-                        "data": [
-                            {
-                                "CaptureTime": "2026-08-12 20:00:00",
-                                "Initiator": "Visitor",
-                                "CaptureType": "Call",
-                                "Location": "Lobby",
-                                "MAC": "AABBCC",
-                                "Relay": "1",
-                            }
-                        ],
+                        "data": {
+                            "list": [
+                                {
+                                    "captureTime": "2026-08-12 20:00:00",
+                                    "initiator": "Visitor",
+                                    "captureType": "faceUnlock",
+                                    "deviceName": "Lobby",
+                                    "picUrl": "https://images.example/event.jpg",
+                                    "relayName": "Relay1",
+                                }
+                            ]
+                        },
                     },
                 ),
             ]
@@ -121,8 +123,20 @@ class TestSmartPlusApiE2E(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(await client.async_retrieve_personal_door_log())
         self.hass.bus.async_fire.assert_called_once()
         self.assertEqual(len(self.session.requests), 1)
-        self.assertEqual(self.entry.data["activity_endpoint_type"], "community")
+        request = self.session.requests[0]
+        self.assertEqual(request["method"], "get")
+        self.assertRegex(
+            request["url"],
+            r"^https://backend\.ecloud\.akuvox\.com/web-server/v4/"
+            r"smartplus/community/log/master/getDoorLog\?row=20&page=1&_t=\d+$",
+        )
+        self.assertEqual(request["headers"]["x-auth-token"], "expired-token")
+        self.assertEqual(request["headers"]["origin"], "https://ecloud.akuvox.com")
 
+        panel_event = client.get_panel_data()["activity"][0]
+        self.assertEqual(panel_event["CaptureTime"], "2026-08-12 20:00:00")
+        self.assertEqual(panel_event["Location"], "Lobby")
+        self.assertEqual(panel_event["CaptureType"], "faceUnlock")
     async def test_empty_activity_response_was_a_healthy_poll(self) -> None:
         """An empty activity list did not trigger a fallback request or warning."""
         client = self._client([_Response(200, {"code": 0, "data": []})])

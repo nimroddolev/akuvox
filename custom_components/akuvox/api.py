@@ -7,6 +7,7 @@ import socket
 from collections.abc import Callable
 from typing import Any
 from datetime import datetime, timezone
+from time import time
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant
@@ -45,6 +46,7 @@ from .const import (
     API_CREATE_TEMP_KEY,
     API_DELETE_TEMP_KEY,
     API_GET_PERSONAL_DOOR_LOG,
+    API_DOOR_LOG_HOST,
     USER_AGENT,
     SMARTPLUS_USER_AGENT,
     SMARTPLUS_USER_AGENT_ALT,
@@ -787,34 +789,50 @@ class AkuvoxApiClient:
         await self.async_retrieve_temp_keys_data()
 
     async def async_get_personal_door_log(self):
-        """Request the user's personal door log data."""
-        # LOGGER.debug("📡 Retrieving list of user's personal door log...")
-        host = self.get_activities_host()
-        url = f"https://{host}/{API_GET_PERSONAL_DOOR_LOG}"
+        """Request the user's personal door log data from the SmartPlus v4 API."""
+        host = API_DOOR_LOG_HOST.replace("subdomain.", f"{self._data.subdomain}.")
+        url = f"https://{host}/{API_GET_PERSONAL_DOOR_LOG}&_t={int(time() * 1000)}"
         data = {}
         headers = {
             "x-cloud-version": "6.4",
             "accept": "application/json, text/plain, */*",
-            "sec-fetch-site": "same-origin",
+            "origin": f"https://{self._data.subdomain}.akuvox.com",
+            "sec-fetch-site": "same-site",
             "accept-language": "en-AU,en;q=0.9",
             "sec-fetch-mode": "cors",
             "x-cloud-lang": "en",
             "user-agent": SMARTPLUS_USER_AGENT_ALT,
-            "referer": f"https://{self._data.subdomain}.akuvox.com/smartplus/Activities.html?TOKEN={self._data.token}",
+            "referer": f"https://{self._data.subdomain}.akuvox.com/",
             "x-auth-token": self._data.token,
-            "sec-fetch-dest": "empty"
+            "sec-fetch-dest": "empty",
         }
 
         json_data = await self._async_api_wrapper(
             method="get", url=url, headers=headers, data=data
         )
 
+        if isinstance(json_data, dict):
+            records = json_data.get("list")
+            if isinstance(records, list):
+                return [self._normalise_v4_door_log(item) for item in records if isinstance(item, dict)]
         if isinstance(json_data, list):
-            self._async_persist_activity_endpoint()
             return json_data
         LOGGER.debug("No personal door log data returned")
         return None
 
+    @staticmethod
+    def _normalise_v4_door_log(record: dict[str, Any]) -> dict[str, Any]:
+        """Adapt SmartPlus v4 camelCase door-log fields for existing consumers."""
+        return {
+            **record,
+            "CaptureTime": record.get("captureTime", ""),
+            "Location": record.get("deviceName", ""),
+            "Initiator": record.get("initiator", ""),
+            "CaptureType": record.get("captureType", ""),
+            "PicUrl": record.get("picUrl", ""),
+            "MAC": record.get("mac", ""),
+            "Relay": record.get("relayName", ""),
+        }
     ###################
     # Request Methods #
     ###################
