@@ -1,5 +1,6 @@
 """Akuvox Data Class."""
 from __future__ import annotations
+from datetime import datetime
 from urllib.parse import quote, urlsplit
 
 from homeassistant.core import HomeAssistant
@@ -8,7 +9,6 @@ from homeassistant.helpers import storage
 
 from .const import (
     LOGGER,
-    TEMP_KEY_QR_HOST,
     PIC_URL_KEY,
     CAPTURE_TIME_KEY,
     DATA_STORAGE_KEY,
@@ -40,6 +40,11 @@ class AkuvoxData:
         self.location_dict: dict = {}
         self.app_type = self._get_activity_endpoint_type(entry)
         self.rtsp_server = ""
+        self.sip_server = ""
+        self.sip_account = ""
+        self.sip_password = ""
+        self.sip_transport = ""
+        self.sip_device_accounts: dict[str, str] = {}
         self.project_name = "Akuvox SmartPlus"
         self.camera_data: list[dict] = []
         self.door_relay_data: list[dict] = []
@@ -58,6 +63,7 @@ class AkuvoxData:
         self.auth_token = auth_token or self.get_value_for_key(entry, "auth_token", "")
         self.token = token or self.get_value_for_key(entry, "token", "")
         self.phone_number = phone_number or self.get_value_for_key(entry, "phone_number", "")
+        self.country_code = country_code or self.get_value_for_key(entry, "country_code", "")
         self.wait_for_image_url = (
             wait_for_image_url
             if wait_for_image_url is not None
@@ -132,8 +138,11 @@ class AkuvoxData:
         self.auth_token = str(payload.get("auth_token", self.auth_token))
         self.token = str(payload.get("token", self.token))
         self.rtsp_server = self._normalise_rtsp_server(
-            payload.get("vrtsp_server")
-            or payload.get("rtsp_server")
+            # ``rtsp_server`` is the documented video-monitoring endpoint.
+            # The virtual endpoint has returned invalid Transport headers to
+            # FFmpeg/go2rtc, leaving snapshots as corrupt downloads.
+            payload.get("rtsp_server")
+            or payload.get("vrtsp_server")
             or payload.get("rtmp_server")
             or self.rtsp_server
         )
@@ -156,7 +165,16 @@ class AkuvoxData:
         self.camera_data = []
         if isinstance(json_data, dict):
             if isinstance(json_data.get("app_conf"), dict):
-                self.project_name = str(json_data["app_conf"].get("project_name", self.project_name)).strip()
+                app_conf = json_data["app_conf"]
+                self.project_name = str(app_conf.get("project_name", self.project_name)).strip()
+                self.sip_server = str(app_conf.get("sip_server", "")).strip()
+                self.sip_account = str(
+                    app_conf.get("main_sip") or app_conf.get("sip") or ""
+                ).strip()
+                self.sip_password = str(
+                    app_conf.get("main_sip_passwd") or app_conf.get("sip_passwd") or ""
+                ).strip()
+                self.sip_transport = str(app_conf.get("trans_type", "")).strip()
             if isinstance(json_data.get("dev_list"), list):
                 for dev_data in json_data["dev_list"]:
                     if not isinstance(dev_data, dict):
@@ -165,6 +183,9 @@ class AkuvoxData:
                     mac = str(dev_data.get("mac", "")).strip()
                     if not name or not mac:
                         continue
+                    device_sip = str(dev_data.get("sip", "")).strip()
+                    if device_sip:
+                        self.sip_device_accounts[mac] = device_sip
 
                     # Camera
                     if dev_data.get("rtsp_pwd") and self.rtsp_server:
@@ -213,13 +234,33 @@ class AkuvoxData:
             door_keys_data["key_id"] = door_keys_json["ID"]
             door_keys_data["description"] = door_keys_json["Description"]
             door_keys_data["key_code"] = door_keys_json["TmpKey"]
-            door_keys_data["begin_time"] = door_keys_json["BeginTime"]
-            door_keys_data["end_time"] = door_keys_json["EndTime"]
+            door_keys_data["begin_time"] = self._normalise_temp_key_time(
+                door_keys_json["BeginTime"]
+            )
+            door_keys_data["end_time"] = self._normalise_temp_key_time(
+                door_keys_json["EndTime"]
+            )
             door_keys_data["access_times"] = door_keys_json.get("AccessTimes", 0)
             door_keys_data["allowed_times"] = door_keys_json.get("AllowedTimes", 0)
             door_keys_data["each_allowed_times"] = door_keys_json.get("EachAllowedTimes", 0)
-            door_keys_data["qr_code_url"] = f"https://{TEMP_KEY_QR_HOST}{door_keys_json.get('QrCodeUrl', '')}"
-            door_keys_data["expired"] = not bool(door_keys_json.get("Expired", False))
+            door_keys_data["date_flag"] = door_keys_json.get("DateFlag", "")
+            door_keys_data["scheduler_type"] = door_keys_json.get("SchedulerType", 3)
+            door_keys_data["id_number"] = door_keys_json.get("IDNumber", "")
+            door_keys_data["license_plate"] = door_keys_json.get("LicensePlate", "")
+            door_keys_data["uhf_card"] = door_keys_json.get("UhfCard", "")
+            door_keys_data["is_follow_my_access"] = door_keys_json.get(
+                "IsFollowMyAccess", 1
+            )
+            qr_code_url = str(door_keys_json.get("QrCodeUrl", "")).strip()
+            # SmartPlus normally returns a complete QR image URL. Older
+            # deployments may return only its path instead.
+            if qr_code_url and not urlsplit(qr_code_url).scheme:
+                qr_code_url = (
+                    f"https://{self.subdomain}.akuvox.com/"
+                    f"{qr_code_url.lstrip('/')}"
+                )
+            door_keys_data["qr_code_url"] = qr_code_url
+            door_keys_data["expired"] = bool(door_keys_json.get("Expired", False))
 
             door_keys_data["doors"] = []
             if isinstance(door_keys_json.get("Doors"), list):
@@ -231,8 +272,11 @@ class AkuvoxData:
                     door_keys_data["doors"].append({
                         "door_id": door_key_json["ID"],
                         "key_id": door_key_json["KeyID"],  # Reference to key
-                        "relay": door_key_json["Relay"],
-                        "mac": door_key_json["MAC"]
+                        "relay": self._normalise_temp_key_relay(
+                            door_key_json["MAC"], door_key_json["Relay"]
+                        ),
+                        "mac": door_key_json["MAC"],
+                        "security_relay": door_key_json.get("SecurityRelay", "0"),
                     })
 
             self.door_keys_data.append(door_keys_data)
@@ -246,6 +290,44 @@ class AkuvoxData:
                              door_key.get("description", ""),
                              len(door_key["doors"]),
                              "" if len(door_key["doors"]) == 1 else "s")
+
+    @staticmethod
+    def _normalise_temp_key_time(value: object) -> str:
+        """Return temporary-key timestamps in the browser-safe ISO-like format.
+
+        SmartPlus returns ``DD-MM-YYYY HH:MM:SS`` for temporary keys, while a
+        ``datetime-local`` control only accepts the year-first representation.
+        Retaining seconds also keeps edits lossless when the value is submitted.
+        """
+        text = str(value).strip()
+        for format_string in (
+            "%Y-%m-%d %H:%M:%S",
+            "%d-%m-%Y %H:%M:%S",
+            "%Y/%m/%d %H:%M:%S",
+            "%d/%m/%Y %H:%M:%S",
+        ):
+            try:
+                return datetime.strptime(text, format_string).strftime(
+                    "%Y-%m-%d %H:%M:%S"
+                )
+            except ValueError:
+                continue
+        return text
+
+    def _normalise_temp_key_relay(self, mac: object, relay: object) -> str:
+        """Map SmartPlus's one-based temporary-key relay to the device relay ID."""
+        relay_id = str(relay)
+        mac_value = str(mac).casefold()
+        available = {
+            str(item.get("relay_id", ""))
+            for item in self.door_relay_data
+            if str(item.get("mac", "")).casefold() == mac_value
+        }
+        try:
+            device_relay_id = str(int(relay_id) - 1)
+        except ValueError:
+            return relay_id
+        return device_relay_id if device_relay_id in available else relay_id
 
     async def async_parse_personal_door_log(self, json_data: list):
         """Parse the getDoorLog API response."""

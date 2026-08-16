@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
+import secrets
 import socket
 from collections.abc import Callable
 from typing import Any
@@ -19,7 +21,8 @@ import aiohttp
 import async_timeout
 
 from .data import AkuvoxData
-from .credentials import async_store_credentials
+from .credentials import async_store_credentials, async_store_sip_credentials
+from .repairs import async_report_authentication_failure
 
 from .const import (
     LOGGER,
@@ -32,9 +35,12 @@ from .const import (
     API_REFRESH_TOKEN,
     TOKEN_REFRESH_INTERVAL,
     TOKEN_REFRESHED_AT,
+    TOKEN_UPDATE_TYPE,
+    TOKEN_UPDATE_REFRESHED,
     DOOR_LOG_POLL_INTERVAL,
     ACTIVITY_ENDPOINT_TYPE,
     ACTIVITY_HISTORY_LIMIT,
+    PANEL_DATA_UPDATED_EVENT,
     REST_SERVER_API_VERSION,
     API_REST_SERVER_DATA,
     USERCONF_API_VERSION,
@@ -44,12 +50,15 @@ from .const import (
     API_APP_HOST,
     API_GET_PERSONAL_TEMP_KEY_LIST,
     API_CREATE_TEMP_KEY,
+    API_EDIT_TEMP_KEY,
     API_DELETE_TEMP_KEY,
     API_GET_PERSONAL_DOOR_LOG,
+    API_GET_CALL_LOG,
     API_DOOR_LOG_HOST,
     USER_AGENT,
     SMARTPLUS_USER_AGENT,
     SMARTPLUS_USER_AGENT_ALT,
+    SMARTPLUS_REFRESH_USER_AGENT,
 )
 
 
@@ -93,6 +102,9 @@ class AkuvoxApiClient:
         self._token_refresh_unsub: Callable[[], None] | None = None
         self._skip_next_entry_reload = False
         self._activity_history: list[dict[str, Any]] = []
+        self._activity_history_loaded = False
+        self._call_history: list[dict[str, Any]] = []
+        self._call_history_loaded = False
         if entry:
             LOGGER.debug("▶️ Initializing AkuvoxData from API client init")
             self._data = AkuvoxData(
@@ -102,6 +114,11 @@ class AkuvoxApiClient:
                 token=(credentials or {}).get("token"),
             ) # type: ignore
             self._door_log_backoff = self._data.door_log_poll_interval
+
+    @property
+    def config_entry(self) -> ConfigEntry | None:
+        """Return the associated Home Assistant configuration entry."""
+        return self._entry
 
     async def async_init_api(self) -> bool:
         """Initialize API configuration data."""
@@ -113,8 +130,9 @@ class AkuvoxApiClient:
                 hass=self.hass,
                 auth_token=self._data.auth_token,
                 token=self._data.token,
-                country_code=self.hass.config.country,
+                country_code=self._data.country_code,
                 phone_number=self._data.phone_number,
+                subdomain=self._data.subdomain,
             ):
                 LOGGER.error("❌ API request for servers list failed.")
                 return False
@@ -379,6 +397,7 @@ class AkuvoxApiClient:
             if self._data.token and self._data.token != failed_token:
                 return True
 
+            LOGGER.debug("SmartPlus token refresh starting")
             url = f"https://{REST_SERVER_ADDR}:{REST_SERVER_PORT}/{API_REFRESH_TOKEN}"
             headers = {
                 "accept": "*/*",
@@ -386,25 +405,33 @@ class AkuvoxApiClient:
                 "x-auth-token": self._data.token,
                 "api-version": "6.8",
                 "x-cloud-lang": "en",
-                "user-agent": SMARTPLUS_USER_AGENT,
+                "user-agent": SMARTPLUS_REFRESH_USER_AGENT,
+                "accept-language": "en-AU;q=1, he-AU;q=0.9, ru-RU;q=0.8",
             }
-            response = await self._async_api_wrapper(
-                method="post",
-                url=url,
-                headers=headers,
-                data=json.dumps({"auth_token": self._data.auth_token}),
-                allow_token_refresh=False,
-            )
-            if not isinstance(response, dict) or not response.get("token"):
-                raise AkuvoxApiClientAuthenticationError(
-                    "SmartPlus did not return a refreshed session token"
+            try:
+                response = await self._async_api_wrapper(
+                    method="post",
+                    url=url,
+                    headers=headers,
+                    data=json.dumps({"auth_token": self._data.auth_token}),
+                    allow_token_refresh=False,
                 )
+                if not isinstance(response, dict) or not response.get("token"):
+                    raise AkuvoxApiClientAuthenticationError(
+                        "SmartPlus did not return a refreshed session token"
+                    )
 
-            self._data.token = str(response["token"])
-            if response.get("auth_token"):
-                self._data.auth_token = str(response["auth_token"])
-            await self._async_persist_refreshed_credentials()
-            LOGGER.debug("SmartPlus session token refreshed successfully")
+                self._data.token = str(response["token"])
+                if response.get("auth_token"):
+                    self._data.auth_token = str(response["auth_token"])
+                await self._async_persist_refreshed_credentials()
+            except Exception as error:
+                LOGGER.debug(
+                    "SmartPlus token refresh finished: failed (%s)",
+                    type(error).__name__,
+                )
+                raise
+            LOGGER.debug("SmartPlus token refresh finished: succeeded")
             return True
 
     async def _async_persist_refreshed_credentials(self) -> None:
@@ -423,12 +450,14 @@ class AkuvoxApiClient:
         )
         target = options if options.get("override", False) else data
         target[TOKEN_REFRESHED_AT] = datetime.now(timezone.utc).isoformat()
+        target[TOKEN_UPDATE_TYPE] = TOKEN_UPDATE_REFRESHED
         self._skip_next_entry_reload = True
         self.hass.config_entries.async_update_entry(
             self._entry,
             data=data,
             options=options,
         )
+        self._notify_panel_data_updated()
 
     def _async_persist_activity_endpoint(self) -> None:
         """Persist the verified activity endpoint without disrupting entities."""
@@ -500,8 +529,7 @@ class AkuvoxApiClient:
             await self.async_refresh_token(self._data.token)
         except AkuvoxApiClientAuthenticationError:
             LOGGER.error("SmartPlus token refresh failed; reauthentication is required")
-            if self._entry is not None:
-                self._entry.async_start_reauth_if_available(self.hass)
+            self._report_authentication_failure()
         except AkuvoxApiClientError as error:
             LOGGER.warning("Scheduled SmartPlus token refresh failed: %s", error)
 
@@ -550,8 +578,10 @@ class AkuvoxApiClient:
             hass=self.hass,
             auth_token=self._data.auth_token,
             token=self._data.token,
-            country_code=self.hass.config.country,
-            phone_number=self._data.phone_number):
+            country_code=self._data.country_code,
+            phone_number=self._data.phone_number,
+            subdomain=self._data.subdomain,
+        ):
             device_data_loaded = await self.async_retrieve_device_data()
             temp_keys_loaded = await self.async_retrieve_temp_keys_data()
             if device_data_loaded and start_polling:
@@ -565,7 +595,26 @@ class AkuvoxApiClient:
         """Request and parse the user's device data."""
         user_conf_data = await self.async_user_conf()
         if user_conf_data is not None:
+            previous_panel_data = self.get_panel_data()
             self._data.parse_userconf_data(user_conf_data) # type: ignore
+            if (
+                self._entry
+                and self._data.sip_server
+                and self._data.sip_account
+                and self._data.sip_password
+            ):
+                await async_store_sip_credentials(
+                    self.hass,
+                    self._entry.entry_id,
+                    {
+                        "sip_server": self._data.sip_server,
+                        "sip_account": self._data.sip_account,
+                        "sip_password": self._data.sip_password,
+                        "sip_transport": self._data.sip_transport,
+                    },
+                )
+            if self.get_panel_data() != previous_panel_data:
+                self._notify_panel_data_updated()
             return True
         return False
 
@@ -631,7 +680,10 @@ class AkuvoxApiClient:
         """Request and parse the user's temporary keys."""
         json_data = await self.async_get_temp_key_list()
         if json_data is not None:
+            previous_keys = self.get_panel_data()["temporary_keys"]
             self._data.parse_temp_keys_data(json_data)
+            if self.get_panel_data()["temporary_keys"] != previous_keys:
+                self._notify_panel_data_updated()
             return True
         return False
 
@@ -640,7 +692,9 @@ class AkuvoxApiClient:
         LOGGER.debug("📡 Retrieving list of user's temporary keys...")
         host = self.get_activities_host()
         subdomain = self._data.subdomain # await self._data.async_get_stored_data_for_key("subdomain")
-        url = f"https://{host}/{API_GET_PERSONAL_TEMP_KEY_LIST}"
+        # SmartPlus can serve a cached key list for the fixed row/page URL,
+        # causing a successful edit to appear to revert in the sidebar.
+        url = f"https://{host}/{API_GET_PERSONAL_TEMP_KEY_LIST}&_t={int(time() * 1000)}"
         data = {}
         headers = {
             "x-cloud-version": "6.4",
@@ -652,7 +706,8 @@ class AkuvoxApiClient:
             "user-agent": SMARTPLUS_USER_AGENT,
             "referer": f"https://{subdomain}.akuvox.com/smartplus/TmpKey.html?TOKEN={self._data.token}&USERTYPE=20&VERSION=6.6",
             "x-auth-token": self._data.token,
-            "sec-fetch-dest": "empty"
+            "sec-fetch-dest": "empty",
+            "cache-control": "no-cache",
         }
 
         json_data = await self._async_api_wrapper(method="get", url=url, headers=headers, data=data)
@@ -686,31 +741,137 @@ class AkuvoxApiClient:
         json_data = await self.async_get_personal_door_log()
         if json_data is None:
             return False
-        self._record_panel_activity(json_data)
+        await self._async_record_panel_activity(json_data)
+        try:
+            await self.async_retrieve_call_history()
+        except AkuvoxApiClientError as error:
+            LOGGER.debug("Unable to refresh SmartPlus call history: %s", error)
         new_door_log = await self._data.async_parse_personal_door_log(json_data)
         if new_door_log is not None:
             LOGGER.debug("🚪 New door open event occurred. Firing akuvox_door_update event")
             self.hass.bus.async_fire("akuvox_door_update", new_door_log)
         return True
 
-    def _record_panel_activity(self, events: list[dict[str, Any]]) -> None:
-        """Keep the latest cloud activity in memory for the sidebar panel only."""
-        existing = {str(item.get("CaptureTime", "")) for item in self._activity_history}
+    async def _async_record_panel_activity(self, events: list[dict[str, Any]]) -> None:
+        """Restore and persist the latest cloud activity for the sidebar panel."""
+        if not self._activity_history_loaded:
+            stored_history = await self._data.async_get_stored_data_for_key(
+                "panel_activity_history"
+            )
+            if isinstance(stored_history, list):
+                self._activity_history = [
+                    dict(event) for event in stored_history if isinstance(event, dict)
+                ][:ACTIVITY_HISTORY_LIMIT]
+            self._activity_history_loaded = True
+        existing = {
+            str(item.get("CaptureTime", "")): index
+            for index, item in enumerate(self._activity_history)
+        }
+        changed = False
         for event in reversed(events):
             if not isinstance(event, dict):
                 continue
             event_time = str(event.get("CaptureTime", ""))
-            if event_time and event_time not in existing:
+            if not event_time:
+                continue
+            existing_index = existing.get(event_time)
+            if existing_index is None:
                 self._activity_history.insert(0, dict(event))
-                existing.add(event_time)
+                existing = {
+                    str(item.get("CaptureTime", "")): index
+                    for index, item in enumerate(self._activity_history)
+                }
+                changed = True
+            elif self._activity_history[existing_index] != event:
+                self._activity_history[existing_index] = dict(event)
+                changed = True
         del self._activity_history[ACTIVITY_HISTORY_LIMIT:]
+        if changed:
+            await self._data.async_set_stored_data_for_key(
+                "panel_activity_history", self._activity_history
+            )
+            self._notify_panel_data_updated()
+
+    async def async_retrieve_call_history(self) -> bool:
+        """Fetch and retain the latest SmartPlus call-history page for the panel."""
+        host = API_DOOR_LOG_HOST.replace("subdomain.", f"{self._data.subdomain}.")
+        url = f"https://{host}/{API_GET_CALL_LOG}&_t={int(time() * 1000)}"
+        headers = {
+            "x-cloud-version": "6.4",
+            "accept": "application/json, text/plain, */*",
+            "origin": f"https://{self._data.subdomain}.akuvox.com",
+            "x-cloud-lang": "en",
+            "user-agent": SMARTPLUS_USER_AGENT_ALT,
+            "referer": f"https://{self._data.subdomain}.akuvox.com/",
+            "x-auth-token": self._data.token,
+        }
+        response = await self._async_api_wrapper("get", url, data={}, headers=headers)
+        records = response.get("list") if isinstance(response, dict) else None
+        if not isinstance(records, list):
+            LOGGER.debug("No SmartPlus call history returned")
+            return False
+        await self._async_record_call_history(records)
+        return True
+
+    async def _async_record_call_history(self, calls: list[dict[str, Any]]) -> None:
+        """Restore and persist a bounded call history for the sidebar panel."""
+        if not self._call_history_loaded:
+            stored = await self._data.async_get_stored_data_for_key("panel_call_history")
+            if isinstance(stored, list):
+                self._call_history = [dict(call) for call in stored if isinstance(call, dict)][
+                    :ACTIVITY_HISTORY_LIMIT
+                ]
+            self._call_history_loaded = True
+        existing = {
+            str(call.get("id", "")): index
+            for index, call in enumerate(self._call_history)
+        }
+        changed = False
+        for call in reversed(calls):
+            if not isinstance(call, dict):
+                continue
+            call_id = str(call.get("id", ""))
+            if not call_id:
+                continue
+            existing_index = existing.get(call_id)
+            if existing_index is None:
+                self._call_history.insert(0, dict(call))
+                existing = {
+                    str(item.get("id", "")): index
+                    for index, item in enumerate(self._call_history)
+                }
+                changed = True
+            elif self._call_history[existing_index] != call:
+                self._call_history[existing_index] = dict(call)
+                changed = True
+        del self._call_history[ACTIVITY_HISTORY_LIMIT:]
+        if changed:
+            await self._data.async_set_stored_data_for_key(
+                "panel_call_history", self._call_history
+            )
+            self._notify_panel_data_updated()
+
+    def _notify_panel_data_updated(self) -> None:
+        """Tell connected sidebar panels to retrieve their latest data."""
+        bus = getattr(self.hass, "bus", None)
+        if bus is None:
+            return
+        bus.async_fire(
+            PANEL_DATA_UPDATED_EVENT,
+            {"entry_id": self._entry.entry_id} if self._entry is not None else {},
+        )
 
     def get_panel_data(self) -> dict[str, Any]:
         """Return non-secret account data for the SmartPlus sidebar panel."""
         if self._data is None:
-            return {"cameras": [], "relays": [], "temporary_keys": [], "activity": []}
+            return {"cameras": [], "relays": [], "temporary_keys": [], "activity": [], "calls": []}
         return {
             "project_name": self._data.project_name,
+            "sip_available": bool(
+                self._data.sip_server
+                and self._data.sip_account
+                and self._data.sip_password
+            ),
             "cameras": [{"name": camera.get("name", "")} for camera in self._data.camera_data],
             "relays": [
                 {
@@ -723,7 +884,119 @@ class AkuvoxApiClient:
             ],
             "temporary_keys": [dict(key) for key in self._data.door_keys_data],
             "activity": [dict(activity) for activity in self._activity_history],
+            "calls": [dict(call) for call in self._call_history],
         }
+
+    async def async_get_panel_activity_image(
+        self, capture_time: str, *, allow_http: bool = False
+    ) -> dict[str, str]:
+        """Fetch one known SmartPlus event image without exposing its cloud URL."""
+        event = next(
+            (
+                item
+                for item in self._activity_history
+                if str(item.get("CaptureTime", "")) == capture_time
+            ),
+            None,
+        )
+        image_url = str(event.get("PicUrl", "")) if event else ""
+        parsed_url = urlsplit(image_url)
+        if (
+            parsed_url.scheme not in {"https", "http"}
+            or not parsed_url.netloc
+            or (parsed_url.scheme == "http" and not allow_http)
+        ):
+            raise AkuvoxApiClientError("The SmartPlus event image is unavailable")
+
+        image_host = (parsed_url.hostname or "").lower()
+        headers = {"accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8"}
+        if image_host == "akuvox.com" or image_host.endswith(".akuvox.com"):
+            headers.update(
+                {
+                    "x-auth-token": self._data.token,
+                    "user-agent": SMARTPLUS_USER_AGENT,
+                    "referer": f"https://{self._data.subdomain}.akuvox.com/",
+                }
+            )
+        try:
+            async with async_timeout.timeout(15):
+                async with self._session.get(
+                    image_url, headers=headers, allow_redirects=True, max_redirects=3
+                ) as response:
+                    content_type = response.content_type.lower()
+                    if response.status != 200:
+                        LOGGER.debug(
+                            "SmartPlus event image request failed with HTTP %s from %s",
+                            response.status,
+                            image_host,
+                        )
+                        raise AkuvoxApiClientError("SmartPlus did not provide an event image")
+                    if response.content_length is not None and response.content_length > 5_000_000:
+                        raise AkuvoxApiClientError("The SmartPlus event image is too large")
+                    image = await response.read()
+        except (aiohttp.ClientError, TimeoutError) as error:
+            raise AkuvoxApiClientCommunicationError(
+                "Unable to retrieve the SmartPlus event image"
+            ) from error
+        image_signatures = (b"\xff\xd8\xff", b"\x89PNG\r\n\x1a\n", b"GIF87a", b"GIF89a", b"RIFF")
+        if not image or len(image) > 5_000_000 or (
+            not content_type.startswith("image/") and not image.startswith(image_signatures)
+        ):
+            LOGGER.debug(
+                "SmartPlus event image response from %s was not a supported image (%s)",
+                image_host,
+                content_type,
+            )
+            raise AkuvoxApiClientError("The SmartPlus event image is unavailable")
+        if not content_type.startswith("image/"):
+            content_type = "image/webp" if image.startswith(b"RIFF") else "image/jpeg"
+        return {
+            "content_type": content_type,
+            "data": base64.b64encode(image).decode("ascii"),
+        }
+
+    async def async_get_panel_call_image(self, call_id: str) -> dict[str, str]:
+        """Fetch a known call image without exposing its SmartPlus URL."""
+        call = next((item for item in self._call_history if str(item.get("id", "")) == call_id), None)
+        image_url = str((call or {}).get("smallPicUrl") or (call or {}).get("picUrl") or "")
+        if not image_url:
+            raise AkuvoxApiClientError("The SmartPlus call image is unavailable")
+        # Reuse the authenticated, size-limited image retrieval path by using a
+        # short-lived synthetic activity record.
+        self._activity_history.append({"CaptureTime": f"call:{call_id}", "PicUrl": image_url})
+        try:
+            return await self.async_get_panel_activity_image(f"call:{call_id}")
+        finally:
+            self._activity_history = [item for item in self._activity_history if item.get("CaptureTime") != f"call:{call_id}"]
+
+    async def async_get_panel_temp_key_qr(self, key_id: str) -> dict[str, str]:
+        """Fetch a temporary key QR image without exposing its cloud URL."""
+        if self._data is None:
+            raise AkuvoxApiClientError("SmartPlus account data is unavailable")
+        key = next(
+            (
+                item
+                for item in self._data.door_keys_data
+                if str(item.get("key_id", "")) == str(key_id)
+            ),
+            None,
+        )
+        qr_code_url = str((key or {}).get("qr_code_url", ""))
+        if not qr_code_url:
+            raise AkuvoxApiClientError("The temporary key QR code is unavailable")
+        capture_time = f"temp-key:{key_id}"
+        self._activity_history.append({"CaptureTime": capture_time, "PicUrl": qr_code_url})
+        try:
+            # The documented QrCodeUrl response is sometimes an HTTP URL on
+            # a regional file host, unlike the HTTPS activity image URLs.
+            return await self.async_get_panel_activity_image(
+                capture_time, allow_http=True
+            )
+        finally:
+            self._activity_history = [
+                item for item in self._activity_history
+                if item.get("CaptureTime") != capture_time
+            ]
 
     def get_stream_url(self, camera_name: str) -> str | None:
         """Return a camera RTSP URL only after panel authorisation has succeeded."""
@@ -750,42 +1023,198 @@ class AkuvoxApiClient:
         raise AkuvoxApiClientError("Requested relay was not found")
 
     async def async_create_panel_temp_key(
-        self, begin_time: str, end_time: str, counts: int, dev_list: list[dict[str, str]]
+        self,
+        description: str,
+        begin_time: str,
+        end_time: str,
+        counts: int,
+        dev_list: list[dict[str, str]],
+        id_number: str = "",
+        license_plate: str = "",
+        uhf_card: str = "",
     ) -> None:
         """Create an end-user temporary key through Akuvox's documented API."""
-        if self._data is None or not self._data.host:
+        if self._data is None:
             raise AkuvoxApiClientError("SmartPlus account data is unavailable")
-        payload = {
-            "begin_time": begin_time,
-            "end_time": end_time,
-            "counts": counts,
-            # The end-user API accepts an empty floor selection, but still
-            # expects the floor object to be present in the request body.
-            "floor": {"isFollowUser": 0, "floors": []},
-            "dev_list": dev_list,
-        }
+        try:
+            start = datetime.strptime(begin_time, "%Y-%m-%d %H:%M:%S")
+            stop = datetime.strptime(end_time, "%Y-%m-%d %H:%M:%S")
+        except ValueError as error:
+            raise AkuvoxApiClientError("Invalid temporary-key validity period") from error
+        form_fields: list[tuple[str, str]] = [
+            ("DateFlag", ""),
+            ("StartDay", start.strftime("%Y-%m-%d")),
+            ("StopDay", stop.strftime("%Y-%m-%d")),
+            ("StartTime", start.strftime("%H:%M:%S")),
+            ("StopTime", stop.strftime("%H:%M:%S")),
+            ("SchedulerType", "3"),
+            ("AllowedTimes", str(counts)),
+            ("IDNumber", id_number or secrets.token_hex(3)),
+            ("Description", description),
+        ]
+        relay_index = 0
+        for device in dev_list:
+            for relay in str(device["relay"]).split(";"):
+                form_fields.extend(
+                    [
+                        (f"MAC[{relay_index}][MAC]", str(device["mac"])),
+                        (f"MAC[{relay_index}][Relay]", relay),
+                        (f"MAC[{relay_index}][SecurityRelay]", ""),
+                    ]
+                )
+                relay_index += 1
+        form_fields.extend(
+            [
+                ("LicensePlate", license_plate),
+                ("UhfCard", uhf_card),
+                ("IsFollowMyAccess", "1"),
+            ]
+        )
+        host = API_DOOR_LOG_HOST.replace("subdomain.", f"{self._data.subdomain}.")
         response = await self._async_api_wrapper(
             method="post",
-            url=f"https://{self._data.host}/{API_CREATE_TEMP_KEY}?token={self._data.token}",
-            data=json.dumps(payload),
-            headers={"content-type": "application/json", "x-auth-token": self._data.token},
+            url=f"https://{host}/{API_CREATE_TEMP_KEY}",
+            data=urlencode(form_fields),
+            headers={
+                "content-type": "application/x-www-form-urlencoded",
+                "x-auth-token": self._data.token,
+                "x-cloud-version": "6.4",
+                "x-cloud-lang": "en",
+                "user-agent": SMARTPLUS_USER_AGENT,
+                "origin": f"https://{self._data.subdomain}.akuvox.com",
+                "referer": f"https://{self._data.subdomain}.akuvox.com/",
+            },
         )
-        if not isinstance(response, dict):
+        if response is None:
             raise AkuvoxApiClientError("SmartPlus did not confirm temporary-key creation")
         await self.async_retrieve_temp_keys_data()
 
     async def async_delete_panel_temp_key(self, temp_key: str) -> None:
         """Delete an end-user temporary key through Akuvox's documented API."""
-        if self._data is None or not self._data.host:
+        if self._data is None:
             raise AkuvoxApiClientError("SmartPlus account data is unavailable")
+        host = API_DOOR_LOG_HOST.replace("subdomain.", f"{self._data.subdomain}.")
         response = await self._async_api_wrapper(
             method="post",
-            url=f"https://{self._data.host}/{API_DELETE_TEMP_KEY}?token={self._data.token}",
+            url=f"https://{host}/{API_DELETE_TEMP_KEY}?token={self._data.token}",
             data=json.dumps({"temp_key": [temp_key]}),
-            headers={"content-type": "application/json", "x-auth-token": self._data.token},
+            headers={
+                "content-type": "application/json",
+                "x-auth-token": self._data.token,
+                "x-cloud-version": "6.4",
+                "x-cloud-lang": "en",
+                "user-agent": SMARTPLUS_USER_AGENT,
+                "origin": f"https://{self._data.subdomain}.akuvox.com",
+                "referer": f"https://{self._data.subdomain}.akuvox.com/",
+            },
         )
-        if not isinstance(response, dict):
+        if response is None:
             raise AkuvoxApiClientError("SmartPlus did not confirm temporary-key deletion")
+        await self.async_retrieve_temp_keys_data()
+
+    async def async_edit_panel_temp_key(
+        self, key_id: str, description: str, begin_time: str, end_time: str,
+        counts: int, dev_list: list[dict[str, str]], id_number: str = "",
+        license_plate: str = "", uhf_card: str = "",
+    ) -> None:
+        """Update a temporary key through SmartPlus's documented v3 form API."""
+        if self._data is None:
+            raise AkuvoxApiClientError("SmartPlus account data is unavailable")
+        try:
+            start = datetime.strptime(begin_time, "%Y-%m-%d %H:%M:%S")
+            stop = datetime.strptime(end_time, "%Y-%m-%d %H:%M:%S")
+        except ValueError as error:
+            raise AkuvoxApiClientError("Invalid temporary-key validity period") from error
+        existing_key = next(
+            (
+                key
+                for key in self._data.door_keys_data
+                if str(key.get("key_id", "")) == str(key_id)
+            ),
+            None,
+        )
+        if existing_key is None:
+            raise AkuvoxApiClientError("Temporary key was not found")
+        fields = [
+            ("DateFlag", str(existing_key.get("date_flag", ""))),
+            ("StartDay", start.strftime("%Y-%m-%d")),
+            ("StopDay", stop.strftime("%Y-%m-%d")),
+            ("StartTime", start.strftime("%H:%M:%S")),
+            ("StopTime", stop.strftime("%H:%M:%S")),
+            ("SchedulerType", str(existing_key.get("scheduler_type", 3))),
+            ("AllowedTimes", str(counts)),
+            ("IDNumber", id_number),
+            ("Description", description),
+        ]
+        existing_doors = {
+            (str(door.get("mac", "")).casefold(), str(door.get("relay", ""))): door
+            for door in existing_key.get("doors", [])
+            if isinstance(door, dict)
+        }
+        index = 0
+        for device in dev_list:
+            for relay in str(device["relay"]).split(";"):
+                existing_door = existing_doors.get(
+                    (str(device["mac"]).casefold(), str(relay)), {}
+                )
+                try:
+                    # The panel exposes the device relay ID (zero-based), while
+                    # editPersonalTempKey expects SmartPlus's one-based value.
+                    # This differs from addPersonalTempKey, whose captured
+                    # request uses the device relay ID unchanged.
+                    api_relay = str(int(relay) + 1)
+                except ValueError as error:
+                    raise AkuvoxApiClientError("Invalid temporary-key relay") from error
+                fields.extend([
+                    (f"MAC[{index}][MAC]", str(device["mac"])),
+                    (f"MAC[{index}][Relay]", api_relay),
+                    (
+                        f"MAC[{index}][SecurityRelay]",
+                        str(existing_door.get("security_relay", "0")),
+                    ),
+                ])
+                index += 1
+        fields.extend([
+            ("LicensePlate", license_plate),
+            ("UhfCard", uhf_card),
+            ("ID", key_id),
+            ("IsFollowMyAccess", str(existing_key.get("is_follow_my_access", 1))),
+        ])
+        host = API_DOOR_LOG_HOST.replace("subdomain.", f"{self._data.subdomain}.")
+        LOGGER.info(
+            "Submitting SmartPlus temporary-key update for key ID %s (%s relay entries)",
+            key_id,
+            index,
+        )
+        try:
+            response = await self._async_api_wrapper(
+                "post",
+                f"https://{host}/{API_EDIT_TEMP_KEY}",
+                urlencode(fields),
+                {
+                    "content-type": "application/x-www-form-urlencoded",
+                    "x-auth-token": self._data.token,
+                    "x-cloud-version": "6.4",
+                    "x-cloud-lang": "en",
+                    "user-agent": SMARTPLUS_USER_AGENT,
+                    "origin": f"https://{self._data.subdomain}.akuvox.com",
+                    "referer": f"https://{self._data.subdomain}.akuvox.com/",
+                },
+            )
+        except AkuvoxApiClientError as error:
+            LOGGER.warning(
+                "SmartPlus temporary-key update request failed for key ID %s: %s",
+                key_id,
+                error,
+            )
+            raise
+        if response is None:
+            LOGGER.warning(
+                "SmartPlus temporary-key update received no confirmation for key ID %s",
+                key_id,
+            )
+            raise AkuvoxApiClientError("SmartPlus did not confirm temporary-key update")
+        LOGGER.info("SmartPlus temporary-key update succeeded for key ID %s", key_id)
         await self.async_retrieve_temp_keys_data()
 
     async def async_get_personal_door_log(self):
@@ -833,6 +1262,7 @@ class AkuvoxApiClient:
             "MAC": record.get("mac", ""),
             "Relay": record.get("relayName", ""),
         }
+
     ###################
     # Request Methods #
     ###################
@@ -884,8 +1314,13 @@ class AkuvoxApiClient:
             ) from exception
         except AkuvoxApiClientAuthenticationError:
             if not allow_token_refresh or not failed_token:
+                self._report_authentication_failure()
                 raise
-            await self.async_refresh_token(failed_token)
+            try:
+                await self.async_refresh_token(failed_token)
+            except AkuvoxApiClientAuthenticationError:
+                self._report_authentication_failure()
+                raise
             return await self._async_api_wrapper(
                 method,
                 self._replace_request_token(url, failed_token),
@@ -901,6 +1336,13 @@ class AkuvoxApiClient:
                 f"Unexpected SmartPlus API error: {type(exception).__name__}"
             ) from exception
         return None
+
+    def _report_authentication_failure(self) -> None:
+        """Start reauthentication and surface the failure to the user."""
+        if self._entry is None:
+            return
+        async_report_authentication_failure(self.hass, self._entry)
+        self._entry.async_start_reauth_if_available(self.hass)
 
     def _replace_request_token(self, value, previous_token: str):
         """Replace an expired token in a URL, headers, or JSON request body."""
@@ -960,10 +1402,23 @@ class AkuvoxApiClient:
                 return None
 
             # US API format (err_code instead of result)
-            if "err_code" in json_data and str(json_data["err_code"]) == "0":
-                if "datas" in json_data:
-                    return json_data["datas"]
-                return json_data
+            if "err_code" in json_data:
+                if str(json_data["err_code"]) == "0":
+                    if "datas" in json_data:
+                        return json_data["datas"]
+                    return json_data
+                message = str(json_data.get("message", "No message returned"))
+                if API_REFRESH_TOKEN in url:
+                    raise AkuvoxApiClientAuthenticationError(
+                        "SmartPlus rejected the session refresh "
+                        f"({json_data['err_code']}): {message}"
+                    )
+                LOGGER.warning(
+                    "SmartPlus request was rejected: err_code=%s, message=%s",
+                    json_data["err_code"],
+                    message,
+                )
+                return None
 
             # Temp key requests
             if "code" in json_data:
@@ -983,7 +1438,7 @@ class AkuvoxApiClient:
                 else:
                     LOGGER.error("❌ SmartPlus API returned error code %s", json_data["code"])
 
-                return []
+                return None
 
             LOGGER.warning("🤨 Unexpected SmartPlus API response schema")
         else:

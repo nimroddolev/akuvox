@@ -31,6 +31,7 @@ class TestDataAndHelpersE2E(unittest.IsolatedAsyncioTestCase):
                 "token": "new-session",
                 "rtmp_server": "fallback.example:1935",
                 "vrtsp_server": "rtsp.example:8554",
+                "rtsp_server": "documented-rtsp.example:554",
             }
         )
         self.data.parse_userconf_data(
@@ -50,7 +51,7 @@ class TestDataAndHelpersE2E(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(self.data.project_name, "Home")
         self.assertEqual(len(self.data.camera_data), 1)
-        self.assertIn("rtsp.example:8554", self.data.camera_data[0]["video_url"])
+        self.assertIn("documented-rtsp.example:554", self.data.camera_data[0]["video_url"])
         self.assertIn("safe%2Fpassword", self.data.camera_data[0]["video_url"])
         self.assertEqual(self.data.door_relay_data[0]["relay_id"], "2")
 

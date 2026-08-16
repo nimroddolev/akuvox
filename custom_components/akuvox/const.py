@@ -467,12 +467,25 @@ API_SERVERS_LIST = "servers_list"
 API_REFRESH_TOKEN = "refresh_token"
 TOKEN_REFRESH_INTERVAL = timedelta(hours=6)
 TOKEN_REFRESHED_AT = "token_refreshed_at"
+TOKEN_UPDATE_TYPE = "token_update_type"
+TOKEN_UPDATE_REFRESHED = "refreshed"
+TOKEN_UPDATE_CHANGED = "changed"
 DOOR_LOG_POLL_INTERVAL = 60
 DOOR_LOG_MAX_BACKOFF = 900
 DOOR_LOG_MIN_POLL_INTERVAL = 30
 DOOR_LOG_MIN_MAX_BACKOFF = 60
 DOOR_LOG_MAX_CONFIGURED_BACKOFF = 3600
 ACTIVITY_ENDPOINT_TYPE = "activity_endpoint_type"
+PANEL_URL_PATH = "akuvox-smartplus"
+PANEL_STATIC_URL = "/api/akuvox_panel"
+PANEL_ENABLED = "panel_enabled"
+PANEL_ADMIN_ONLY = "panel_admin_only"
+MIRROR_ACTIVITY_IMAGES = "mirror_activity_images"
+DEBUG_LOGGING = "debug_logging"
+PANEL_RUNTIME_KEY = "_panel_registered"
+PANEL_RUNTIME_DOMAIN = f"{DOMAIN}_panel"
+PANEL_DATA_UPDATED_EVENT = f"{DOMAIN}_panel_data_updated"
+ACTIVITY_HISTORY_LIMIT = 100
 API_SMS_LOGIN = "sms_login"
 API_USERCONF = "userconf"
 API_OPENDOOR = "opendoor"
@@ -481,11 +494,16 @@ API_OPENDOOR = "opendoor"
 USER_AGENT = "VBell/6.61.2 (iPhone; iOS 16.6; Scale/3.00)"
 SMARTPLUS_USER_AGENT = "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) SmartPlus/6.2"
 SMARTPLUS_USER_AGENT_ALT = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) SmartPlus/6.2"
+SMARTPLUS_REFRESH_USER_AGENT = "VBell/7.50.3 (iPhone; iOS 26.6; Scale/3.00)"
 
 API_APP_HOST = "subdomain.akuvox.com/web-server/v3/app/"
 API_DOOR_LOG_HOST = "backend.subdomain.akuvox.com"
 API_GET_PERSONAL_TEMP_KEY_LIST = "tempKey/getPersonalTempKeyList?row=20&page=1"
+API_CREATE_TEMP_KEY = "web-server/v3/app/community/tempKey/addPersonalTempKey"
+API_EDIT_TEMP_KEY = "web-server/v3/app/community/tempKey/editPersonalTempKey"
+API_DELETE_TEMP_KEY = "opendoor/tempkey/delete"
 API_GET_PERSONAL_DOOR_LOG = "web-server/v4/smartplus/community/log/master/getDoorLog?row=20&page=1"
+API_GET_CALL_LOG = "web-server/v4/smartplus/community/log/master/getCallLog?row=20&page=1"
 
 TEMP_KEY_QR_HOST = "subdomain.akuvox.com"
 

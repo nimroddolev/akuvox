@@ -41,8 +41,6 @@ async def async_setup_entry(
     if not isinstance(door_keys_data, list):
         LOGGER.warning("Saved temporary door key list was missing or invalid")
         return
-    date_format = "%d-%m-%Y %H:%M:%S"
-
     entities: list[AkuvoxTemporaryDoorKey] = []
     for door_key_data in door_keys_data:
         if not isinstance(door_key_data, dict):
@@ -52,8 +50,8 @@ async def async_setup_entry(
             key_id = door_key_data["key_id"]
             description = door_key_data["description"]
             key_code = door_key_data["key_code"]
-            begin_time = datetime.strptime(door_key_data["begin_time"], date_format)
-            end_time = datetime.strptime(door_key_data["end_time"], date_format)
+            begin_time = _parse_temp_key_time(door_key_data["begin_time"])
+            end_time = _parse_temp_key_time(door_key_data["end_time"])
             allowed_times = door_key_data["allowed_times"]
             access_times = door_key_data["access_times"]
             qr_code_url = door_key_data["qr_code_url"]
@@ -77,6 +75,17 @@ async def async_setup_entry(
         )
 
     async_add_entities(entities)
+
+
+def _parse_temp_key_time(value: object) -> datetime:
+    """Parse both legacy SmartPlus and normalised temporary-key timestamps."""
+    text = str(value).strip()
+    for format_string in ("%Y-%m-%d %H:%M:%S", "%d-%m-%Y %H:%M:%S"):
+        try:
+            return datetime.strptime(text, format_string)
+        except ValueError:
+            continue
+    raise ValueError(f"Unsupported temporary-key timestamp: {text!r}")
 
 class AkuvoxTemporaryDoorKey(SensorEntity, AkuvoxEntity):
     """Akuvox temporary door key class."""
