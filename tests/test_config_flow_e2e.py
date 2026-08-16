@@ -67,6 +67,10 @@ class _ReauthClient:
 
     def __init__(self) -> None:
         self.async_sms_sign_in = AsyncMock(return_value=True)
+        self.async_make_servers_list_request = AsyncMock(return_value=True)
+        self.async_retrieve_user_data = AsyncMock(return_value=True)
+        self.async_retrieve_device_data = AsyncMock(return_value=True)
+        self.async_retrieve_temp_keys_data = AsyncMock(return_value=True)
 
     def get_devices_json(self) -> dict:
         return {
@@ -83,8 +87,11 @@ class _ReauthClient:
 class TestReauthFlowE2E(unittest.IsolatedAsyncioTestCase):
     """Verify reauthentication renewed the active config entry in place."""
 
+    @patch("custom_components.akuvox.config_flow.async_clear_authentication_failure")
     @patch("custom_components.akuvox.config_flow.async_store_credentials", new_callable=AsyncMock)
-    async def test_sms_code_updated_and_reloaded_existing_entry(self, store_credentials) -> None:
+    async def test_sms_code_updated_and_reloaded_existing_entry(
+        self, store_credentials, clear_authentication_failure
+    ) -> None:
         """A valid reauth SMS code replaced credentials without creating an entry."""
         flow = AkuvoxFlowHandler()
         flow.hass = _Hass()
@@ -105,6 +112,43 @@ class TestReauthFlowE2E(unittest.IsolatedAsyncioTestCase):
         store_credentials.assert_awaited_once_with(
             flow.hass, flow._reauth_entry.entry_id, "new-auth-token", "new-session-token"
         )
+        clear_authentication_failure.assert_called_once_with(flow.hass, flow._reauth_entry)
         self.assertEqual(update["data"]["camera_data"], [{"name": "Lobby"}])
         self.assertIn("token_refreshed_at", update["data"])
         self.assertEqual(update["reason"], "reauth_successful")
+
+    @patch("custom_components.akuvox.config_flow.async_clear_authentication_failure")
+    @patch("custom_components.akuvox.config_flow.async_store_credentials", new_callable=AsyncMock)
+    async def test_current_tokens_updated_and_reloaded_existing_entry(
+        self, store_credentials, clear_authentication_failure
+    ) -> None:
+        """A validated token pair replaced credentials without creating an entry."""
+        flow = AkuvoxFlowHandler()
+        flow.hass = _Hass()
+        flow._reauth_entry = _ReauthEntry()
+        flow.data = {"country_code": "972", "phone_number": "5551234", "subdomain": "ecloud"}
+        flow.akuvox_api_client = _ReauthClient()
+        flow.async_update_reload_and_abort = MagicMock(return_value={"type": "abort"})
+
+        result = await flow.async_step_reauth_tokens(
+            {"auth_token": "new-auth-token", "token": "new-session-token"}
+        )
+
+        self.assertEqual(result, {"type": "abort"})
+        flow.akuvox_api_client.async_make_servers_list_request.assert_awaited_once_with(
+            hass=flow.hass,
+            auth_token="new-auth-token",
+            token="new-session-token",
+            country_code="972",
+            phone_number="5551234",
+            subdomain="ecloud",
+        )
+        flow.akuvox_api_client.async_retrieve_user_data.assert_awaited_once_with(
+            start_polling=False
+        )
+        flow.akuvox_api_client.async_retrieve_device_data.assert_not_awaited()
+        flow.akuvox_api_client.async_retrieve_temp_keys_data.assert_not_awaited()
+        store_credentials.assert_awaited_once_with(
+            flow.hass, flow._reauth_entry.entry_id, "new-auth-token", "new-session-token"
+        )
+        clear_authentication_failure.assert_called_once_with(flow.hass, flow._reauth_entry)

@@ -22,6 +22,7 @@ from .const import(
     LOGGER,
     DATA_STORAGE_KEY
 )
+from .repairs import async_report_authentication_failure
 
 
 # https://developers.home-assistant.io/docs/integration_fetching_data#coordinated-single-api-poll-for-data-for-all-entities
@@ -55,7 +56,8 @@ class AkuvoxDataUpdateCoordinator(DataUpdateCoordinator):
                     await store.async_save(data)
 
         except AkuvoxApiClientAuthenticationError as exception:
+            if entry := getattr(self.client, "config_entry", None):
+                async_report_authentication_failure(self.hass, entry)
             raise ConfigEntryAuthFailed(exception) from exception
         except AkuvoxApiClientError as exception:
             raise UpdateFailed(exception) from exception
-

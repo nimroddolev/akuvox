@@ -7,11 +7,17 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
-from custom_components.akuvox import async_reload_entry, async_setup_entry, async_unload_entry
+from custom_components.akuvox import (
+    async_reload_entry,
+    async_setup,
+    async_setup_entry,
+    async_unload_entry,
+)
 from custom_components.akuvox.api import (
     AkuvoxApiClientAuthenticationError,
     AkuvoxApiClientCommunicationError,
 )
+from custom_components.akuvox import repairs
 from custom_components.akuvox.const import DOMAIN
 from custom_components.akuvox.coordinator import AkuvoxDataUpdateCoordinator
 
@@ -50,6 +56,13 @@ class _Coordinator:
         await self.first_refresh()
 
 
+class _UnavailableCoordinator(_Coordinator):
+    """Models a temporary SmartPlus transport outage during startup."""
+
+    async def async_config_entry_first_refresh(self) -> None:
+        raise UpdateFailed("Timed out fetching SmartPlus API data")
+
+
 class _Entry:
     """Minimal config entry suitable for the integration lifecycle."""
 
@@ -84,6 +97,10 @@ class _ConfigEntries:
     async def async_reload(self, entry_id: str) -> None:
         await self.reloaded(entry_id)
 
+    def async_entries(self, _domain: str):
+        """Return no additional entries for the isolated lifecycle harness."""
+        return []
+
 
 class _Hass:
     """Provides the subset of Home Assistant used by lifecycle functions."""
@@ -96,6 +113,13 @@ class _Hass:
 class TestIntegrationLifecycleE2E(unittest.IsolatedAsyncioTestCase):
     """Verify setup, routine token updates, reload, and unload work together."""
 
+    async def test_domain_setup_registered_panel_commands_without_an_account(self) -> None:
+        """The empty-account panel could request its WebSocket data."""
+        hass = _Hass()
+        with patch("custom_components.akuvox.async_register_websocket_api") as register:
+            self.assertTrue(await async_setup(hass, {}))
+        register.assert_called_once_with(hass)
+
     async def test_setup_reload_and_unload_completed_cleanly(self) -> None:
         """Integration lifecycle registered and removed every managed resource."""
         hass = _Hass()
@@ -105,6 +129,9 @@ class TestIntegrationLifecycleE2E(unittest.IsolatedAsyncioTestCase):
             patch("custom_components.akuvox.AkuvoxApiClient", _Client),
             patch("custom_components.akuvox.AkuvoxDataUpdateCoordinator", _Coordinator),
             patch("custom_components.akuvox.async_get_clientsession", return_value=object()),
+            patch("custom_components.akuvox.async_register_websocket_api"),
+            patch("custom_components.akuvox.async_refresh_panel", new=AsyncMock()),
+            patch("custom_components.akuvox.async_clear_authentication_failure"),
         ):
             self.assertTrue(await async_setup_entry(hass, entry))
 
@@ -119,9 +146,28 @@ class TestIntegrationLifecycleE2E(unittest.IsolatedAsyncioTestCase):
         await async_reload_entry(hass, entry)
         hass.config_entries.reloaded.assert_awaited_once_with(entry.entry_id)
 
-        self.assertTrue(await async_unload_entry(hass, entry))
+        with patch("custom_components.akuvox.async_refresh_panel", new=AsyncMock()):
+            self.assertTrue(await async_unload_entry(hass, entry))
         self.assertTrue(coordinator.client.stopped)
         self.assertNotIn(entry.entry_id, hass.data[DOMAIN])
+
+    async def test_setup_kept_panel_available_when_cloud_was_temporarily_unavailable(self) -> None:
+        """A transport timeout did not put the whole integration into retry-only state."""
+        hass = _Hass()
+        entry = _Entry()
+        with (
+            patch("custom_components.akuvox.async_load_and_migrate_credentials", new=AsyncMock(return_value={})),
+            patch("custom_components.akuvox.AkuvoxApiClient", _Client),
+            patch("custom_components.akuvox.AkuvoxDataUpdateCoordinator", _UnavailableCoordinator),
+            patch("custom_components.akuvox.async_get_clientsession", return_value=object()),
+            patch("custom_components.akuvox.async_register_websocket_api"),
+            patch("custom_components.akuvox.async_refresh_panel", new=AsyncMock()) as refresh_panel,
+            patch("custom_components.akuvox.async_clear_authentication_failure"),
+        ):
+            self.assertTrue(await async_setup_entry(hass, entry))
+
+        self.assertIn(entry.entry_id, hass.data[DOMAIN])
+        refresh_panel.assert_awaited_once_with(hass)
 
 
 class _DataClient:
@@ -160,3 +206,25 @@ class TestCoordinatorE2E(unittest.IsolatedAsyncioTestCase):
             await auth_coordinator._async_update_data()
         with self.assertRaises(UpdateFailed):
             await network_coordinator._async_update_data()
+
+
+class TestAuthenticationRepairE2E(unittest.TestCase):
+    """Verify Home Assistant owns the single reauthentication repair."""
+
+    def test_auth_failure_kept_panel_state_without_creating_a_second_repair(self) -> None:
+        """The custom panel state did not duplicate Home Assistant's repair."""
+        hass = MagicMock()
+        hass.data = {}
+        entry = MagicMock(entry_id="entry-id")
+
+        with (
+            patch("custom_components.akuvox.repairs.ir.async_create_issue") as create_issue,
+            patch("custom_components.akuvox.repairs.ir.async_delete_issue") as delete_issue,
+        ):
+            repairs.async_report_authentication_failure(hass, entry)
+
+        create_issue.assert_not_called()
+        delete_issue.assert_called_once_with(
+            hass, DOMAIN, "reauthentication_required_entry-id"
+        )
+        self.assertTrue(repairs.authentication_failed(hass, "entry-id"))

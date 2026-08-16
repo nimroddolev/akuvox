@@ -5,19 +5,25 @@ https://github.com/nimroddolev/akuvox
 """
 from __future__ import annotations
 
+import logging
+
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.update_coordinator import UpdateFailed
 
 from .config_flow import AkuvoxOptionsFlowHandler
 from .api import AkuvoxApiClient
 from .const import (
     DOMAIN,
+    DEBUG_LOGGING,
     LOGGER
 )
 from .coordinator import AkuvoxDataUpdateCoordinator
 from .credentials import async_load_and_migrate_credentials
+from .panel import async_refresh_panel, async_register_websocket_api
+from .repairs import async_clear_authentication_failure
 
 PLATFORMS: list[Platform] = [
     Platform.CAMERA,
@@ -25,11 +31,19 @@ PLATFORMS: list[Platform] = [
     Platform.SENSOR
 ]
 
+
+async def async_setup(hass: HomeAssistant, _config: dict) -> bool:
+    """Set up shared Akuvox resources before any account is configured."""
+    async_register_websocket_api(hass)
+    return True
+
+
 # https://developers.home-assistant.io/docs/config_entries_index/#setting-up-an-entry
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up this integration using UI."""
     credentials = await async_load_and_migrate_credentials(hass, entry)
     hass.data.setdefault(DOMAIN, {})
+    async_register_websocket_api(hass)
     hass.data[DOMAIN][entry.entry_id] = coordinator = AkuvoxDataUpdateCoordinator(
         hass=hass,
         client=AkuvoxApiClient(
@@ -40,16 +54,40 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         ),
     )
     await async_update_configuration(hass=hass, entry=entry)
+    _configure_debug_logging(hass)
 
     # https://developers.home-assistant.io/docs/integration_fetching_data#coordinated-single-api-poll-for-data-for-all-entities
-    await coordinator.async_config_entry_first_refresh()
+    try:
+        await coordinator.async_config_entry_first_refresh()
+    except UpdateFailed as error:
+        # SmartPlus's cloud endpoints are occasionally slow or unavailable.
+        # Do not hold up Home Assistant startup (and therefore the sidebar
+        # panel) for a transient transport failure. Authentication failures
+        # remain ConfigEntryAuthFailed and are still handled by HA's reauth
+        # flow. The coordinator will recover on its next requested refresh.
+        LOGGER.warning(
+            "SmartPlus was unavailable during startup; continuing with cached "
+            "integration state: %s",
+            error,
+        )
+    async_clear_authentication_failure(hass, entry)
     coordinator.client.async_start_proactive_token_refresh()
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    await async_refresh_panel(hass)
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
     entry.async_on_unload(coordinator.client.async_stop_proactive_token_refresh)
 
     return True
+
+
+def _configure_debug_logging(hass: HomeAssistant) -> None:
+    """Apply the persisted diagnostic level across Akuvox accounts."""
+    enabled = any(
+        bool(item.options.get(DEBUG_LOGGING, False))
+        for item in hass.config_entries.async_entries(DOMAIN)
+    )
+    LOGGER.setLevel(logging.DEBUG if enabled else logging.INFO)
 
 
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -64,6 +102,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data[DOMAIN][entry.entry_id].client.async_stop_proactive_token_refresh()
     if unloaded := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
         hass.data[DOMAIN].pop(entry.entry_id)
+        await async_refresh_panel(hass)
     return unloaded
 
 

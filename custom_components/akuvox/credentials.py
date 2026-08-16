@@ -32,8 +32,21 @@ async def async_store_credentials(
     """Persist credentials outside config-entry data and options."""
     store = _store(hass)
     credentials = await store.async_load() or {}
-    credentials[entry_id] = {"auth_token": auth_token, "token": token}
+    credentials[entry_id] = {
+        **credentials.get(entry_id, {}),
+        "auth_token": auth_token,
+        "token": token,
+    }
     await store.async_save(credentials)
+
+
+async def async_store_sip_credentials(
+    hass: HomeAssistant, entry_id: str, sip_credentials: dict[str, str]
+) -> None:
+    """Persist post-login SIP credentials without exposing them in entry data."""
+    credentials = await _store(hass).async_load() or {}
+    credentials[entry_id] = {**credentials.get(entry_id, {}), **sip_credentials}
+    await _store(hass).async_save(credentials)
 
 
 async def async_get_credentials(hass: HomeAssistant, entry_id: str) -> dict[str, str]:

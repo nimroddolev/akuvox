@@ -13,6 +13,7 @@ from custom_components.akuvox.api import (
     AkuvoxApiClient,
     AkuvoxApiClientAuthenticationError,
 )
+from custom_components.akuvox.const import SMARTPLUS_REFRESH_USER_AGENT
 
 
 class _Response:
@@ -123,6 +124,10 @@ class TestSmartPlusSessionRefreshE2E(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(self.session.requests[1]["method"], "post")
         self.assertEqual(
+            self.session.requests[1]["headers"]["user-agent"],
+            SMARTPLUS_REFRESH_USER_AGENT,
+        )
+        self.assertEqual(
             self.session.requests[2]["headers"]["x-auth-token"], "replacement-token"
         )
         self.assertTrue(
@@ -133,7 +138,10 @@ class TestSmartPlusSessionRefreshE2E(unittest.IsolatedAsyncioTestCase):
         """An invalid refresh credential raised an auth error without a loop."""
         client = self._client([_Response(401, {}), _Response(401, {})])
 
-        with self.assertRaises(AkuvoxApiClientAuthenticationError):
+        with (
+            patch("custom_components.akuvox.api.async_report_authentication_failure"),
+            self.assertRaises(AkuvoxApiClientAuthenticationError),
+        ):
             await client._async_api_wrapper(
                 "get",
                 "https://api.example/userconf?token=expired-token",
@@ -142,6 +150,21 @@ class TestSmartPlusSessionRefreshE2E(unittest.IsolatedAsyncioTestCase):
             )
 
         self.assertEqual(len(self.session.requests), 2)
+
+    async def test_refresh_error_code_reported_an_authentication_failure(self) -> None:
+        """The refresh endpoint's JSON error did not look like a malformed response."""
+        client = self._client(
+            [_Response(200, {"err_code": "1000100003", "message": "refreshToken error."})]
+        )
+
+        with (
+            patch("custom_components.akuvox.api.async_report_authentication_failure"),
+            self.assertRaisesRegex(
+                AkuvoxApiClientAuthenticationError,
+                r"1000100003.*refreshToken error",
+            ),
+        ):
+            await client.async_refresh_token("expired-token")
 
     @patch("custom_components.akuvox.api.async_store_credentials", new_callable=AsyncMock)
     async def test_scheduled_refresh_persisted_a_new_token(self, store_credentials) -> None:
@@ -159,7 +182,8 @@ class TestSmartPlusSessionRefreshE2E(unittest.IsolatedAsyncioTestCase):
         """A rejected renewal prompted Home Assistant reauthentication once."""
         client = self._client([_Response(401, {})])
 
-        await client._async_proactive_token_refresh(None)
+        with patch("custom_components.akuvox.api.async_report_authentication_failure"):
+            await client._async_proactive_token_refresh(None)
 
         self.assertTrue(self.entry.reauth_started)
         self.assertEqual(len(self.session.requests), 1)

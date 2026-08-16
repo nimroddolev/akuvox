@@ -11,6 +11,7 @@ import voluptuous as vol
 from .api import AkuvoxApiClient
 from .coordinator import AkuvoxDataUpdateCoordinator
 from .credentials import async_get_credentials, async_store_credentials
+from .repairs import async_clear_authentication_failure
 
 from .const import (
     DOMAIN,
@@ -26,6 +27,9 @@ from .const import (
     DOOR_LOG_MIN_POLL_INTERVAL,
     DOOR_LOG_MIN_MAX_BACKOFF,
     DOOR_LOG_MAX_CONFIGURED_BACKOFF,
+    PANEL_ADMIN_ONLY,
+    PANEL_ENABLED,
+    MIRROR_ACTIVITY_IMAGES,
 )
 from .helpers import AkuvoxHelpers
 
@@ -96,11 +100,18 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             hass=self.hass,
             entry=None,
         )
+        return self.async_show_menu(
+            step_id="reauth",
+            menu_options=["reauth_sms", "reauth_tokens"],
+        )
+
+    async def async_step_reauth_sms(self, user_input=None):
+        """Send an SMS code after the user selected SMS reauthentication."""
         try:
             code_sent = await self.akuvox_api_client.async_send_sms(
                 self.hass,
-                country_code,
-                phone_number,
+                self.data["country_code"],
+                self.data["phone_number"],
                 self.data["subdomain"],
             )
         except Exception as error:
@@ -109,7 +120,7 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         if code_sent:
             return await self.async_step_reauth_confirm()
         return self.async_show_form(
-            step_id="reauth_confirm",
+            step_id="reauth_sms",
             data_schema=vol.Schema({}),
             errors={"base": "cannot_connect"},
         )
@@ -147,6 +158,51 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                 errors={"base": "invalid_auth"},
             )
 
+        return await self._async_finish_reauthentication()
+
+    async def async_step_reauth_tokens(self, user_input=None):
+        """Validate and replace the saved SmartPlus token pair."""
+        schema = vol.Schema(
+            {
+                vol.Required("auth_token"): str,
+                vol.Required("token"): str,
+            }
+        )
+        if user_input is None:
+            return self.async_show_form(step_id="reauth_tokens", data_schema=schema, errors={})
+
+        auth_token = str(user_input["auth_token"]).strip()
+        token = str(user_input["token"]).strip()
+        try:
+            signed_in = await self.akuvox_api_client.async_make_servers_list_request(
+                hass=self.hass,
+                auth_token=auth_token,
+                token=token,
+                country_code=self.data["country_code"],
+                phone_number=self.data["phone_number"],
+                subdomain=self.data["subdomain"],
+            )
+            if signed_in:
+                # Match the fresh token-based setup flow.  The server-list
+                # response can update session details, so validate the new
+                # credentials through the full account bootstrap before
+                # replacing the existing entry's private credentials.
+                signed_in = await self.akuvox_api_client.async_retrieve_user_data(
+                    start_polling=False
+                )
+        except Exception as error:
+            LOGGER.warning("SmartPlus token reauthentication failed: %s", error)
+            signed_in = False
+        if not signed_in:
+            return self.async_show_form(
+                step_id="reauth_tokens",
+                data_schema=schema,
+                errors={"base": "invalid_auth"},
+            )
+        return await self._async_finish_reauthentication()
+
+    async def _async_finish_reauthentication(self):
+        """Persist validated credentials and reload the existing config entry."""
         devices = self.akuvox_api_client.get_devices_json()
         data = dict(self._reauth_entry.data)
         options = dict(self._reauth_entry.options)
@@ -172,6 +228,7 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                 "door_keys_data": devices["door_keys_data"],
             }
         )
+        async_clear_authentication_failure(self.hass, self._reauth_entry)
         return self.async_update_reload_and_abort(
             self._reauth_entry,
             data=data,
@@ -584,6 +641,18 @@ class AkuvoxOptionsFlowHandler(config_entries.OptionsFlow):
                     max=DOOR_LOG_MAX_CONFIGURED_BACKOFF,
                 ),
             ),
+            vol.Required(
+                PANEL_ENABLED,
+                default=self.get_data_key_value(PANEL_ENABLED, True),
+            ): bool,
+            vol.Required(
+                PANEL_ADMIN_ONLY,
+                default=self.get_data_key_value(PANEL_ADMIN_ONLY, True),
+            ): bool,
+            vol.Required(
+                MIRROR_ACTIVITY_IMAGES,
+                default=self.get_data_key_value(MIRROR_ACTIVITY_IMAGES, True),
+            ): bool,
         })
 
         # Show the form with the current options
