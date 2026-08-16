@@ -49,6 +49,26 @@
                 "data": {
                     "sms_code": "SMS Code"
                 }
+            },
+            "reauth": {
+                "title": "Reauthenticate Akuvox SmartPlus",
+                "description": "Choose how you would like to restore this SmartPlus account.",
+                "menu_options": {
+                    "reauth_sms": "Verify with an SMS code",
+                    "reauth_tokens": "Enter current app tokens"
+                }
+            },
+            "reauth_sms": {
+                "title": "Reauthenticate with SMS",
+                "description": "Request a verification code for the phone number registered with SmartPlus."
+            },
+            "reauth_tokens": {
+                "title": "Reauthenticate with app tokens",
+                "description": "Enter the current token pair from the SmartPlus app.",
+                "data": {
+                    "auth_token": "Authentication token",
+                    "token": "Session token"
+                }
             }
         },
         "error": {
@@ -56,7 +76,14 @@
             "invalid_auth": "The SMS code was invalid or expired."
         },
         "abort": {
-            "reauth_missing_account_data": "The saved account does not include a phone number and country code. Reconfigure the integration."
+            "reauth_missing_account_data": "The saved account does not include a phone number and country code. Reconfigure the integration.",
+            "reauth_successful": "Akuvox SmartPlus was reauthenticated successfully."
+        }
+    },
+    "issues": {
+        "reauthentication_required": {
+            "title": "Re-authentication required for {entry_title}",
+            "description": "Akuvox SmartPlus no longer accepts this account's session. Open the Akuvox integration and complete re-authentication to restore access."
         }
     },
     "options": {
@@ -72,7 +99,8 @@
                     "subdomain": "Manually set the regional API subdomain",
                     "event_screenshot_options": "Screenshot URLS for `akuvox_door_update` events:",
                     "door_log_poll_interval": "Door-log polling interval (seconds)",
-                    "door_log_max_backoff": "Maximum door-log retry backoff (seconds)"
+                    "door_log_max_backoff": "Maximum door-log retry backoff (seconds)",
+                    "mirror_activity_images": "Mirror activity images"
                 }
             }
         }
