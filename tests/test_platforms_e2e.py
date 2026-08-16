@@ -2,10 +2,11 @@
 from __future__ import annotations
 
 import unittest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 from custom_components.akuvox import button, camera, sensor
 from custom_components.akuvox.const import DOMAIN
+from homeassistant.components.camera.const import StreamType
 
 
 class _Store:
@@ -132,3 +133,41 @@ class TestPlatformSetupE2E(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(relay_entity.unique_id, "Lobby, 1")
         self.assertTrue(key_entity.is_key_active())
         client.async_make_opendoor_request.assert_awaited_once()
+
+    def test_camera_preserved_the_configured_udp_transport(self) -> None:
+        """Camera entities retained their RTSP transport configuration."""
+        with patch("custom_components.akuvox.camera.GenericCamera.__init__") as init:
+            camera.AkuvoxCameraEntity(_Hass(), "Lobby", "rtsp://example/lobby")
+
+        config = init.call_args.kwargs["device_info"]
+        self.assertEqual(config["advanced"]["rtsp_transport"], "udp")
+
+    def test_camera_offered_hls_without_broken_webrtc_audio(self) -> None:
+        """Akuvox cameras avoided go2rtc's failing WebRTC audio producer."""
+        camera_entity = camera.AkuvoxCameraEntity(
+            _Hass(), "Lobby", "rtsp://example/lobby"
+        )
+
+        self.assertEqual(
+            camera_entity.camera_capabilities.frontend_stream_types,
+            {StreamType.HLS},
+        )
+        self.assertFalse(camera_entity.use_stream_for_stills)
+
+    async def test_camera_snapshot_used_direct_udp_ffmpeg_capture(self) -> None:
+        """Snapshots bypassed the cloud RTSP proxy's broken MJPEG transport."""
+        entity = camera.AkuvoxCameraEntity(_Hass(), "Lobby", "rtsp://example/lobby")
+        with patch(
+            "custom_components.akuvox.camera.async_get_image",
+            new=AsyncMock(return_value=b"jpeg-data"),
+        ) as get_image:
+            self.assertEqual(await entity.async_camera_image(640, 360), b"jpeg-data")
+
+        get_image.assert_awaited_once_with(
+            entity.hass,
+            "rtsp://example/lobby",
+            output_format=ANY,
+            extra_cmd="-rtsp_transport udp",
+            width=640,
+            height=360,
+        )

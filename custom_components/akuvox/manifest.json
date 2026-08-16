@@ -7,7 +7,10 @@
   "config_flow": true,
   "dependencies": [
     "button",
+    "ffmpeg",
+    "frontend",
     "generic",
+    "panel_custom",
     "sensor"
   ],
   "documentation": "https://github.com/nimroddolev/akuvox",
