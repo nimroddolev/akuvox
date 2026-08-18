@@ -115,6 +115,8 @@ class TestReauthFlowE2E(unittest.IsolatedAsyncioTestCase):
         clear_authentication_failure.assert_called_once_with(flow.hass, flow._reauth_entry)
         self.assertEqual(update["data"]["camera_data"], [{"name": "Lobby"}])
         self.assertIn("token_refreshed_at", update["data"])
+        self.assertIn("token_refreshed_at", update["options"])
+        self.assertEqual(update["options"]["token_update_type"], "refreshed")
         self.assertEqual(update["reason"], "reauth_successful")
 
     @patch("custom_components.akuvox.config_flow.async_clear_authentication_failure")

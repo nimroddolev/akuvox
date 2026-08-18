@@ -22,6 +22,8 @@ from .const import (
     COUNTRY_PHONE,
     SUBDOMAINS_LIST,
     TOKEN_REFRESHED_AT,
+    TOKEN_UPDATE_REFRESHED,
+    TOKEN_UPDATE_TYPE,
     DOOR_LOG_POLL_INTERVAL,
     DOOR_LOG_MAX_BACKOFF,
     DOOR_LOG_MIN_POLL_INTERVAL,
@@ -216,10 +218,16 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             credentials["auth_token"],
             credentials["token"],
         )
+        refreshed_at = datetime.now(timezone.utc).isoformat()
         data.update({
             "host": devices["host"],
-            TOKEN_REFRESHED_AT: datetime.now(timezone.utc).isoformat(),
+            # Retain this copy for entries created by older releases.
+            TOKEN_REFRESHED_AT: refreshed_at,
         })
+        # Panel settings prefer entry options, so update them too. Otherwise a
+        # prior options timestamp masks the successful reauthentication time.
+        options[TOKEN_REFRESHED_AT] = refreshed_at
+        options[TOKEN_UPDATE_TYPE] = TOKEN_UPDATE_REFRESHED
         data.update(self.data)
         data.update(
             {

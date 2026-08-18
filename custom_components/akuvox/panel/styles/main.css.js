@@ -1,0 +1,295 @@
+/**
+ * Core design tokens, typography, layout, header, navigation, and base components.
+ */
+
+export const mainStyles = `
+  :host {
+    --aqua: #00a9ce;
+    --navy: #003b5c;
+    --mint: #76c8c3;
+    color: var(--primary-text-color, #17212b);
+    display: block;
+    font: 14px/1.45 var(--paper-font-body1_-_font-family, Arial, sans-serif);
+  }
+
+  main {
+    max-width: 1440px;
+    margin: auto;
+    padding: 24px;
+  }
+
+  main.reauthentication-required {
+    box-sizing: border-box;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  header {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    padding: 22px;
+    color: white;
+    border-radius: 18px;
+    background: linear-gradient(135deg, #55d9e8 0%, #299fd8 52%, #0c63c9 100%);
+  }
+
+  .brand-mark {
+    width: 52px;
+    height: 52px;
+    object-fit: contain;
+    filter: brightness(0) invert(1);
+  }
+
+  h1 {
+    margin: 0;
+    font-size: 26px;
+  }
+
+  header p {
+    margin: 2px 0 0;
+    opacity: 0.85;
+  }
+
+  header select {
+    margin-left: auto;
+    max-width: 280px;
+    padding: 8px;
+    border-radius: 8px;
+  }
+
+  nav {
+    display: flex;
+    gap: 5px;
+    margin: 20px 0;
+    border-bottom: 1px solid var(--divider-color, #ddd);
+  }
+
+  button {
+    font: inherit;
+    cursor: pointer;
+  }
+
+  .tab {
+    border: 0;
+    background: transparent;
+    padding: 12px 14px;
+    color: inherit;
+  }
+
+  .tab.selected {
+    color: var(--aqua);
+    border-bottom: 3px solid var(--aqua);
+    font-weight: 700;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 16px;
+  }
+
+  .card {
+    border: 1px solid var(--divider-color, #ddd);
+    border-radius: 14px;
+    padding: 16px;
+    background: var(--card-background-color, #fff);
+  }
+
+  .card h2 {
+    font-size: 16px;
+    margin: 0;
+  }
+
+  .section-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 12px;
+  }
+
+  .action {
+    color: white;
+    background: #55bfe6;
+    border: 0;
+    border-radius: 8px;
+    padding: 8px 10px;
+  }
+
+  .success {
+    color: white;
+    background: #16a34a;
+    border: 0;
+    border-radius: 8px;
+    padding: 8px 10px;
+  }
+
+  .success:hover {
+    background: #15803d;
+  }
+
+  .danger {
+    color: white;
+    background: #dc2626;
+    border: 0;
+    border-radius: 8px;
+    padding: 8px;
+  }
+
+  .danger:hover {
+    background: #b91c1c;
+  }
+
+  .danger svg {
+    display: block;
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+  }
+
+  .muted {
+    color: var(--secondary-text-color, #6b7280);
+  }
+
+  .notice {
+    padding: 12px;
+    border-radius: 10px;
+    background: #e9f8fb;
+    color: var(--navy);
+  }
+
+  .auth-required-content {
+    flex: 1;
+    display: grid;
+    place-items: center;
+  }
+
+  .auth-notice {
+    width: min(100%, 560px);
+    text-align: center;
+  }
+
+  .auth-notice h2 {
+    font-size: 20px;
+  }
+
+  /* Form and combobox elements */
+  form {
+    display: grid;
+    gap: 12px;
+  }
+
+  form label {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+    font-weight: 600;
+  }
+
+  form input,
+  form select {
+    box-sizing: border-box;
+    width: 100%;
+    padding: 8px;
+    border: 1px solid var(--divider-color, #bbb);
+    border-radius: 8px;
+    color: inherit;
+    background: var(--card-background-color, #fff);
+    font: inherit;
+  }
+
+  fieldset {
+    border: 1px solid var(--divider-color, #ddd);
+    border-radius: 8px;
+    display: grid;
+    gap: 7px;
+  }
+
+  .check {
+    display: block;
+    font-weight: 400;
+  }
+
+  .check input {
+    width: auto;
+    margin-right: 7px;
+  }
+
+  .combobox {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    position: relative;
+  }
+
+  .combobox input {
+    min-width: 0;
+    border-radius: 8px 0 0 8px;
+  }
+
+  .combobox-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--divider-color, #bbb);
+    border-left: 0;
+    border-radius: 0 8px 8px 0;
+    padding: 0 12px;
+    color: inherit;
+    background: var(--card-background-color, #fff);
+  }
+
+  .combobox-toggle svg {
+    display: block;
+    width: 16px;
+    height: 16px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+  }
+
+  .combobox-menu {
+    position: absolute;
+    z-index: 1;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    max-height: 220px;
+    overflow: auto;
+    border: 1px solid var(--divider-color, #bbb);
+    border-radius: 8px;
+    background: var(--card-background-color, #fff);
+    box-shadow: 0 8px 20px #0003;
+  }
+
+  .combobox-menu button {
+    display: block;
+    width: 100%;
+    border: 0;
+    padding: 8px 10px;
+    color: inherit;
+    background: transparent;
+    text-align: left;
+  }
+
+  .combobox-menu button:hover {
+    background: var(--secondary-background-color, #eef7fa);
+  }
+
+  @media (max-width: 600px) {
+    main {
+      padding: 12px;
+    }
+    header {
+      padding: 16px;
+      flex-wrap: wrap;
+    }
+    header select {
+      margin-left: 0;
+      width: 100%;
+    }
+  }
+`;
