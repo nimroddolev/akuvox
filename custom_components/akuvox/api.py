@@ -1142,17 +1142,17 @@ class AkuvoxApiClient:
             raise AkuvoxApiClientError("SmartPlus did not confirm temporary-key creation")
         await self.async_retrieve_temp_keys_data()
 
-    async def async_delete_panel_temp_key(self, temp_key: str) -> None:
+    async def async_delete_panel_temp_key(self, key_id: str) -> None:
         """Delete an end-user temporary key through Akuvox's documented API."""
         if self._data is None:
             raise AkuvoxApiClientError("SmartPlus account data is unavailable")
         host = API_DOOR_LOG_HOST.replace("subdomain.", f"{self._data.subdomain}.")
         response = await self._async_api_wrapper(
             method="post",
-            url=f"https://{host}/{API_DELETE_TEMP_KEY}?token={self._data.token}",
-            data=json.dumps({"temp_key": [temp_key]}),
+            url=f"https://{host}/{API_DELETE_TEMP_KEY}",
+            data=urlencode({"ID": key_id}),
             headers={
-                "content-type": "application/json",
+                "content-type": "application/x-www-form-urlencoded",
                 "x-auth-token": self._data.token,
                 "x-cloud-version": "6.4",
                 "x-cloud-lang": "en",

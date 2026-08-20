@@ -766,7 +766,7 @@ async def websocket_panel_delete_temp_key(
         connection.send_error(msg["id"], "not_found", "Akuvox account was not found")
         return
     if msg["temp_key"] not in {
-        str(key.get("key_code", "")) for key in client.get_panel_data()["temporary_keys"]
+        str(key.get("key_id", "")) for key in client.get_panel_data()["temporary_keys"]
     }:
         connection.send_error(msg["id"], "not_found", "Temporary key was not found")
         return

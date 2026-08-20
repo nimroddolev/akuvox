@@ -15,7 +15,11 @@ import { closeKeyActionsMenu } from "./components/key-menu.js";
 import { renderDevicesView, bindDevicesEvents } from "./views/devices-view.js";
 import { renderActivityView, bindActivityEvents } from "./views/activity-view.js?v=20260820-table-timestamps";
 import { renderCallsView, bindCallsEvents } from "./views/calls-view.js?v=20260820-table-timestamps";
-import { renderKeysView, bindKeysEvents } from "./views/keys-view.js?v=20260820-table-timestamps";
+import {
+  renderKeysView,
+  bindKeysEvents,
+  deleteSelectedKeys,
+} from "./views/keys-view.js?v=20260820-temp-key-delete-fix-2";
 import { renderSettingsView, bindSettingsEvents } from "./views/settings-view.js?v=20260820-local-activity-storage";
 import { renderHelpView } from "./views/help-view.js";
 
@@ -67,6 +71,43 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
         this._render();
       }
     };
+
+    // Keep essential navigation and temporary-key actions available even if a
+    // view-specific binding fails during a later render. Capture these events
+    // so the regular per-view handlers do not run a second time.
+    this.shadowRoot.addEventListener("click", (event) => {
+      const button = event.target.closest?.("button");
+      if (!button) return;
+
+      if (button.matches("[data-tab]")) {
+        event.stopPropagation();
+        const hash = TAB_HASH_BY_ID[button.dataset.tab];
+        if (hash) window.location.hash = hash;
+        return;
+      }
+
+      if (button.matches("[data-toggle-key-selection]")) {
+        event.stopPropagation();
+        this._selectingKeys = !this._selectingKeys;
+        this._selectedKeyIds.clear();
+        this._render();
+        return;
+      }
+
+      if (button.matches("[data-delete-selected]")) {
+        event.stopPropagation();
+        void deleteSelectedKeys(this);
+      }
+    }, { capture: true });
+
+    this.shadowRoot.addEventListener("change", (event) => {
+      const input = event.target;
+      if (!(input instanceof HTMLInputElement) || !input.matches("[data-select-key]")) return;
+      event.stopPropagation();
+      if (input.checked) this._selectedKeyIds.add(input.dataset.selectKey);
+      else this._selectedKeyIds.delete(input.dataset.selectKey);
+      this._render();
+    }, { capture: true });
   }
 
   set hass(value) {
@@ -484,6 +525,15 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
   }
 
   _render() {
+    // A panel-data refresh can complete between opening a dialog and the next
+    // paint. Replacing the shadow DOM at that point removes the dialog and
+    // leaves the initiating action looking as though it did nothing. Defer the
+    // refresh until the dialog or blocking operation has finished instead.
+    if (this._modalCount > 0 || this._blockingRequest) {
+      this._loadQueued = true;
+      return;
+    }
+
     this._tabResizeObserver?.disconnect();
     this._subdomainOutsideAbort?.abort();
     this._subdomainOutsideAbort = undefined;

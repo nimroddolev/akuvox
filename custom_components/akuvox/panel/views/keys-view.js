@@ -112,7 +112,7 @@ export const renderKeysView = (host, account) => {
         ? `<span class="copied-code" role="status">${icons.check}Copied</span>`
         : `<span class="key-code"><button class="copy-code" type="button" data-copy-key-id="${escapeHtml(key.key_id)}" data-copy-key-code="${escapeHtml(key.key_code)}" aria-label="Copy code to clipboard" title="Copy code to clipboard">${icons.copy}</button><code>${escapeHtml(key.key_code)}</code></span>`;
       const menu = key.expired
-        ? `<button class="danger key-menu-button" type="button" data-delete-key="${escapeHtml(key.key_code)}" aria-label="Delete temporary key" title="Delete temporary key">${icons.trash}</button>`
+        ? `<button class="danger key-menu-button" type="button" data-delete-key="${escapeHtml(key.key_id)}" aria-label="Delete temporary key" title="Delete temporary key">${icons.trash}</button>`
         : `<button class="action key-menu-button" type="button" data-key-menu="${escapeHtml(key.key_id)}" data-key-code="${escapeHtml(key.key_code)}" data-key-expired="false" data-key-has-qr="${Boolean(key.has_qr_code)}" aria-label="Key actions" aria-haspopup="menu">⋯</button>`;
 
       return `
@@ -136,8 +136,8 @@ export const renderKeysView = (host, account) => {
       <div class="section-heading key-heading">
         <h2>Temporary keys</h2>
         <div class="key-heading-actions">
-          ${selectedCount ? `<button class="danger" data-delete-selected>Delete Selected (${selectedCount})</button>` : ""}
-          <button class="action" data-toggle-key-selection>${host._selectingKeys ? "Cancel selection" : "Select"}</button>
+          ${selectedCount ? `<button type="button" class="danger" data-delete-selected>Delete Selected (${selectedCount})</button>` : ""}
+          <button type="button" class="action" data-toggle-key-selection>${host._selectingKeys ? "Cancel selection" : "Select"}</button>
           <button class="success add-key" data-create-key><span class="plus">+</span> Add Key</button>
         </div>
       </div>
@@ -566,7 +566,7 @@ export const deleteKey = async (host, tempKey) => {
  * Delete all selected temporary keys with confirmation.
  * @param {HTMLElement} host
  */
-const deleteSelectedKeys = async (host) => {
+export const deleteSelectedKeys = async (host) => {
   const keys = (host._account()?.temporary_keys || []).filter((key) =>
     host._selectedKeyIds.has(String(key.key_id))
   );
@@ -588,7 +588,7 @@ const deleteSelectedKeys = async (host) => {
       await callWsWithBlocker(host, {
         type: "akuvox/panel_delete_temp_key",
         entry_id: host._activeAccount,
-        temp_key: String(key.key_code),
+        temp_key: String(key.key_id),
         confirmed: true,
       });
     }

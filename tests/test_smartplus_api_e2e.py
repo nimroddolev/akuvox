@@ -407,11 +407,14 @@ class TestSmartPlusApiE2E(unittest.IsolatedAsyncioTestCase):
         self.assertIn("UhfCard=updated-card", edit_request["data"])
         delete_request = self.session.requests[2]
         self.assertIn(
-            "backend.ecloud.akuvox.com/opendoor/tempkey/delete",
+            "backend.ecloud.akuvox.com/web-server/v3/app/community/tempKey/delPersonalTempKey",
             delete_request["url"],
         )
-        self.assertIn("temp_key", delete_request["data"])
-        self.assertEqual(delete_request["headers"]["content-type"], "application/json")
+        self.assertEqual(delete_request["data"], "ID=1234")
+        self.assertEqual(
+            delete_request["headers"]["content-type"],
+            "application/x-www-form-urlencoded",
+        )
         self.assertEqual(client.async_retrieve_temp_keys_data.await_count, 3)
 
     async def test_temporary_key_qr_is_fetched_only_on_request(self) -> None:

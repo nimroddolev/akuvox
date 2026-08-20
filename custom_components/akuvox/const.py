@@ -507,7 +507,7 @@ API_DOOR_LOG_HOST = "backend.subdomain.akuvox.com"
 API_GET_PERSONAL_TEMP_KEY_LIST = "tempKey/getPersonalTempKeyList?row=20&page=1"
 API_CREATE_TEMP_KEY = "web-server/v3/app/community/tempKey/addPersonalTempKey"
 API_EDIT_TEMP_KEY = "web-server/v3/app/community/tempKey/editPersonalTempKey"
-API_DELETE_TEMP_KEY = "opendoor/tempkey/delete"
+API_DELETE_TEMP_KEY = "web-server/v3/app/community/tempKey/delPersonalTempKey"
 API_GET_PERSONAL_DOOR_LOG = "web-server/v4/smartplus/community/log/master/getDoorLog?row=20&page=1"
 API_GET_CALL_LOG = "web-server/v4/smartplus/community/log/master/getCallLog?row=20&page=1"
 
