@@ -7,7 +7,7 @@
 import { PANEL_TAG, TAB_HASHES, TAB_HASH_BY_ID, TABS } from "./utils/constants.js";
 import { escapeHtml } from "./utils/dom.js";
 import { copyText } from "./utils/clipboard.js";
-import { getPanelStyles } from "./styles/index.js?v=20260817-range-picker";
+import { getPanelStyles } from "./styles/index.js?v=20260820-tab-scroll-v3";
 import { showNotice, confirmModal, callWsWithBlocker } from "./components/dialogs.js";
 import { installCameraRelayActions } from "./components/camera-actions.js";
 import { closeKeyActionsMenu } from "./components/key-menu.js";
@@ -54,6 +54,8 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
     this._copiedKeyCodes = new Map();
 
     this._panelDataSubscriptionActive = false;
+    this._tabResizeObserver = null;
+    this._onTabWindowResize = () => this._updateTabScrollControls();
 
     this._onHashChange = () => {
       const tab = TAB_HASHES[decodeURIComponent(window.location.hash.slice(1))];
@@ -72,6 +74,10 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
     }
     this._onHashChange();
     this._subscribeToPanelDataUpdates();
+    if (!this._tabResizeListenerRegistered) {
+      window.addEventListener("resize", this._onTabWindowResize);
+      this._tabResizeListenerRegistered = true;
+    }
     this._requestLoad();
     if (!this._timer) {
       this._timer = window.setInterval(() => this._requestLoad(), 15000);
@@ -88,6 +94,12 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
     this._panelDataSubscriptionActive = false;
     this._unsubscribePanelDataUpdates?.();
     this._unsubscribePanelDataUpdates = undefined;
+    this._tabResizeObserver?.disconnect();
+    this._tabResizeObserver = null;
+    if (this._tabResizeListenerRegistered) {
+      window.removeEventListener("resize", this._onTabWindowResize);
+      this._tabResizeListenerRegistered = false;
+    }
     if (this._hashListenerRegistered) {
       window.removeEventListener("hashchange", this._onHashChange);
     }
@@ -166,6 +178,48 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
 
   _account() {
     return this._accounts.find((account) => account.entry_id === this._activeAccount);
+  }
+
+  _updateTabScrollControls() {
+    const viewport = this.shadowRoot.querySelector("[data-tab-scroll-viewport]");
+    if (!viewport) return;
+
+    const left = this.shadowRoot.querySelector('[data-tab-scroll="left"]');
+    const right = this.shadowRoot.querySelector('[data-tab-scroll="right"]');
+    if (!left || !right) return;
+
+    const maxScroll = Math.max(0, viewport.scrollWidth - viewport.clientWidth);
+    const showLeft = viewport.scrollLeft > 1;
+    const showRight = viewport.scrollLeft < maxScroll - 1;
+    const changed = left.hidden === showLeft || right.hidden === showRight;
+    left.hidden = !showLeft;
+    right.hidden = !showRight;
+    if (changed) requestAnimationFrame(() => this._updateTabScrollControls());
+  }
+
+  _setupTabScrolling() {
+    this._tabResizeObserver?.disconnect();
+    const viewport = this.shadowRoot.querySelector("[data-tab-scroll-viewport]");
+    if (!viewport) return;
+
+    viewport.addEventListener("scroll", () => this._updateTabScrollControls(), {
+      passive: true,
+    });
+    this.shadowRoot.querySelectorAll("[data-tab-scroll]").forEach((button) =>
+      button.addEventListener("click", () => {
+        const direction = button.dataset.tabScroll === "left" ? -1 : 1;
+        viewport.scrollBy({ left: direction * Math.max(160, viewport.clientWidth * 0.75), behavior: "smooth" });
+      })
+    );
+    if (typeof ResizeObserver !== "undefined") {
+      this._tabResizeObserver = new ResizeObserver(() => this._updateTabScrollControls());
+      this._tabResizeObserver.observe(viewport);
+    }
+    viewport.querySelector(".tab.selected")?.scrollIntoView({
+      block: "nearest",
+      inline: "nearest",
+    });
+    requestAnimationFrame(() => this._updateTabScrollControls());
   }
 
   async _loadSettings() {
@@ -358,6 +412,7 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
   }
 
   _render() {
+    this._tabResizeObserver?.disconnect();
     this._subdomainOutsideAbort?.abort();
     this._subdomainOutsideAbort = undefined;
 
@@ -397,7 +452,17 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
               : ""
           }
         </header>
-        ${requiresReauthentication ? "" : `<nav>${tabsMarkup}</nav>`}
+        ${
+          requiresReauthentication
+            ? ""
+            : `<div class="tab-navigation">
+                <button class="tab-scroll-arrow" type="button" data-tab-scroll="left" aria-label="Show previous tabs" hidden>‹</button>
+                <div class="tab-scroll-viewport" data-tab-scroll-viewport>
+                  <nav>${tabsMarkup}</nav>
+                </div>
+                <button class="tab-scroll-arrow" type="button" data-tab-scroll="right" aria-label="Show more tabs" hidden>›</button>
+              </div>`
+        }
         <section class="${requiresReauthentication ? "auth-required-content" : ""}">
           ${this._error ? `<p class="notice">${this._error}</p>` : this._content(account)}
         </section>
@@ -411,6 +476,7 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
         if (hash) window.location.hash = hash;
       })
     );
+    this._setupTabScrolling();
 
     // Account selector event listener
     this.shadowRoot.querySelector("[data-account]")?.addEventListener("change", async (event) => {

@@ -9,13 +9,23 @@ export const mainStyles = `
     --mint: #76c8c3;
     color: var(--primary-text-color, #17212b);
     display: block;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: hidden;
+    overflow-x: clip;
+    width: 100%;
     font: 14px/1.45 var(--paper-font-body1_-_font-family, Arial, sans-serif);
   }
 
   main {
+    box-sizing: border-box;
     max-width: 1440px;
     margin: auto;
+    min-width: 0;
+    overflow-x: hidden;
+    overflow-x: clip;
     padding: 24px;
+    width: 100%;
   }
 
   main.reauthentication-required {
@@ -65,6 +75,59 @@ export const mainStyles = `
     margin: 20px 0;
     border-bottom: 1px solid var(--divider-color, #ddd);
   }
+
+  .tab-navigation {
+    display: flex;
+    align-items:stretch;
+    box-sizing: border-box;
+    max-width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    width: 100%;
+    margin: 20px 0;
+    border-bottom: 1px solid var(--divider-color, #ddd);
+  }
+
+  .tab-scroll-viewport {
+    flex: 1 1 0;
+    min-width: 0;
+    width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    scroll-behavior: smooth;
+  }
+
+  .tab-scroll-viewport::-webkit-scrollbar { display: none; }
+
+  .tab-scroll-viewport nav {
+    width: max-content;
+    min-width: 100%;
+    margin: 0;
+    border-bottom: 0;
+  }
+
+  .tab-scroll-arrow {
+    display: grid;
+    flex: 0 0 36px;
+    place-items: center;
+    align-self: stretch;
+    border: 0;
+    border-radius: 10px;
+    margin: 4px;
+    color: var(--primary-text-color, #17212b);
+    background: rgb(127 127 127 / 18%);
+    font-size: 26px;
+    line-height: 1;
+  }
+
+  .tab-scroll-arrow:hover { color: var(--aqua); }
+  .tab-scroll-arrow:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: -2px;
+  }
+  .tab-scroll-arrow[hidden] { display: none; }
 
   button {
     font: inherit;
