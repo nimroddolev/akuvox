@@ -10,6 +10,18 @@
 export const toIsoDateString = (date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 
+/** Format timestamps without a year when every populated value shares it. */
+export const tableTimestampFormatter = (values) => {
+  const years = new Set(
+    values
+      .map((value) => String(value || "").match(/^(\d{4})[-/]/)?.[1])
+      .filter(Boolean)
+  );
+  const hideYear = years.size === 1;
+  return (value) =>
+    hideYear ? String(value || "").replace(/^\d{4}[-/]/, "") : String(value || "");
+};
+
 /**
  * Parse an API date/time string into an HTML datetime-local compatible format (YYYY-MM-DDTHH:MM).
  * @param {string} value
@@ -59,6 +71,5 @@ export const UHF_CARD_PATTERN = "[0-9A-Fa-f]{0,24}";
 export const UHF_CARD_TITLE = "Enter up to 24 hexadecimal characters (0–9 and A–F)";
 export const UHF_CARD_REGEX = /^[0-9A-Fa-f]{0,24}$/;
 export const UHF_CARD_ERROR_MSG = "Enter up to 24 hexadecimal characters (0–9 and A–F)";
-
 
 

@@ -3,6 +3,7 @@
  */
 
 import { escapeHtml } from "../utils/dom.js";
+import { tableTimestampFormatter } from "../utils/formatters.js?v=20260820-table-timestamps";
 import { showCallImageDialog } from "../components/image-dialog.js";
 
 /**
@@ -71,6 +72,7 @@ export const renderCallsView = (host, account) => {
 
   const heading = (label, key) =>
     `<button class="sort-button ${host._callSort.key === key ? "active" : ""}" data-call-sort="${key}" data-direction="${host._callSort.direction === "asc" ? "↑" : "↓"}">${label}</button>`;
+  const formatTimestamp = tableTimestampFormatter(filtered.map((call) => call.startTime));
 
   return `
     <div class="card table-wrap">
@@ -116,7 +118,7 @@ export const renderCallsView = (host, account) => {
               .map(
                 (call) => `
               <tr>
-                <td>${escapeHtml(call.startTime || "")}</td>
+                <td>${escapeHtml(formatTimestamp(call.startTime))}</td>
                 <td>${escapeHtml(call.callerName || "")}</td>
                 <td>${escapeHtml(call.calleeName || "")}</td>
                 <td>

@@ -13,9 +13,9 @@ import { installCameraRelayActions } from "./components/camera-actions.js?v=2026
 import { closeKeyActionsMenu } from "./components/key-menu.js";
 
 import { renderDevicesView, bindDevicesEvents } from "./views/devices-view.js";
-import { renderActivityView, bindActivityEvents } from "./views/activity-view.js?v=20260820-activity-pagination-tests";
-import { renderCallsView, bindCallsEvents } from "./views/calls-view.js";
-import { renderKeysView, bindKeysEvents } from "./views/keys-view.js?v=20260817-range-picker";
+import { renderActivityView, bindActivityEvents } from "./views/activity-view.js?v=20260820-table-timestamps";
+import { renderCallsView, bindCallsEvents } from "./views/calls-view.js?v=20260820-table-timestamps";
+import { renderKeysView, bindKeysEvents } from "./views/keys-view.js?v=20260820-table-timestamps";
 import { renderSettingsView, bindSettingsEvents } from "./views/settings-view.js?v=20260820-local-activity-storage";
 import { renderHelpView } from "./views/help-view.js";
 

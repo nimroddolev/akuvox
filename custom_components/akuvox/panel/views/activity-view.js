@@ -3,6 +3,7 @@
  */
 
 import { escapeHtml } from "../utils/dom.js";
+import { tableTimestampFormatter } from "../utils/formatters.js?v=20260820-table-timestamps";
 import { icons } from "../utils/icons.js";
 import { showActivityImageDialog } from "../components/image-dialog.js?v=20260820-camera-orientation";
 import {
@@ -95,6 +96,7 @@ export const renderActivityView = (host, account) => {
     `<button class="sort-button ${host._activitySort.key === key ? "active" : ""}" data-activity-sort="${key}" data-direction="${host._activitySort.direction === "asc" ? "↑" : "↓"}">${label}</button>`;
 
   const visible = visibleActivityItems(filtered, host._activityVisibleCount);
+  const formatTimestamp = tableTimestampFormatter(filtered.map((item) => item.CaptureTime));
   const hasMore = visible.length < filtered.length;
 
   return `
@@ -140,7 +142,7 @@ export const renderActivityView = (host, account) => {
               .map(
                 (item) => `
               <tr>
-                <td>${escapeHtml(item.CaptureTime || "")}</td>
+                <td>${escapeHtml(formatTimestamp(item.CaptureTime))}</td>
                 <td>${escapeHtml(item.Location || "")}</td>
                 <td>${escapeHtml(item.CaptureType || "")}</td>
                 <td>${escapeHtml(item.Initiator || "")}</td>

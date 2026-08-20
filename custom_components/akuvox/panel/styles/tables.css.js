@@ -11,7 +11,7 @@ export const tableStyles = `
 
   th,
   td {
-    padding: 10px;
+    padding: 6px;
     text-align: left;
     border-bottom: 1px solid var(--divider-color, #ddd);
     vertical-align: middle;

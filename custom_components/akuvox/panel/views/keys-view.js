@@ -11,7 +11,8 @@ import {
   UHF_CARD_TITLE,
   UHF_CARD_REGEX,
   UHF_CARD_ERROR_MSG,
-} from "../utils/formatters.js";
+  tableTimestampFormatter,
+} from "../utils/formatters.js?v=20260820-table-timestamps";
 import { copyText } from "../utils/clipboard.js";
 import { showNotice, confirmModal, callWsWithBlocker } from "../components/dialogs.js";
 import { showDateRangePicker } from "../components/date-range-picker.js?v=20260817-range-picker-4";
@@ -91,6 +92,9 @@ export const renderKeysView = (host, account) => {
 
   const heading = (label, key) =>
     `<button class="sort-button ${host._keySort.key === key ? "active" : ""}" data-key-sort="${key}" data-direction="${host._keySort.direction === "asc" ? "↑" : "↓"}">${label}</button>`;
+  const formatTimestamp = tableTimestampFormatter(
+    filtered.flatMap((key) => [key.begin_time, key.end_time])
+  );
 
   const selectionColumn = host._selectingKeys
     ? '<th class="key-select-cell" aria-label="Select"></th>'
@@ -116,8 +120,8 @@ export const renderKeysView = (host, account) => {
           ${selector}
           <td>${escapeHtml(key.description)}</td>
           <td>${code}</td>
-          <td>${escapeHtml(key.begin_time)}</td>
-          <td>${escapeHtml(key.end_time)}</td>
+          <td>${escapeHtml(formatTimestamp(key.begin_time))}</td>
+          <td>${escapeHtml(formatTimestamp(key.end_time))}</td>
           <td>${escapeHtml(key.access_times)}/${escapeHtml(key.allowed_times)}</td>
           <td>${key.expired ? "Expired" : "Active"}</td>
           <td><div class="key-actions">${menu}</div></td>
