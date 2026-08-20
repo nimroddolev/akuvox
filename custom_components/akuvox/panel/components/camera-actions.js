@@ -3,6 +3,7 @@
  */
 
 import { findInComposedTree, escapeHtml } from "../utils/dom.js";
+import { orientationTransform } from "../utils/orientation.js?v=20260820-camera-orientation";
 
 /**
  * Locate Home Assistant's camera modal and inject door relay action buttons.
@@ -10,7 +11,7 @@ import { findInComposedTree, escapeHtml } from "../utils/dom.js";
  * @param {Array<object>} relays
  * @param {number} [attempt=0]
  */
-export const installCameraRelayActions = (host, relays, attempt = 0) => {
+export const installCameraRelayActions = (host, relays, orientation = "none", attempt = 0) => {
   const documentRef = host.shadowRoot.ownerDocument;
   const cameraDialog = findInComposedTree(documentRef, "more-info-camera");
   const actions = cameraDialog?.shadowRoot?.querySelector(".actions");
@@ -18,12 +19,16 @@ export const installCameraRelayActions = (host, relays, attempt = 0) => {
   if (!actions) {
     if (attempt < 12) {
       window.setTimeout(
-        () => installCameraRelayActions(host, relays, attempt + 1),
+        () => installCameraRelayActions(host, relays, orientation, attempt + 1),
         100
       );
     }
     return;
   }
+
+  const stream = findInComposedTree(cameraDialog, "ha-camera-stream");
+  const media = stream && findInComposedTree(stream, "video, img");
+  if (media) media.style.transform = orientationTransform(orientation);
 
   const nativeSnapshotAction = [
     ...actions.querySelectorAll("button, ha-button, mwc-button, a"),
@@ -98,7 +103,7 @@ export const installCameraRelayActions = (host, relays, attempt = 0) => {
   // element once that action is available.
   if (!nativeSnapshotAction && attempt < 30) {
     window.setTimeout(
-      () => installCameraRelayActions(host, relays, attempt + 1),
+      () => installCameraRelayActions(host, relays, orientation, attempt + 1),
       200
     );
   }

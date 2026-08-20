@@ -24,8 +24,16 @@ export const viewStyles = `
     height: auto;
     object-fit: cover;
     object-position: center center;
-    transform: none;
+    transform: var(--camera-orientation-transform, none);
   }
+
+  [data-orientation="rotate_90"] { --camera-orientation-transform: rotate(90deg); }
+  [data-orientation="rotate_180"] { --camera-orientation-transform: rotate(180deg); }
+  [data-orientation="rotate_270"] { --camera-orientation-transform: rotate(270deg); }
+  [data-orientation="flip_horizontal"] { --camera-orientation-transform: scaleX(-1); }
+  [data-orientation="flip_vertical"] { --camera-orientation-transform: scaleY(-1); }
+  [data-orientation="flip_horizontal_and_rotate_90"] { --camera-orientation-transform: rotate(90deg) scaleX(-1); }
+  [data-orientation="flip_vertical_and_rotate_90"] { --camera-orientation-transform: rotate(90deg) scaleY(-1); }
 
   .activity-thumbnail svg {
     position: absolute;
@@ -44,7 +52,12 @@ export const viewStyles = `
 
   :host([data-mirror-activity-images]) .activity-thumbnail img,
   :host([data-mirror-activity-images]) .activity-image-dialog img {
-    transform: scaleX(-1);
+    transform: var(--camera-orientation-transform, none) scaleX(-1);
+  }
+
+  :host([data-mirror-activity-images]) .activity-thumbnail img[data-orientation]:not([data-orientation="none"]),
+  :host([data-mirror-activity-images]) .activity-image-dialog img[data-orientation]:not([data-orientation="none"]) {
+    transform: var(--camera-orientation-transform, none);
   }
 
   .thumbnail-spinner {
@@ -94,7 +107,10 @@ export const viewStyles = `
     max-height: 75vh;
     object-fit: contain;
     border-radius: 8px;
+    transform: var(--camera-orientation-transform, none);
   }
+
+  .activity-image-cell { text-align: left; }
 
   .activity-image-details {
     margin: 10px 44px 0;

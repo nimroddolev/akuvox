@@ -4,7 +4,13 @@
 
 import { escapeHtml } from "../utils/dom.js";
 import { icons } from "../utils/icons.js";
-import { showActivityImageDialog } from "../components/image-dialog.js";
+import { showActivityImageDialog } from "../components/image-dialog.js?v=20260820-camera-orientation";
+
+const activityOrientation = (host, item) => {
+  const settings = host._settings || {};
+  if (!settings.custom_activity_image_orientations) return "none";
+  return settings.activity_image_orientations?.[String(item.Location || "").trim()] || "none";
+};
 
 /**
  * Build option elements for filter dropdowns.
@@ -52,7 +58,7 @@ const renderThumbnail = (host, item) => {
 
   return `
     <button class="activity-thumbnail" aria-label="View activity image" data-activity-image="${escapeHtml(item.CaptureTime)}">
-      <img alt="" src="data:${image.content_type};base64,${image.data}">
+      <img alt="" data-orientation="${activityOrientation(host, item)}" src="data:${image.content_type};base64,${image.data}">
       ${icons.searchThumbnail}
     </button>
   `;
@@ -130,7 +136,7 @@ export const renderActivityView = (host, account) => {
                 <td>${escapeHtml(item.Location || "")}</td>
                 <td>${escapeHtml(item.CaptureType || "")}</td>
                 <td>${escapeHtml(item.Initiator || "")}</td>
-                <td>${renderThumbnail(host, item)}</td>
+                <td class="activity-image-cell">${renderThumbnail(host, item)}</td>
               </tr>
             `
               )
@@ -169,6 +175,7 @@ export const bindActivityEvents = (host) => {
           button.dataset.activityImage,
           events,
           (captureTime) => host._getActivityImage(captureTime)
+          , (item) => activityOrientation(host, item)
         );
       })
     );

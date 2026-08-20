@@ -348,11 +348,14 @@ export const mainStyles = `
     }
     header {
       padding: 16px;
-      flex-wrap: wrap;
+      display: grid;
+      grid-template-columns: 52px minmax(0, 1fr);
     }
     header select {
+      grid-column: 1 / -1;
+      justify-self: center;
       margin-left: 0;
-      width: 100%;
+      width: min(100%, 360px);
     }
   }
 `;

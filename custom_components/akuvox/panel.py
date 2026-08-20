@@ -40,6 +40,10 @@ from .const import (
     PANEL_ADMIN_ONLY,
     PANEL_ENABLED,
     MIRROR_ACTIVITY_IMAGES,
+    CUSTOM_CAMERA_STREAM_ORIENTATIONS,
+    CAMERA_STREAM_ORIENTATIONS,
+    CUSTOM_ACTIVITY_IMAGE_ORIENTATIONS,
+    ACTIVITY_IMAGE_ORIENTATIONS,
     DEBUG_LOGGING,
     PANEL_RUNTIME_KEY,
     PANEL_RUNTIME_DOMAIN,
@@ -314,7 +318,7 @@ async def websocket_panel_settings(
         {
             "country_options": countries,
             "subdomain_options": SUBDOMAINS_LIST,
-            "settings": {
+    "settings": {
                 "country_code": str(_entry_value(entry, "country_code", "")),
                 "subdomain": str(_entry_value(entry, "subdomain", "")),
                 "event_screenshot_options": str(
@@ -330,6 +334,18 @@ async def websocket_panel_settings(
                 PANEL_ADMIN_ONLY: bool(_entry_value(entry, PANEL_ADMIN_ONLY, True)),
                 MIRROR_ACTIVITY_IMAGES: bool(
                     _entry_value(entry, MIRROR_ACTIVITY_IMAGES, True)
+                ),
+                CUSTOM_CAMERA_STREAM_ORIENTATIONS: bool(
+                    _entry_value(entry, CUSTOM_CAMERA_STREAM_ORIENTATIONS, False)
+                ),
+                CAMERA_STREAM_ORIENTATIONS: _entry_value(
+                    entry, CAMERA_STREAM_ORIENTATIONS, {}
+                ),
+                CUSTOM_ACTIVITY_IMAGE_ORIENTATIONS: bool(
+                    _entry_value(entry, CUSTOM_ACTIVITY_IMAGE_ORIENTATIONS, False)
+                ),
+                ACTIVITY_IMAGE_ORIENTATIONS: _entry_value(
+                    entry, ACTIVITY_IMAGE_ORIENTATIONS, {}
                 ),
                 DEBUG_LOGGING: bool(_entry_value(entry, DEBUG_LOGGING, False)),
                 "token_update": {
@@ -363,6 +379,10 @@ async def websocket_panel_settings(
         vol.Required(PANEL_ENABLED): bool,
         vol.Required(PANEL_ADMIN_ONLY): bool,
         vol.Required(MIRROR_ACTIVITY_IMAGES): bool,
+        vol.Required(CUSTOM_CAMERA_STREAM_ORIENTATIONS): bool,
+        vol.Required(CAMERA_STREAM_ORIENTATIONS): dict,
+        vol.Required(CUSTOM_ACTIVITY_IMAGE_ORIENTATIONS): bool,
+        vol.Required(ACTIVITY_IMAGE_ORIENTATIONS): dict,
         vol.Required(DEBUG_LOGGING): bool,
         vol.Required("auth_token"): str,
         vol.Required("token"): str,
@@ -409,6 +429,24 @@ async def websocket_panel_save_settings(
         or token != previous_credentials.get("token", "")
     )
     options = dict(entry.options)
+    valid_orientations = {
+        "none", "rotate_90", "rotate_180", "rotate_270", "flip_horizontal",
+        "flip_vertical", "flip_horizontal_and_rotate_90", "flip_vertical_and_rotate_90",
+    }
+    client = _client_for_entry(hass, entry.entry_id)
+    camera_names = {
+        str(camera.get("name", ""))
+        for camera in (client.get_panel_data().get("cameras", []) if client else [])
+    }
+    def _orientations(value: dict[str, Any], enabled: bool) -> dict[str, str]:
+        if not enabled:
+            return {}
+        return {
+            name: orientation
+            for name, orientation in value.items()
+            if name in camera_names and isinstance(orientation, str)
+            and orientation in valid_orientations
+        }
     options.update(
         {
             "override": True,
@@ -419,6 +457,14 @@ async def websocket_panel_save_settings(
             PANEL_ENABLED: msg[PANEL_ENABLED],
             PANEL_ADMIN_ONLY: msg[PANEL_ADMIN_ONLY],
             MIRROR_ACTIVITY_IMAGES: msg[MIRROR_ACTIVITY_IMAGES],
+            CUSTOM_CAMERA_STREAM_ORIENTATIONS: msg[CUSTOM_CAMERA_STREAM_ORIENTATIONS],
+            CAMERA_STREAM_ORIENTATIONS: _orientations(
+                msg[CAMERA_STREAM_ORIENTATIONS], msg[CUSTOM_CAMERA_STREAM_ORIENTATIONS]
+            ),
+            CUSTOM_ACTIVITY_IMAGE_ORIENTATIONS: msg[CUSTOM_ACTIVITY_IMAGE_ORIENTATIONS],
+            ACTIVITY_IMAGE_ORIENTATIONS: _orientations(
+                msg[ACTIVITY_IMAGE_ORIENTATIONS], msg[CUSTOM_ACTIVITY_IMAGE_ORIENTATIONS]
+            ),
             DEBUG_LOGGING: msg[DEBUG_LOGGING],
         }
     )

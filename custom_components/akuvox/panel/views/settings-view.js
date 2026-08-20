@@ -5,6 +5,25 @@
 import { escapeHtml } from "../utils/dom.js";
 import { icons } from "../utils/icons.js";
 import { showNotice } from "../components/dialogs.js";
+import { CAMERA_ORIENTATION_OPTIONS } from "../utils/orientation.js?v=20260820-camera-orientation";
+
+const cameraOrientationControls = (host, enabledKey, valuesKey, dataKey) => {
+  const enabled = Boolean(host._settings?.[enabledKey]);
+  const cameras = [...new Set((host._account()?.cameras || []).map((camera) => camera.name).filter(Boolean))]
+    .sort((left, right) => left.localeCompare(right));
+  const values = host._settings?.[valuesKey] || {};
+  return `
+    <label class="check">
+      <input name="${enabledKey}" type="checkbox" data-orientation-toggle="${dataKey}" ${enabled ? "checked" : ""}>
+      ${dataKey === "stream" ? "Custom camera stream orientations" : "Custom activity image orientations"}
+    </label>
+    <div class="camera-orientations" data-orientation-controls="${dataKey}" ${enabled ? "" : "hidden"}>
+      ${cameras.map((camera) => `<label>${escapeHtml(camera)}
+        <select data-${dataKey}-orientation="${escapeHtml(camera)}">
+          ${CAMERA_ORIENTATION_OPTIONS.map(([value, label]) => `<option value="${value}" ${values[camera] === value ? "selected" : ""}>${label}</option>`).join("")}
+        </select></label>`).join("") || '<p class="muted">No cameras are currently available for this account.</p>'}
+    </div>`;
+};
 
 /**
  * Render HTML content for the Settings tab.
@@ -98,6 +117,12 @@ export const renderSettingsView = (host) => {
         </div>
 
         <fieldset>
+          <legend>Camera Options</legend>
+          ${cameraOrientationControls(host, "custom_camera_stream_orientations", "camera_stream_orientations", "stream")}
+          ${cameraOrientationControls(host, "custom_activity_image_orientations", "activity_image_orientations", "activity")}
+        </fieldset>
+
+        <fieldset>
           <legend>Panel Options</legend>
           <label class="check">
             <input name="panel_enabled" type="checkbox" ${settings.panel_enabled ? "checked" : ""}> Show the SmartPlus panel in the sidebar
@@ -177,6 +202,14 @@ export const handleSaveSettings = async (host, event) => {
       panel_enabled: form.get("panel_enabled") === "on",
       panel_admin_only: form.get("panel_admin_only") === "on",
       mirror_activity_images: form.get("mirror_activity_images") === "on",
+      custom_camera_stream_orientations: form.get("custom_camera_stream_orientations") === "on",
+      camera_stream_orientations: Object.fromEntries(
+        [...event.target.querySelectorAll("[data-stream-orientation]")].map((select) => [select.dataset.streamOrientation, select.value])
+      ),
+      custom_activity_image_orientations: form.get("custom_activity_image_orientations") === "on",
+      activity_image_orientations: Object.fromEntries(
+        [...event.target.querySelectorAll("[data-activity-orientation]")].map((select) => [select.dataset.activityOrientation, select.value])
+      ),
       debug_logging: form.get("debug_logging") === "on",
       auth_token: String(form.get("auth_token")).trim(),
       token: String(form.get("token")).trim(),
@@ -222,6 +255,13 @@ export const bindSettingsEvents = (host) => {
   settingsForm.addEventListener("change", () => {
     host._settingsDirty = true;
   });
+
+  settingsForm.querySelectorAll("[data-orientation-toggle]").forEach((toggle) =>
+    toggle.addEventListener("change", () => {
+      const controls = settingsForm.querySelector(`[data-orientation-controls="${toggle.dataset.orientationToggle}"]`);
+      if (controls) controls.hidden = !toggle.checked;
+    })
+  );
 
   // Secret input toggles (show/hide password)
   host.shadowRoot.querySelectorAll("[data-toggle-secret]").forEach((button) =>

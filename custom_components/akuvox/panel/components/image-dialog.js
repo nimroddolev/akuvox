@@ -11,12 +11,14 @@ import { showNotice } from "./dialogs.js";
  * @param {string} captureTime
  * @param {Array<object>} filteredEvents
  * @param {(captureTime: string) => Promise<object|null>} getActivityImageFn
+ * @param {(event: object) => string} getOrientation
  */
 export const showActivityImageDialog = async (
   host,
   captureTime,
   filteredEvents,
-  getActivityImageFn
+  getActivityImageFn,
+  getOrientation = () => "none"
 ) => {
   let index = filteredEvents.findIndex((item) => item.CaptureTime === captureTime);
   if (index < 0) return;
@@ -51,6 +53,7 @@ export const showActivityImageDialog = async (
     const image = await getActivityImageFn(event.CaptureTime);
     if (!image || !dialog.open) return;
     picture.alt = `SmartPlus activity at ${event.CaptureTime}`;
+    picture.dataset.orientation = getOrientation(event);
     picture.src = `data:${image.content_type};base64,${image.data}`;
     details.textContent = `${event.Initiator || "Unknown"} - ${event.Location || "Unknown door"} - ${event.CaptureTime || "Unknown time"}`;
     previous.hidden = index === 0;
