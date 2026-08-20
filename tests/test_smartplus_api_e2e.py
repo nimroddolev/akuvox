@@ -205,6 +205,25 @@ class TestSmartPlusApiE2E(unittest.IsolatedAsyncioTestCase):
             subdomain="ecloud",
         )
 
+    async def test_ecloud_server_discovery_used_post_without_a_timing_out_get(self) -> None:
+        """Non-US accounts avoided the GET endpoint that does not serve them."""
+        client = self._client([_success({"rtsp_server": "rtsp.example:554"})])
+        client._async_ensure_rest_server = AsyncMock(return_value=True)
+
+        self.assertTrue(
+            await client.async_make_servers_list_request(
+                hass=self.hass,
+                auth_token="auth-token",
+                token="session-token",
+                country_code="972",
+                phone_number="5551234",
+                subdomain="ecloud",
+            )
+        )
+
+        self.assertEqual(len(self.session.requests), 1)
+        self.assertEqual(self.session.requests[0]["method"], "post")
+
     async def test_activity_response_published_a_new_door_event(self) -> None:
         """A valid v4 activity response fired the event without a duplicate request."""
         client = self._client(

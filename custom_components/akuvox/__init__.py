@@ -10,6 +10,7 @@ import logging
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
@@ -35,6 +36,9 @@ PLATFORMS: list[Platform] = [
 async def async_setup(hass: HomeAssistant, _config: dict) -> bool:
     """Set up shared Akuvox resources before any account is configured."""
     async_register_websocket_api(hass)
+    # Register the panel from persisted entry options, independently of cloud
+    # connectivity. A failed account refresh must not make it disappear.
+    await async_refresh_panel(hass)
     return True
 
 
@@ -55,11 +59,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
     await async_update_configuration(hass=hass, entry=entry)
     _configure_debug_logging(hass)
+    # Keep the sidebar available even while the cloud service is temporarily
+    # unavailable. The panel can then show its cached/reauthentication state.
+    await async_refresh_panel(hass)
 
     # https://developers.home-assistant.io/docs/integration_fetching_data#coordinated-single-api-poll-for-data-for-all-entities
     try:
         await coordinator.async_config_entry_first_refresh()
-    except UpdateFailed as error:
+    except (ConfigEntryNotReady, UpdateFailed) as error:
         # SmartPlus's cloud endpoints are occasionally slow or unavailable.
         # Do not hold up Home Assistant startup (and therefore the sidebar
         # panel) for a transient transport failure. Authentication failures
@@ -74,7 +81,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     coordinator.client.async_start_proactive_token_refresh()
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    await async_refresh_panel(hass)
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
     entry.async_on_unload(coordinator.client.async_stop_proactive_token_refresh)
 

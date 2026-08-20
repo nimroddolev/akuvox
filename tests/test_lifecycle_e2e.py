@@ -4,7 +4,7 @@ from __future__ import annotations
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
 from custom_components.akuvox import (
@@ -63,6 +63,13 @@ class _UnavailableCoordinator(_Coordinator):
         raise UpdateFailed("Timed out fetching SmartPlus API data")
 
 
+class _NotReadyCoordinator(_Coordinator):
+    """Models Home Assistant's first-refresh wrapper for a transport outage."""
+
+    async def async_config_entry_first_refresh(self) -> None:
+        raise ConfigEntryNotReady("Timed out fetching SmartPlus API data")
+
+
 class _Entry:
     """Minimal config entry suitable for the integration lifecycle."""
 
@@ -116,9 +123,13 @@ class TestIntegrationLifecycleE2E(unittest.IsolatedAsyncioTestCase):
     async def test_domain_setup_registered_panel_commands_without_an_account(self) -> None:
         """The empty-account panel could request its WebSocket data."""
         hass = _Hass()
-        with patch("custom_components.akuvox.async_register_websocket_api") as register:
+        with (
+            patch("custom_components.akuvox.async_register_websocket_api") as register,
+            patch("custom_components.akuvox.async_refresh_panel", new=AsyncMock()) as refresh_panel,
+        ):
             self.assertTrue(await async_setup(hass, {}))
         register.assert_called_once_with(hass)
+        refresh_panel.assert_awaited_once_with(hass)
 
     async def test_setup_reload_and_unload_completed_cleanly(self) -> None:
         """Integration lifecycle registered and removed every managed resource."""
@@ -159,6 +170,24 @@ class TestIntegrationLifecycleE2E(unittest.IsolatedAsyncioTestCase):
             patch("custom_components.akuvox.async_load_and_migrate_credentials", new=AsyncMock(return_value={})),
             patch("custom_components.akuvox.AkuvoxApiClient", _Client),
             patch("custom_components.akuvox.AkuvoxDataUpdateCoordinator", _UnavailableCoordinator),
+            patch("custom_components.akuvox.async_get_clientsession", return_value=object()),
+            patch("custom_components.akuvox.async_register_websocket_api"),
+            patch("custom_components.akuvox.async_refresh_panel", new=AsyncMock()) as refresh_panel,
+            patch("custom_components.akuvox.async_clear_authentication_failure"),
+        ):
+            self.assertTrue(await async_setup_entry(hass, entry))
+
+        self.assertIn(entry.entry_id, hass.data[DOMAIN])
+        refresh_panel.assert_awaited_once_with(hass)
+
+    async def test_setup_kept_panel_available_when_first_refresh_was_not_ready(self) -> None:
+        """The Home Assistant first-refresh wrapper did not hide the panel."""
+        hass = _Hass()
+        entry = _Entry()
+        with (
+            patch("custom_components.akuvox.async_load_and_migrate_credentials", new=AsyncMock(return_value={})),
+            patch("custom_components.akuvox.AkuvoxApiClient", _Client),
+            patch("custom_components.akuvox.AkuvoxDataUpdateCoordinator", _NotReadyCoordinator),
             patch("custom_components.akuvox.async_get_clientsession", return_value=object()),
             patch("custom_components.akuvox.async_register_websocket_api"),
             patch("custom_components.akuvox.async_refresh_panel", new=AsyncMock()) as refresh_panel,

@@ -345,22 +345,28 @@ class AkuvoxApiClient:
             "accept-language": "en-US;q=1"
         }
 
-        # Try GET first (used by US/ucloud API)
-        LOGGER.debug("📡 Requesting server list (GET)...")
-        json_data = await self._async_api_wrapper(
-            method="get",
-            url=url,
-            headers=headers,
-            data=None,
-        )
-        if json_data is not None:
-            LOGGER.debug("✅ Server list retrieved successfully (GET)")
-            self._data.parse_sms_login_response(json_data)
-            if self._data.rtsp_server:
-                return True
+        # The GET variant is only served by the US regional endpoint. Calling
+        # it first for ecloud and other regions can time out before the POST
+        # request they require is ever attempted.
+        if self._data.subdomain == "ucloud":
+            LOGGER.debug("📡 Requesting server list (GET)...")
+            try:
+                json_data = await self._async_api_wrapper(
+                    method="get",
+                    url=url,
+                    headers=headers,
+                    data=None,
+                )
+            except AkuvoxApiClientCommunicationError as error:
+                LOGGER.debug("US server-list GET failed; trying POST: %s", error)
+                json_data = None
+            if json_data is not None:
+                LOGGER.debug("✅ Server list retrieved successfully (GET)")
+                self._data.parse_sms_login_response(json_data)
+                if self._data.rtsp_server:
+                    return True
 
-        # Fall back to POST (used by other regional APIs)
-        LOGGER.debug("📡 Requesting server list (POST fallback)...")
+        LOGGER.debug("📡 Requesting server list (POST)...")
         obfuscated_number = str(self.get_obfuscated_phone_number(phone_number))
         data = json.dumps({
             "auth_token": auth_token,

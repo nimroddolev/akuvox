@@ -1,35 +1,12 @@
 {
     "config": {
         "step": {
-            "user": {
-                "title": "Akuvox SmartPlus Sign-In",
-                "description": "Choose a sign-in method to connect to your Akuvox SmartPlus account:",
-                "menu_options": {
-                    "sms_sign_in_warning": "1. SMS Verification (Recommended)",
-                    "app_tokens_sign_in": "2. App Tokens (Advanced)"
-                }
-            },
-            "sms_sign_in_warning": {
-                "title": "SMS Verification",
-                "description": "⚠️ Warning ⚠️\n\nChoosing this sign-in method will log you out of the SmartPlus app on your phone.\n\nTo stay logged in to the app and use both the app and this integration, please use the `App Tokens` sign-in method instead."
-            },
             "sms_sign_in": {
                 "title": "SMS Verification",
                 "description": "Please enter your mobile phone number to receive your verification SMS:",
                 "data": {
                     "country_code": "Country",
                     "phone_number": "Phone Number (without the country code)",
-                    "subdomain": "Manually set the regional API subdomain"
-                }
-            },
-            "app_tokens_sign_in": {
-                "title": "Sign In via App Tokens",
-                "description": "Please enter your account details below.\n\nℹ️ To obtain your tokens please review the documentation.",
-                "data": {
-                    "country_code": "Country",
-                    "phone_number": "Phone Number (without the country code)",
-                    "token": "Token",
-                    "auth_token": "Auth Token",
                     "subdomain": "Manually set the regional API subdomain"
                 }
             },
@@ -50,25 +27,9 @@
                     "sms_code": "SMS Code"
                 }
             },
-            "reauth": {
-                "title": "Reauthenticate Akuvox SmartPlus",
-                "description": "Choose how you would like to restore this SmartPlus account.",
-                "menu_options": {
-                    "reauth_sms": "Verify with an SMS code",
-                    "reauth_tokens": "Enter current app tokens"
-                }
-            },
             "reauth_sms": {
                 "title": "Reauthenticate with SMS",
                 "description": "Request a verification code for the phone number registered with SmartPlus."
-            },
-            "reauth_tokens": {
-                "title": "Reauthenticate with app tokens",
-                "description": "Enter the current token pair from the SmartPlus app.",
-                "data": {
-                    "auth_token": "Authentication token",
-                    "token": "Session token"
-                }
             }
         },
         "error": {
@@ -89,13 +50,10 @@
     "options": {
         "step": {
             "init": {
-                "title": "SmartPlus User Tokens & Event Configuration",
-                "description": "If you signed into the SmartPlus app on your device after adding the integration, you can update your user tokens below. This will allow Home Assistant to communicate with Akuvox's servers while you remain signed in on your device.\n\nPlease refer to the documentation for instructions on how to extract your token string.",
+                "title": "Akuvox SmartPlus Event Configuration",
+                "description": "Adjust the door event and polling settings for this integration.",
                 "data": {
                     "country": "The country registered in your Akuvox SmartPlus account",
-                    "override": "Use the following SmartLife account tokens:",
-                    "auth_token": "Your SmartLife `auth_token` value",
-                    "token": "Your SmartLife `token` value",
                     "subdomain": "Manually set the regional API subdomain",
                     "event_screenshot_options": "Screenshot URLS for `akuvox_door_update` events:",
                     "door_log_poll_interval": "Door-log polling interval (seconds)",

@@ -15,8 +15,6 @@ from .repairs import async_clear_authentication_failure
 
 from .const import (
     DOMAIN,
-    DEFAULT_TOKEN,
-    DEFAULT_APP_TOKEN,
     LOGGER,
     LOCATIONS_DICT,
     COUNTRY_PHONE,
@@ -56,7 +54,7 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         return AkuvoxOptionsFlowHandler()
 
     async def async_step_user(self, user_input=None):
-        """Step 0: User selects sign-in method."""
+        """Step 0: Initialise the API client and proceed directly to SMS sign-in."""
 
         # Initialize the API client
         if self.akuvox_api_client is None:
@@ -72,11 +70,11 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                     hass=self.hass,
                     entry=None)
 
-
-        return self.async_show_menu(
-            step_id="user",
-            menu_options=["sms_sign_in_warning", "app_tokens_sign_in"],
+        return self.async_show_form(
+            step_id="sms_sign_in",
+            data_schema=vol.Schema(self.get_sms_sign_in_schema(user_input)),
             description_placeholders=user_input,
+            last_step=False,
         )
 
     async def async_step_reauth(self, _entry_data):
@@ -102,10 +100,7 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             hass=self.hass,
             entry=None,
         )
-        return self.async_show_menu(
-            step_id="reauth",
-            menu_options=["reauth_sms", "reauth_tokens"],
-        )
+        return await self.async_step_reauth_sms()
 
     async def async_step_reauth_sms(self, user_input=None):
         """Send an SMS code after the user selected SMS reauthentication."""
@@ -162,47 +157,6 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
 
         return await self._async_finish_reauthentication()
 
-    async def async_step_reauth_tokens(self, user_input=None):
-        """Validate and replace the saved SmartPlus token pair."""
-        schema = vol.Schema(
-            {
-                vol.Required("auth_token"): str,
-                vol.Required("token"): str,
-            }
-        )
-        if user_input is None:
-            return self.async_show_form(step_id="reauth_tokens", data_schema=schema, errors={})
-
-        auth_token = str(user_input["auth_token"]).strip()
-        token = str(user_input["token"]).strip()
-        try:
-            signed_in = await self.akuvox_api_client.async_make_servers_list_request(
-                hass=self.hass,
-                auth_token=auth_token,
-                token=token,
-                country_code=self.data["country_code"],
-                phone_number=self.data["phone_number"],
-                subdomain=self.data["subdomain"],
-            )
-            if signed_in:
-                # Match the fresh token-based setup flow.  The server-list
-                # response can update session details, so validate the new
-                # credentials through the full account bootstrap before
-                # replacing the existing entry's private credentials.
-                signed_in = await self.akuvox_api_client.async_retrieve_user_data(
-                    start_polling=False
-                )
-        except Exception as error:
-            LOGGER.warning("SmartPlus token reauthentication failed: %s", error)
-            signed_in = False
-        if not signed_in:
-            return self.async_show_form(
-                step_id="reauth_tokens",
-                data_schema=schema,
-                errors={"base": "invalid_auth"},
-            )
-        return await self._async_finish_reauthentication()
-
     async def _async_finish_reauthentication(self):
         """Persist validated credentials and reload the existing config entry."""
         devices = self.akuvox_api_client.get_devices_json()
@@ -244,52 +198,8 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             reason="reauth_successful",
         )
 
-    async def async_step_sms_sign_in_warning(self, user_input=None):
-        """Step 1a: Warning before continuing with login via SMS Verification."""
-        errors = {}
-        sms_sign_in = "Continue sign-in via SMS Verification"
-        app_tokens_sign_in = "Sign-in via app tokens"
-        data_schema = {
-            "warning_option_selection": selector.selector({
-                "select": {
-                    "options": [sms_sign_in, app_tokens_sign_in],
-                }
-            })
-        }
-        if user_input is not None:
-            if "warning_option_selection" in user_input:
-                selection = user_input["warning_option_selection"]
-                if selection == sms_sign_in:
-                    return self.async_show_form(
-                        step_id="sms_sign_in",
-                        data_schema=vol.Schema(self.get_sms_sign_in_schema(user_input)),
-                        description_placeholders=user_input,
-                        last_step=False,
-                        errors=None
-                    )
-                if selection == app_tokens_sign_in:
-                    return self.async_show_form(
-                        step_id="app_tokens_sign_in",
-                        data_schema=vol.Schema(self.get_app_tokens_sign_in_schema(user_input)),
-                        description_placeholders=user_input,
-                        last_step=False,
-                        errors=None
-                    )
-                errors["base"] = "Please choose a sign-in option."
-            else:
-                errors["base"] = "Please choose a valid sign-in option."
-
-        return self.async_show_form(
-            step_id="sms_sign_in_warning",
-            data_schema=vol.Schema(data_schema),
-            description_placeholders=user_input,
-            last_step=False,
-            errors=errors
-        )
-
-
     async def async_step_sms_sign_in(self, user_input=None):
-        """Step 1b: User enters their mobile phone country code and number.
+        """Step 1: User enters their mobile phone country code and number.
 
         Args:
             user_input (dict): User-provided input data.
@@ -349,86 +259,6 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             data_schema=vol.Schema(data_schema),
             description_placeholders=user_input,
             last_step=False,
-        )
-
-
-    async def async_step_app_tokens_sign_in(self, user_input=None):
-        """Step 1c: User enters app tokens and phone number to sign in."""
-        data_schema = self.get_app_tokens_sign_in_schema(user_input) # type: ignore
-        if user_input is not None:
-            country_code: str = helpers.get_country_phone_code_from_name(user_input.get("country_code")) # type: ignore
-            phone_number: str = user_input.get(
-                "phone_number", "").replace("-", "").replace(" ", "")
-            token: str = user_input.get("token", "")
-            auth_token: str = user_input.get("auth_token", "")
-            subdomain: str = user_input.get("subdomain", "Default")
-            subdomain = subdomain if subdomain != "Default" else helpers.get_subdomain_from_country_code(country_code)
-
-            self.data = {
-                "full_phone_number": f"(+{country_code}) {phone_number}",
-                "country_code": country_code,
-                "phone_number": phone_number,
-                "token": token,
-                "auth_token": auth_token,
-                "subdomain": subdomain
-            }
-
-            # Perform login via auth_token, token and phone number
-            if all(len(value) > 0 for value in (country_code, phone_number, token, auth_token)):
-                # Retrieve servers_list data.
-                login_successful = False
-                try:
-                    login_successful = await self.akuvox_api_client.async_make_servers_list_request(
-                        hass=self.hass,
-                        auth_token=auth_token,
-                        token=token,
-                        country_code=country_code,
-                        phone_number=phone_number,
-                        subdomain=subdomain)
-                except Exception as error:
-                    LOGGER.error("❌ Error calling async_make_servers_list_request: %s", str(error))
-
-                if login_successful is True:
-                    # Retrieve connected device data
-                    await self.akuvox_api_client.async_retrieve_user_data()
-                    devices_json = self.akuvox_api_client.get_devices_json()
-                    self.data.update(devices_json)
-
-                    ################################
-                    ### Create integration entry ###
-                    ################################
-                    return self.async_create_entry(
-                        title=self.akuvox_api_client.get_title(),
-                        data=self.data
-                    )
-                else:
-                    LOGGER.error("❌ Unable to retrieve user data. Check your tokens.")
-
-                return self.async_show_form(
-                    step_id="app_tokens_sign_in",
-                    data_schema=vol.Schema(self.get_app_tokens_sign_in_schema(user_input)),
-                    description_placeholders=user_input,
-                    last_step=True,
-                    errors={
-                        "base": "Sign in failed. Please check the values entered and try again."
-                    }
-                )
-
-            return self.async_show_form(
-                step_id="app_tokens_sign_in",
-                data_schema=vol.Schema(data_schema),
-                description_placeholders=user_input,
-                last_step=True,
-                errors={
-                    "base": "Please check the values enterted and try again."
-                }
-            )
-
-        return self.async_show_form(
-            step_id="app_tokens_sign_in",
-            data_schema=vol.Schema(data_schema),
-            description_placeholders=user_input,
-            last_step=True,
         )
 
     async def async_step_verify_sms_code(self, user_input=None):
@@ -525,50 +355,6 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                         )
         }
 
-    def get_app_tokens_sign_in_schema(self, user_input: dict = {}):
-        """Get the schema for app_tokens_sign_in step."""
-        user_input = user_input or {}
-
-        default_country_name_code = helpers.find_country_name_code(str(COUNTRY_PHONE.get(self.hass.config.country,"")))
-        default_country_name = LOCATIONS_DICT.get(default_country_name_code, {}).get("country") # type: ignore
-        country_names_list:list = helpers.get_country_names_list()
-
-        return {
-            vol.Required("country_code",
-                         default=default_country_name,
-                         description="Your phone's international calling code prefix"):
-                         selector.SelectSelector(
-                             selector.SelectSelectorConfig(
-                                 options=country_names_list,
-                                 mode=selector.SelectSelectorMode.DROPDOWN,
-                                 custom_value=False),
-                                 ),
-            vol.Required(
-                "phone_number",
-                msg=None,
-                default=user_input.get("phone_number"),  # type: ignore
-                description="Your phone number"): str,
-            vol.Required(
-                "auth_token",
-                msg=None,
-                default=user_input.get("auth_token", DEFAULT_APP_TOKEN),  # type: ignore
-                description="Your SmartPlus account's auth_token string"): str,
-            vol.Required(
-                "token",
-                msg=None,
-                default=user_input.get("token", DEFAULT_TOKEN),  # type: ignore
-                description="Your SmartPlus account's token string"): str,
-            vol.Optional("subdomain",
-                         default="Default", # type: ignore
-                         description="Manually set the regional API subdomain"):
-                         selector.SelectSelector(
-                             selector.SelectSelectorConfig(
-                                 options=SUBDOMAINS_LIST,
-                                 mode=selector.SelectSelectorMode.DROPDOWN,
-                                 custom_value=True),
-                                 )
-        }
-
 class AkuvoxOptionsFlowHandler(config_entries.OptionsFlow):
     """Handle options flow for Akuvox integration."""
 
@@ -581,7 +367,6 @@ class AkuvoxOptionsFlowHandler(config_entries.OptionsFlow):
         """Initialize the options flow."""
         # Define the options schema
         config_data = dict(self.config_entry.data)
-        credentials = await async_get_credentials(self.hass, self.config_entry.entry_id)
 
         event_screenshot_options = {
             "asap": "Receive events once generated, without waiting for camera screenshot URLs.",
@@ -609,16 +394,6 @@ class AkuvoxOptionsFlowHandler(config_entries.OptionsFlow):
                                  mode=selector.SelectSelectorMode.DROPDOWN,
                                  custom_value=False),
                                  ),
-            vol.Optional(
-                "auth_token",
-                default=credentials.get("auth_token", ""),
-                description="Your SmartPlus auth_token",
-            ): str,
-            vol.Optional(
-                "token",
-                default=credentials.get("token", ""),
-                description="Your SmartPlus token",
-            ): str,
             vol.Optional("subdomain",
                 default=current_subdomain, # type: ignore
                 description="Manually set the regional API subdomain"):
@@ -672,15 +447,6 @@ class AkuvoxOptionsFlowHandler(config_entries.OptionsFlow):
                 last_step=True
             )
 
-        auth_token = str(user_input.pop("auth_token", "")).strip()
-        token = str(user_input.pop("token", "")).strip()
-        if bool(auth_token) != bool(token):
-            return self.async_show_form(
-                step_id="init",
-                data_schema=options_schema,
-                errors={"base": "token_pair_required"},
-            )
-
         # API client
         if self.akuvox_api_client is None:
             coordinator: AkuvoxDataUpdateCoordinator
@@ -692,16 +458,8 @@ class AkuvoxOptionsFlowHandler(config_entries.OptionsFlow):
             self.akuvox_api_client._data.phone_number = self.get_data_key_value("phone_number") # type: ignore
             self.akuvox_api_client._data.wait_for_image_url = self.get_data_key_value("wait_for_image_url") # type: ignore
 
-        if auth_token:
-            await async_store_credentials(
-                self.hass, self.config_entry.entry_id, auth_token, token
-            )
-            self.akuvox_api_client._data.auth_token = auth_token # type: ignore
-            self.akuvox_api_client._data.token = token # type: ignore
-
         # User input is valid, update the options
         LOGGER.debug("Updating configuration...")
-        # user_input = None
         return self.async_create_entry(
             data=user_input, # type: ignore
             title="",

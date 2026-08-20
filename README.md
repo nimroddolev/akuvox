@@ -39,10 +39,7 @@ If you find this integration useful, consider showing your support:
   - [Via HACS (Recommended)](#via-hacs-recommended)
   - [Manual Installation](#manual-installation)
 - [Adding the Akuvox Integration](#adding-the-akuvox-integration)
-  - [Method 1: SMS Verification (Recommended)](#method-1-sms-verification-recommended)
-  - [Method 2: App Tokens (Advanced)](#method-2-app-tokens-advanced)
 - [Configuration](#configuration)
-- [Finding Your SmartPlus Account Tokens](#finding-your-smartplus-account-tokens)
 
 ***
 
@@ -185,50 +182,25 @@ Or:
 
 ## Adding the Akuvox Integration
 
+The integration is set up using SMS verification. You will receive a one-time code on your SmartPlus phone number to confirm your identity.
+
+> **Note:** Signing in via SMS will log you out of the SmartPlus app on your phone (and vice versa). If you wish to use both the integration and the app, you should sign in using a second account.
+
 1. Click this button: <a href="https://my.home-assistant.io/redirect/config_flow_start/?domain=akuvox" target="_blank" rel="noreferrer noopener"><img src="https://my.home-assistant.io/badges/config_flow_start.svg" alt="Open your Home Assistant instance and start setting up a new integration." /></a> to add the integration.
 
-4. Click `OPEN LINK`
+2. Click `OPEN LINK`
 
-5. Click `OK`:
+3. Click `OK`:
 
 <img src="https://user-images.githubusercontent.com/1849295/269954970-15b480b7-6e41-4be3-966b-451143ab21a1.png" width="400">
 
-4. Select a sign in method:
-
-<img src="https://user-images.githubusercontent.com/1849295/273309170-31e1e9cf-4d93-469a-9a7c-0bc101b4ac4c.png" width="500">
-
-
-### Method 1: SMS Verification (Recommended)
-
-Sigining in via SMS verification will sign you out from the SmartPlus app on your device. If you wish to stay signed in on the app and also use the integration in Home Assistant please use the [App Tokens](#method-2-app-tokens-advanced) sign in method below.
-
-1. Select `Continue sign-in with SMS Verification` and click `NEXT`
-
-<img src="https://user-images.githubusercontent.com/1849295/270022694-4ff0cb9f-2b15-4333-abec-df38e8b61d85.png" width="650">
-
-2. Enter your phone number and click `NEXT` to receive your SMS verification code
+4. Enter your phone number and click `NEXT` to receive your SMS verification code:
 
 <img src="https://user-images.githubusercontent.com/1849295/269956757-ef24502e-38ed-4ea6-9b6e-07c0d50ecdc3.png" width="500">
 
-3. Enter your code and click `SUBMIT`
+5. Enter your code and click `SUBMIT`:
 
 <img src="https://user-images.githubusercontent.com/1849295/269956800-e5bb633b-db85-4acb-b90d-effa81c1fa05.png" width="400">
-
-
-### Method 2: App Tokens (Advanced)
-
-Signing in using your SmartPlus app session tokens allows you to remain signed in to the SmartPlus app on your device. These are private app-session credentials, not Akuvox OpenAPI OAuth tokens. Do not share them in issues, logs, or screenshots.
-
-When SmartPlus rejects an expired session, the integration refreshes the short-lived `token` using the paired `auth_token`, stores the replacement securely in the Home Assistant config entry, and retries the failed request once. If the refresh credential is no longer valid, Home Assistant will report the authentication failure.
-
-As SmartPlus does not report a token expiry time, the integration also proactively refreshes the session every six hours. The refresh time is persisted so Home Assistant restarts do not postpone renewal indefinitely.
-
-The integration options allow the door-log polling interval and maximum retry backoff to be adjusted. The default 60-second interval is intentionally conservative to avoid SmartPlus rate limits; values below 30 seconds are not permitted.
-
-1. Obtain your `auth_token` and `token` values (see the [Finding you SmartPlus Account Tokens](#finding-your-smartplus-account-tokens) section below).
-
-1. Enter your phone number, `auth_token` and `token` values and click `SUBMIT`:
-<img src="https://user-images.githubusercontent.com/1849295/269958871-071008db-c2d8-4455-a612-eb0a9721ea39.png" width="400">
 
 ### You should now have one device per Akuvox door camera with a camera and door relay button/s entity
 
@@ -241,24 +213,15 @@ Once configured, Akuvox cameras & door buttons will appear as a device with a ca
 
 Via the integration's `CONFIGURE` button you can adjust the following:
 
-1. Update your SmartPlus app session tokens used to communicate with the private SmartPlus API. This is particularly useful if you logged into the SmartPlus app on your device after adding the integration. For help accessing your account's tokens, please refer to the [Finding you SmartPlus Account Tokens](#finding-your-smartplus-account-tokens) section below.
-   
 1. Choose between two options for `akuvox_door_update` event handling:
    - Wait for camera screenshots to become available before triggering the event.
    - Receive the event as soon as it is generated, without waiting for camera screenshots.
 
-## Finding your SmartPlus Account Tokens
+---
 
-The `auth_token` and `token` values are private credentials. Keep them out of bug reports, Home Assistant logs, screenshots, and public discussions. They are not interchangeable with the OAuth credentials described in Akuvox's official OpenAPI documentation.
-
-To obtain your SmartPlus account tokens you can use an HTTP proxy (such as [mitmproxy](https://mitmproxy.org/))
-
-1. Connect your device to your HTTP proxy
-
-2. Log out from your SmartPlus app, and then log in with your phone number and SMS code
-
-3. Search for the `sms_login` request. Select it and click on the `Response` tab. Set the View to `JSON`.
-
-    You should find your `auth_token` and `token` values:
-
-![instructions](https://github.com/user-attachments/assets/c1550332-4499-48f0-a55e-34dea410e558)
+> **App Token sign-in (deprecated — no longer working)**
+>
+> A previous version of this integration offered an alternative sign-in method that accepted
+> `auth_token` and `token` values copied directly from the SmartPlus app. This method no
+> longer works: token pairs obtained this way cannot be refreshed, causing the integration
+> to lose access shortly after setup. The option has been removed.
