@@ -349,10 +349,12 @@ export const mainStyles = `
     header {
       padding: 16px;
       display: grid;
-      grid-template-columns: 52px minmax(0, 1fr);
+      grid-template-columns: 1fr;
+      justify-items: center;
+      text-align: center;
     }
     header select {
-      grid-column: 1 / -1;
+      grid-column: auto;
       justify-self: center;
       margin-left: 0;
       width: min(100%, 360px);

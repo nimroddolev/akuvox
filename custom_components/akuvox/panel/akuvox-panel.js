@@ -7,7 +7,7 @@
 import { PANEL_TAG, TAB_HASHES, TAB_HASH_BY_ID, TABS } from "./utils/constants.js";
 import { escapeHtml } from "./utils/dom.js";
 import { copyText } from "./utils/clipboard.js";
-import { getPanelStyles } from "./styles/index.js?v=20260820-local-activity-storage";
+import { getPanelStyles } from "./styles/index.js?v=20260820-mobile-header-center";
 import { showNotice, confirmModal, callWsWithBlocker } from "./components/dialogs.js";
 import { installCameraRelayActions } from "./components/camera-actions.js?v=20260820-camera-relay-content-center";
 import { closeKeyActionsMenu } from "./components/key-menu.js";
@@ -507,10 +507,12 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
       ${getPanelStyles()}
       <main class="${requiresReauthentication ? "reauthentication-required" : ""} ${this._settings?.mirror_activity_images ? "activity-images-mirrored" : ""}">
         <header>
-          <img class="brand-mark" src="/api/akuvox_panel/akuvox.svg" alt="Akuvox SmartPlus">
-          <div>
-            <h1>Akuvox SmartPlus</h1>
-            <p>Doors, calls, cameras, and temporary access</p>
+          <div class="logo-text-container">
+            <div class="logo-text">
+              <img class="brand-mark" src="/api/akuvox_panel/akuvox.svg" alt="Akuvox SmartPlus">
+              <h1>Akuvox SmartPlus</h1>
+              <p>Doors, calls, cameras, and temporary access</p>
+            </div>
           </div>
           ${
             this._accounts.length
