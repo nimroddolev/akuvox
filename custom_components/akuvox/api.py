@@ -40,6 +40,8 @@ from .const import (
     DOOR_LOG_POLL_INTERVAL,
     ACTIVITY_ENDPOINT_TYPE,
     ACTIVITY_HISTORY_LIMIT,
+    STORE_ACTIVITY_HISTORY,
+    ACTIVITY_HISTORY_MAX_STORAGE_MB,
     PANEL_DATA_UPDATED_EVENT,
     REST_SERVER_API_VERSION,
     API_REST_SERVER_DATA,
@@ -767,7 +769,9 @@ class AkuvoxApiClient:
             if isinstance(stored_history, list):
                 self._activity_history = [
                     dict(event) for event in stored_history if isinstance(event, dict)
-                ][:ACTIVITY_HISTORY_LIMIT]
+                ]
+                if not self._activity_storage_enabled():
+                    self._activity_history = self._activity_history[:ACTIVITY_HISTORY_LIMIT]
             self._activity_history_loaded = True
         existing = {
             str(item.get("CaptureTime", "")): index
@@ -791,12 +795,52 @@ class AkuvoxApiClient:
             elif self._activity_history[existing_index] != event:
                 self._activity_history[existing_index] = dict(event)
                 changed = True
-        del self._activity_history[ACTIVITY_HISTORY_LIMIT:]
+        if self._activity_storage_enabled():
+            changed = await self._async_store_activity_previews() or changed
+            self._prune_activity_storage()
+        else:
+            del self._activity_history[ACTIVITY_HISTORY_LIMIT:]
         if changed:
             await self._data.async_set_stored_data_for_key(
                 "panel_activity_history", self._activity_history
             )
             self._notify_panel_data_updated()
+
+    def _activity_storage_enabled(self) -> bool:
+        return bool(self._entry and self._entry.options.get(STORE_ACTIVITY_HISTORY, False))
+
+    def _activity_storage_limit_bytes(self) -> int:
+        if not self._entry:
+            return 0
+        try:
+            return max(0, int(self._entry.options.get(ACTIVITY_HISTORY_MAX_STORAGE_MB, 0))) * 1_000_000
+        except (TypeError, ValueError):
+            return 0
+
+    async def _async_store_activity_previews(self) -> bool:
+        """Cache activity previews alongside their persisted event metadata."""
+        changed = False
+        for event in self._activity_history:
+            if event.get("LocalPreview") or not event.get("PicUrl"):
+                continue
+            try:
+                event["LocalPreview"] = await self.async_get_panel_activity_image(
+                    str(event.get("CaptureTime", ""))
+                )
+                changed = True
+            except AkuvoxApiClientError:
+                continue
+        return changed
+
+    def _prune_activity_storage(self) -> None:
+        """Discard oldest locally stored events until the configured cap is met."""
+        limit = self._activity_storage_limit_bytes()
+        if not limit:
+            return
+        size = sum(len(str(item.get("LocalPreview", {}).get("data", ""))) * 3 // 4 for item in self._activity_history)
+        while self._activity_history and size > limit:
+            removed = self._activity_history.pop()
+            size -= len(str(removed.get("LocalPreview", {}).get("data", ""))) * 3 // 4
 
     async def async_retrieve_call_history(self) -> bool:
         """Fetch and retain the latest SmartPlus call-history page for the panel."""
@@ -906,6 +950,9 @@ class AkuvoxApiClient:
             None,
         )
         image_url = str(event.get("PicUrl", "")) if event else ""
+        local_preview = event.get("LocalPreview") if event else None
+        if isinstance(local_preview, dict) and local_preview.get("data"):
+            return local_preview
         parsed_url = urlsplit(image_url)
         if (
             parsed_url.scheme not in {"https", "http"}

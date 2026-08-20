@@ -44,6 +44,8 @@ from .const import (
     CAMERA_STREAM_ORIENTATIONS,
     CUSTOM_ACTIVITY_IMAGE_ORIENTATIONS,
     ACTIVITY_IMAGE_ORIENTATIONS,
+    STORE_ACTIVITY_HISTORY,
+    ACTIVITY_HISTORY_MAX_STORAGE_MB,
     DEBUG_LOGGING,
     PANEL_RUNTIME_KEY,
     PANEL_RUNTIME_DOMAIN,
@@ -347,6 +349,10 @@ async def websocket_panel_settings(
                 ACTIVITY_IMAGE_ORIENTATIONS: _entry_value(
                     entry, ACTIVITY_IMAGE_ORIENTATIONS, {}
                 ),
+                STORE_ACTIVITY_HISTORY: bool(_entry_value(entry, STORE_ACTIVITY_HISTORY, False)),
+                ACTIVITY_HISTORY_MAX_STORAGE_MB: int(
+                    _entry_value(entry, ACTIVITY_HISTORY_MAX_STORAGE_MB, 0)
+                ),
                 DEBUG_LOGGING: bool(_entry_value(entry, DEBUG_LOGGING, False)),
                 "token_update": {
                     "timestamp": _entry_value(entry, TOKEN_REFRESHED_AT),
@@ -383,6 +389,8 @@ async def websocket_panel_settings(
         vol.Required(CAMERA_STREAM_ORIENTATIONS): dict,
         vol.Required(CUSTOM_ACTIVITY_IMAGE_ORIENTATIONS): bool,
         vol.Required(ACTIVITY_IMAGE_ORIENTATIONS): dict,
+        vol.Required(STORE_ACTIVITY_HISTORY): bool,
+        vol.Required(ACTIVITY_HISTORY_MAX_STORAGE_MB): vol.All(vol.Coerce(int), vol.Range(min=0)),
         vol.Required(DEBUG_LOGGING): bool,
         vol.Required("auth_token"): str,
         vol.Required("token"): str,
@@ -465,6 +473,8 @@ async def websocket_panel_save_settings(
             ACTIVITY_IMAGE_ORIENTATIONS: _orientations(
                 msg[ACTIVITY_IMAGE_ORIENTATIONS], msg[CUSTOM_ACTIVITY_IMAGE_ORIENTATIONS]
             ),
+            STORE_ACTIVITY_HISTORY: msg[STORE_ACTIVITY_HISTORY],
+            ACTIVITY_HISTORY_MAX_STORAGE_MB: msg[ACTIVITY_HISTORY_MAX_STORAGE_MB],
             DEBUG_LOGGING: msg[DEBUG_LOGGING],
         }
     )

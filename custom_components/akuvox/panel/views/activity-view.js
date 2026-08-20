@@ -5,6 +5,11 @@
 import { escapeHtml } from "../utils/dom.js";
 import { icons } from "../utils/icons.js";
 import { showActivityImageDialog } from "../components/image-dialog.js?v=20260820-camera-orientation";
+import {
+  ACTIVITY_INITIAL_PAGE_SIZE,
+  nextActivityVisibleCount,
+  visibleActivityItems,
+} from "../utils/activity-pagination.mjs";
 
 const activityOrientation = (host, item) => {
   const settings = host._settings || {};
@@ -89,6 +94,9 @@ export const renderActivityView = (host, account) => {
   const heading = (label, key) =>
     `<button class="sort-button ${host._activitySort.key === key ? "active" : ""}" data-activity-sort="${key}" data-direction="${host._activitySort.direction === "asc" ? "↑" : "↓"}">${label}</button>`;
 
+  const visible = visibleActivityItems(filtered, host._activityVisibleCount);
+  const hasMore = visible.length < filtered.length;
+
   return `
     <div class="card table-wrap">
       <h2>Latest activity</h2>
@@ -128,7 +136,7 @@ export const renderActivityView = (host, account) => {
         </thead>
         <tbody>
           ${
-            filtered
+            visible
               .map(
                 (item) => `
               <tr>
@@ -144,6 +152,11 @@ export const renderActivityView = (host, account) => {
           }
         </tbody>
       </table>
+      ${
+        hasMore
+          ? `<div class="activity-load-more" data-activity-load-more aria-live="polite">Scroll to load more activity</div>`
+          : ""
+      }
     </div>
   `;
 };
@@ -153,6 +166,7 @@ export const renderActivityView = (host, account) => {
  * @param {HTMLElement} host
  */
 export const bindActivityEvents = (host) => {
+  host._activityPaginationObserver?.disconnect();
   host.shadowRoot
     .querySelectorAll("[data-activity-image]")
     .forEach((button) =>
@@ -185,6 +199,7 @@ export const bindActivityEvents = (host) => {
     .forEach((select) =>
       select.addEventListener("change", () => {
         host._activityFilters[select.dataset.activityFilter] = select.value;
+        host._activityVisibleCount = ACTIVITY_INITIAL_PAGE_SIZE;
         host._render();
       })
     );
@@ -202,7 +217,22 @@ export const bindActivityEvents = (host) => {
               ? "desc"
               : "asc",
         };
+        host._activityVisibleCount = ACTIVITY_INITIAL_PAGE_SIZE;
         host._render();
       })
     );
+
+  const loadMore = host.shadowRoot.querySelector("[data-activity-load-more]");
+  if (loadMore && typeof IntersectionObserver !== "undefined") {
+    host._activityPaginationObserver = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry.isIntersecting) return;
+        host._activityPaginationObserver?.disconnect();
+        host._activityVisibleCount = nextActivityVisibleCount(host._activityVisibleCount);
+        host._render();
+      },
+      { rootMargin: "0px 0px 120px" }
+    );
+    host._activityPaginationObserver.observe(loadMore);
+  }
 };

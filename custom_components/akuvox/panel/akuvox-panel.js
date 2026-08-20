@@ -7,16 +7,16 @@
 import { PANEL_TAG, TAB_HASHES, TAB_HASH_BY_ID, TABS } from "./utils/constants.js";
 import { escapeHtml } from "./utils/dom.js";
 import { copyText } from "./utils/clipboard.js";
-import { getPanelStyles } from "./styles/index.js?v=20260820-activity-orientation-fix";
+import { getPanelStyles } from "./styles/index.js?v=20260820-local-activity-storage";
 import { showNotice, confirmModal, callWsWithBlocker } from "./components/dialogs.js";
 import { installCameraRelayActions } from "./components/camera-actions.js?v=20260820-camera-orientation";
 import { closeKeyActionsMenu } from "./components/key-menu.js";
 
 import { renderDevicesView, bindDevicesEvents } from "./views/devices-view.js";
-import { renderActivityView, bindActivityEvents } from "./views/activity-view.js?v=20260820-activity-orientation-fix";
+import { renderActivityView, bindActivityEvents } from "./views/activity-view.js?v=20260820-activity-pagination-tests";
 import { renderCallsView, bindCallsEvents } from "./views/calls-view.js";
 import { renderKeysView, bindKeysEvents } from "./views/keys-view.js?v=20260817-range-picker";
-import { renderSettingsView, bindSettingsEvents } from "./views/settings-view.js?v=20260820-camera-orientation";
+import { renderSettingsView, bindSettingsEvents } from "./views/settings-view.js?v=20260820-local-activity-storage";
 import { renderHelpView } from "./views/help-view.js";
 
 class AkuvoxSmartPlusPanel extends HTMLElement {
@@ -41,6 +41,8 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
 
     this._activityFilters = { Location: "", CaptureType: "", Initiator: "" };
     this._activitySort = { key: "CaptureTime", direction: "desc" };
+    this._activityVisibleCount = 20;
+    this._activityPaginationObserver = null;
     this._activityImages = new Map();
     this._activityImageFailures = new Map();
 
@@ -95,6 +97,7 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
     this._unsubscribePanelDataUpdates?.();
     this._unsubscribePanelDataUpdates = undefined;
     this._tabResizeObserver?.disconnect();
+    this._activityPaginationObserver?.disconnect();
     this._tabResizeObserver = null;
     if (this._tabResizeListenerRegistered) {
       window.removeEventListener("resize", this._onTabWindowResize);

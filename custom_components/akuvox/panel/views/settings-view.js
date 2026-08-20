@@ -125,6 +125,14 @@ export const renderSettingsView = (host) => {
         <fieldset>
           <legend>Panel Options</legend>
           <label class="check">
+            <input name="store_activity_history" type="checkbox" ${settings.store_activity_history ? "checked" : ""}>
+            Store activity history and preview images locally
+          </label>
+          <label>
+            Local activity storage limit (MB, 0 = unlimited)
+            <input name="activity_history_max_storage_mb" type="number" min="0" value="${escapeHtml(settings.activity_history_max_storage_mb || 0)}">
+          </label>
+          <label class="check">
             <input name="panel_enabled" type="checkbox" ${settings.panel_enabled ? "checked" : ""}> Show the SmartPlus panel in the sidebar
           </label>
           <label class="check">
@@ -202,6 +210,8 @@ export const handleSaveSettings = async (host, event) => {
       panel_enabled: form.get("panel_enabled") === "on",
       panel_admin_only: form.get("panel_admin_only") === "on",
       mirror_activity_images: form.get("mirror_activity_images") === "on",
+      store_activity_history: form.get("store_activity_history") === "on",
+      activity_history_max_storage_mb: Number(form.get("activity_history_max_storage_mb")),
       custom_camera_stream_orientations: form.get("custom_camera_stream_orientations") === "on",
       camera_stream_orientations: Object.fromEntries(
         [...event.target.querySelectorAll("[data-stream-orientation]")].map((select) => [select.dataset.streamOrientation, select.value])
