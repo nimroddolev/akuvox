@@ -455,8 +455,9 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
   }
 
   _content(account) {
+    if (this._activeTab === "help") return renderHelpView();
+
     if (!account) {
-      if (this._activeTab === "help") return renderHelpView();
       return `
         <div class="card auth-notice">
           <p>No active Akuvox account is available.</p>
@@ -479,7 +480,6 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
     if (this._activeTab === "calls") return renderCallsView(this, account);
     if (this._activeTab === "keys") return renderKeysView(this, account);
     if (this._activeTab === "settings") return renderSettingsView(this);
-    if (this._activeTab === "help") return renderHelpView();
     return renderDevicesView(account);
   }
 
@@ -495,7 +495,10 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
       Boolean(this._settings?.mirror_activity_images)
     );
 
-    const tabsMarkup = TABS.map(
+    const availableTabs = requiresReauthentication
+      ? TABS.filter(([id]) => id === "help")
+      : TABS;
+    const tabsMarkup = availableTabs.map(
       ([id, label]) =>
         `<button class="tab ${this._activeTab === id ? "selected" : ""}" data-tab="${id}">${label}</button>`
     ).join("");
@@ -525,9 +528,7 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
           }
         </header>
         ${
-          requiresReauthentication
-            ? ""
-            : `<div class="tab-navigation">
+          `<div class="tab-navigation">
                 <button class="tab-scroll-arrow" type="button" data-tab-scroll="left" aria-label="Show previous tabs" hidden>‹</button>
                 <div class="tab-scroll-viewport" data-tab-scroll-viewport>
                   <nav>${tabsMarkup}</nav>
@@ -536,7 +537,7 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
               </div>`
         }
         <section class="${requiresReauthentication ? "auth-required-content" : ""}">
-          ${this._error ? `<p class="notice">${this._error}</p>` : this._content(account)}
+          ${this._error && this._activeTab !== "help" ? `<p class="notice">${this._error}</p>` : this._content(account)}
         </section>
       </main>
     `;
