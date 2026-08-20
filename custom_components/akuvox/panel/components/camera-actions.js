@@ -35,6 +35,7 @@ export const installCameraRelayActions = (host, relays, orientation = "none", at
   ].find((action) => /download snapshot/i.test(action.textContent || ""));
 
   actions.querySelector(".akuvox-camera-relay-actions")?.remove();
+  host._clearCameraRelayCountdowns?.();
 
   if (nativeSnapshotAction) {
     const walker = documentRef.createTreeWalker(
@@ -73,24 +74,28 @@ export const installCameraRelayActions = (host, relays, orientation = "none", at
     button.removeAttribute("disabled");
     button.setAttribute("aria-label", name);
     button.innerHTML = `<ha-icon icon="mdi:door-open" aria-hidden="true"></ha-icon><span>${escapeHtml(name)}</span>`;
+    button.style.cssText +=
+      ";min-height:36px;padding:0 12px;border:0;border-radius:8px;color:#fff;background:#55bfe6;justify-content:center;text-align:center;";
 
     if (!nativeSnapshotAction) {
       button.style.cssText =
-        "display:inline-flex;align-items:center;gap:7px;min-height:36px;padding:0 8px;border:0;border-radius:0;color:var(--primary-color,#03a9d9);background:transparent;font:500 14px/1 inherit;white-space:nowrap;cursor:pointer;";
+        "display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:36px;padding:0 12px;border:0;border-radius:8px;color:#fff;background:#55bfe6;font:500 14px/1 inherit;text-align:center;white-space:nowrap;cursor:pointer;";
     }
     button.querySelector("ha-icon").style.cssText = "--mdc-icon-size:20px;";
 
-    if (!nativeSnapshotAction) {
-      button.addEventListener("mouseenter", () => {
-        button.style.background = "var(--secondary-background-color,#eef4f7)";
-      });
-      button.addEventListener("mouseleave", () => {
-        button.style.background = "transparent";
-      });
-    }
+    button.addEventListener("mouseenter", () => {
+      if (!host._cameraRelayCountdowns?.has(button)) {
+        button.style.background = "#76c8c3";
+      }
+    });
+    button.addEventListener("mouseleave", () => {
+      if (!host._cameraRelayCountdowns?.has(button)) {
+        button.style.background = "#55bfe6";
+      }
+    });
 
     button.addEventListener("click", () => {
-      void host._relay(relay.mac, relay.relay_id);
+      void host._cameraRelayCountdown(button, relay);
     });
 
     group.append(button);
@@ -98,13 +103,4 @@ export const installCameraRelayActions = (host, relays, orientation = "none", at
 
   actions.prepend(group);
 
-  // The snapshot control can arrive after the rest of the camera modal. Keep
-  // the relay immediately usable, then replace it with HA's native-styled
-  // element once that action is available.
-  if (!nativeSnapshotAction && attempt < 30) {
-    window.setTimeout(
-      () => installCameraRelayActions(host, relays, orientation, attempt + 1),
-      200
-    );
-  }
 };
