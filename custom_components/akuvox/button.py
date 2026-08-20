@@ -15,7 +15,7 @@ from .const import (
     LOGGER,
     NAME,
     VERSION,
-    DATA_STORAGE_KEY
+    account_storage_key,
 )
 from .entity import AkuvoxEntity
 
@@ -23,12 +23,10 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     """Set up the door relay platform."""
-    coordinator: AkuvoxDataUpdateCoordinator
-    for _key, value in hass.data[DOMAIN].items():
-        coordinator = value
+    coordinator: AkuvoxDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
     client = coordinator.client
 
-    store = storage.Store(hass, 1, DATA_STORAGE_KEY)
+    store = storage.Store(hass, 1, account_storage_key(entry.entry_id, "cache"))
     try:
         device_data: Any = await store.async_load()
     except (OSError, ValueError) as error:
@@ -95,12 +93,12 @@ class AkuvoxDoorRelayEntity(ButtonEntity, AkuvoxEntity):
         self._token = client_data.token if client_data else self.get_saved_value("token")
         self._data = data
 
-        self._attr_unique_id = unique_name
+        self._attr_unique_id = f"{entry.entry_id}_{unique_name}"
         self._attr_name = unique_name
 
         LOGGER.debug("Adding Akuvox door relay '%s'", unique_name)
         self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, name)},  # type: ignore
+            identifiers={(DOMAIN, f"{entry.entry_id}:{name}")},  # type: ignore
             name=name,
             model=VERSION,
             manufacturer=NAME,

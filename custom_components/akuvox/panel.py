@@ -190,7 +190,9 @@ async def websocket_panel_data(
         ]
         for item in [*panel_data["cameras"], *panel_data["relays"]]:
             name = str(item.get("name", ""))
-            device = device_registry.async_get_device(identifiers={(DOMAIN, name)})
+            device = device_registry.async_get_device(
+                identifiers={(DOMAIN, f"{entry.entry_id}:{name}")}
+            )
             if device is not None:
                 item["device_id"] = device.id
         accounts.append(

@@ -7,19 +7,20 @@ from homeassistant.components.ffmpeg import async_get_image
 from homeassistant.helpers import storage
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.const import ATTR_IDENTIFIERS, CONF_NAME, CONF_VERIFY_SSL
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.components.camera import CameraCapabilities
 from homeassistant.components.camera.const import StreamType
 from homeassistant.components.generic.camera import GenericCamera
 
-from .const import DOMAIN, LOGGER, NAME, VERSION, DATA_STORAGE_KEY
+from .const import DOMAIN, LOGGER, NAME, VERSION, account_storage_key
 
 
 async def async_setup_entry(hass: HomeAssistant,
-                            _entry,
+                            entry,
                             async_add_devices: Callable[[list], Awaitable[None]]):
     """Set up the camera platform."""
-    store = storage.Store(hass, 1, DATA_STORAGE_KEY)
+    store = storage.Store(hass, 1, account_storage_key(entry.entry_id, "cache"))
     device_data = await store.async_load()
 
     if not device_data:
@@ -37,6 +38,7 @@ async def async_setup_entry(hass: HomeAssistant,
         rtsp_url = str(camera_data["video_url"]).strip()
         entities.append(AkuvoxCameraEntity(
             hass=hass,
+            entry=entry,
             name=name,
             rtsp_url=rtsp_url
         ))
@@ -54,6 +56,7 @@ class AkuvoxCameraEntity(GenericCamera):
     def __init__(
         self,
         hass: HomeAssistant,
+        entry: ConfigEntry,
         name: str,
         rtsp_url: str) -> None:
         """Initialize the Akuvox camera class."""
@@ -82,11 +85,11 @@ class AkuvoxCameraEntity(GenericCamera):
 
         self._name = name
         self._rtsp_url = rtsp_url
-        self._attr_unique_id = name
+        self._attr_unique_id = f"{entry.entry_id}_{name}"
         self._attr_name = name
 
         self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, name)},
+            identifiers={(DOMAIN, f"{entry.entry_id}:{name}")},
             name=name,
             model=VERSION,
             manufacturer=NAME,

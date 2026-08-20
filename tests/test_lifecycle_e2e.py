@@ -11,6 +11,7 @@ from custom_components.akuvox import (
     async_reload_entry,
     async_setup,
     async_setup_entry,
+    async_stop_polling,
     async_unload_entry,
 )
 from custom_components.akuvox.api import (
@@ -28,6 +29,7 @@ class _Client:
     def __init__(self, *_args, **_kwargs) -> None:
         self.started = False
         self.stopped = False
+        self.polling_stopped = False
         self.skip_reload = False
 
     def async_start_proactive_token_refresh(self) -> None:
@@ -41,7 +43,7 @@ class _Client:
         return value
 
     async def async_stop_polling(self) -> None:
-        return None
+        self.polling_stopped = True
 
 
 class _Coordinator:
@@ -161,6 +163,21 @@ class TestIntegrationLifecycleE2E(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(await async_unload_entry(hass, entry))
         self.assertTrue(coordinator.client.stopped)
         self.assertNotIn(entry.entry_id, hass.data[DOMAIN])
+
+    async def test_stopping_one_account_left_other_activity_pollers_running(self) -> None:
+        """Activity polling belongs to the selected config entry only."""
+        hass = _Hass()
+        first = _Client()
+        second = _Client()
+        hass.data[DOMAIN] = {
+            "first": type("Coordinator", (), {"client": first})(),
+            "second": type("Coordinator", (), {"client": second})(),
+        }
+
+        await async_stop_polling(hass, "second")
+
+        self.assertFalse(first.polling_stopped)
+        self.assertTrue(second.polling_stopped)
 
     async def test_setup_kept_panel_available_when_cloud_was_temporarily_unavailable(self) -> None:
         """A transport timeout did not put the whole integration into retry-only state."""

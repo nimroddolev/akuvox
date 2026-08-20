@@ -16,7 +16,7 @@ from .const import (
     LOGGER,
     NAME,
     VERSION,
-    DATA_STORAGE_KEY
+    account_storage_key,
 )
 from .entity import AkuvoxEntity
 
@@ -24,11 +24,9 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     """Set up the temporary door key platform."""
-    coordinator: AkuvoxDataUpdateCoordinator
-    for _key, value in hass.data[DOMAIN].items():
-        coordinator = value
+    coordinator: AkuvoxDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
     client = coordinator.client
-    store = storage.Store(hass, 1, DATA_STORAGE_KEY)
+    store = storage.Store(hass, 1, account_storage_key(entry.entry_id, "cache"))
     try:
         device_data: Any = await store.async_load()
     except (OSError, ValueError) as error:
@@ -122,7 +120,7 @@ class AkuvoxTemporaryDoorKey(SensorEntity, AkuvoxEntity):
         self.expired = False
 
         name = f"{self.description} {self.key_id}".strip()
-        self._attr_unique_id = name
+        self._attr_unique_id = f"{entry.entry_id}_{name}"
         self._attr_name = name
         self._attr_key_code = key_code
 
@@ -130,7 +128,7 @@ class AkuvoxTemporaryDoorKey(SensorEntity, AkuvoxEntity):
 
         LOGGER.debug("Adding temporary door key '%s'", self._attr_unique_id)
         self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, "Temporary Keys")},  # type: ignore
+            identifiers={(DOMAIN, f"{entry.entry_id}:Temporary Keys")},  # type: ignore
             name="Temporary Keys",
             model=VERSION,
             manufacturer=NAME,

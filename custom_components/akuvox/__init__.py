@@ -104,8 +104,10 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Handle removal of an entry."""
-    await async_stop_polling(hass)
-    hass.data[DOMAIN][entry.entry_id].client.async_stop_proactive_token_refresh()
+    client = get_api_client(hass, entry.entry_id)
+    if client is not None:
+        await client.async_stop_polling()
+        client.async_stop_proactive_token_refresh()
     if unloaded := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
         hass.data[DOMAIN].pop(entry.entry_id)
         await async_refresh_panel(hass)
@@ -122,21 +124,32 @@ async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
 
 # Polling
 
-async def async_stop_polling(hass: HomeAssistant):
-    """Stop polling the personal door log API."""
-    api_client: AkuvoxApiClient = get_api_client(hass=hass) # type: ignore
-    await api_client.async_stop_polling()
+async def async_stop_polling(hass: HomeAssistant, entry_id: str | None = None):
+    """Stop one account's poller, or every account poller when unspecified."""
+    clients = (
+        [get_api_client(hass, entry_id)]
+        if entry_id is not None
+        else [item.client for item in hass.data.get(DOMAIN, {}).values()]
+    )
+    for client in clients:
+        if client is not None:
+            await client.async_stop_polling()
 
-async def async_start_polling(hass: HomeAssistant):
-    """Stop polling the personal door log API."""
-    api_client: AkuvoxApiClient = get_api_client(hass=hass) # type: ignore
-    await api_client.async_start_polling_personal_door_log()
+async def async_start_polling(hass: HomeAssistant, entry_id: str | None = None):
+    """Start one account's activity poller, or every account poller."""
+    clients = (
+        [get_api_client(hass, entry_id)]
+        if entry_id is not None
+        else [item.client for item in hass.data.get(DOMAIN, {}).values()]
+    )
+    for client in clients:
+        if client is not None:
+            await client.async_start_polling_personal_door_log()
 
-def get_api_client(hass: HomeAssistant):
-    """Akuvox API Client."""
-    for _key, value in hass.data[DOMAIN].items():
-        coordinator: AkuvoxDataUpdateCoordinator = value
-        return coordinator.client
+def get_api_client(hass: HomeAssistant, entry_id: str) -> AkuvoxApiClient | None:
+    """Return the API client belonging to exactly one configuration entry."""
+    coordinator = hass.data.get(DOMAIN, {}).get(entry_id)
+    return getattr(coordinator, "client", None)
 
 # Integration options
 

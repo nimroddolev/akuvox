@@ -508,6 +508,11 @@ API_GET_CALL_LOG = "web-server/v4/smartplus/community/log/master/getCallLog?row=
 TEMP_KEY_QR_HOST = "subdomain.akuvox.com"
 
 DATA_STORAGE_KEY = "akuvox_data_storage_key"
+
+
+def account_storage_key(entry_id: str, purpose: str) -> str:
+    """Return an isolated storage key for one SmartPlus config entry."""
+    return f"{DATA_STORAGE_KEY}_{purpose}_{entry_id}"
 CREDENTIAL_STORAGE_KEY = "akuvox_credentials"
 CREDENTIAL_STORAGE_VERSION = 1
 

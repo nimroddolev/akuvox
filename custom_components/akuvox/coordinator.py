@@ -20,7 +20,7 @@ from .api import (
 from .const import(
     DOMAIN,
     LOGGER,
-    DATA_STORAGE_KEY
+    account_storage_key,
 )
 from .repairs import async_report_authentication_failure
 
@@ -52,7 +52,9 @@ class AkuvoxDataUpdateCoordinator(DataUpdateCoordinator):
                 data: dict = self.client.get_devices_json()
                 if data is not None:
                     LOGGER.debug("Saving user's data to local storage")
-                    store = storage.Store(self.hass, 1, DATA_STORAGE_KEY)
+                    store = storage.Store(
+                        self.hass, 1, account_storage_key(self.client.config_entry.entry_id, "cache")
+                    )
                     await store.async_save(data)
 
         except AkuvoxApiClientAuthenticationError as exception:

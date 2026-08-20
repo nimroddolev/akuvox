@@ -29,6 +29,7 @@ class _Hass:
 class _Entry:
     """Provides saved credentials required by entity constructors."""
 
+    entry_id = "entry-id"
     data = {"host": "api.example", "token": "session-token", "auth_token": "auth"}
     options = {}
 
@@ -110,7 +111,9 @@ class TestPlatformSetupE2E(unittest.IsolatedAsyncioTestCase):
         client = _EntityClient()
         entry = _Entry()
 
-        camera_entity = camera.AkuvoxCameraEntity(_Hass(), "Lobby", "rtsp://example/lobby")
+        camera_entity = camera.AkuvoxCameraEntity(
+            _Hass(), entry, "Lobby", "rtsp://example/lobby"
+        )
         relay_entity = button.AkuvoxDoorRelayEntity(
             client, entry, "Lobby", "1", "mac=AABBCC&relay=1"
         )

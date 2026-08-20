@@ -12,6 +12,7 @@ from .const import (
     PIC_URL_KEY,
     CAPTURE_TIME_KEY,
     DATA_STORAGE_KEY,
+    account_storage_key,
     LOCATIONS_DICT,
     DOOR_LOG_POLL_INTERVAL,
     DOOR_LOG_MAX_BACKOFF,
@@ -37,6 +38,11 @@ class AkuvoxData:
         """Initialize the Akuvox API client."""
 
         self.hass = hass
+        self._storage_key = (
+            account_storage_key(entry.entry_id, "state")
+            if entry is not None and not isinstance(entry, dict)
+            else DATA_STORAGE_KEY
+        )
         self.location_dict: dict = {}
         self.app_type = self._get_activity_endpoint_type(entry)
         self.rtsp_server = ""
@@ -364,7 +370,7 @@ class AkuvoxData:
 
     async def async_set_stored_data_for_key(self, key, value):
         """Store key/value pair to integration's storage."""
-        store = storage.Store(self.hass, 1, DATA_STORAGE_KEY)
+        store = storage.Store(self.hass, 1, self._storage_key)
         stored_data: dict = await store.async_load() # type: ignore
         if stored_data is None:
             stored_data = {}
@@ -373,7 +379,7 @@ class AkuvoxData:
 
     async def async_get_stored_data_for_key(self, key):
         """Store key/value pair to integration's storage."""
-        store = storage.Store(self.hass, 1, DATA_STORAGE_KEY)
+        store = storage.Store(self.hass, 1, self._storage_key)
         stored_data: dict = await store.async_load() # type: ignore
         if stored_data:
             return stored_data.get(key, None)
