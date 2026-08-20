@@ -9,6 +9,12 @@ const describeDuration = (count, unit) => {
   const label = unit.toLowerCase().replace(/s$/, "");
   return `${count} ${label}${count === 1 ? "" : "s"}`;
 };
+const updateDurationUnitLabels = (dialog, amount) => {
+  const suffix = Number(amount) === 1 ? "" : "s";
+  dialog.querySelectorAll("[data-relative-unit] option").forEach((option) => {
+    option.textContent = `${option.value}${suffix}`;
+  });
+};
 const formatRangeDate = (date, includeYear) => date.toLocaleDateString(undefined, {
   day: "2-digit", month: "2-digit", ...(includeYear ? { year: "numeric" } : {}),
 });
@@ -47,15 +53,17 @@ export const showDateRangePicker = (host, targetForm, labelSelector = "[data-val
     const fillers = Array.from({ length: Math.max(0, 35 - cells) }, () => '<span class="day empty"></span>').join("");
     const calendar = `<div class="range-calendar-wrap"><div class="range-calendar-header"><button type="button" data-range-month="-1" aria-label="Previous month">‹</button><strong>${month.toLocaleString(undefined, { month: "long", year: "numeric" })}</strong><button type="button" data-range-month="1" aria-label="Next month">›</button></div><div class="range-calendar">${weekdays}${blanks}${days}${fillers}</div></div>`;
     const suffix = Number(amount) === 1 ? "" : "s";
-    const relativeContent = mode === "relative" ? `<div class="relative-range-controls"><span>Enable access for</span><input class="relative-range-input" data-relative-amount type="number" min="0" max="1000" step="1" inputmode="numeric" value="${amount}" aria-label="Duration amount"><select class="relative-range-input" data-relative-unit aria-label="Duration unit"><option value="day" ${unit === "day" ? "selected" : ""}>day${unit === "day" ? suffix : "s"}</option><option value="week" ${unit === "week" ? "selected" : ""}>week${unit === "week" ? suffix : "s"}</option><option value="month" ${unit === "month" ? "selected" : ""}>month${unit === "month" ? suffix : "s"}</option></select><span>starting from today</span></div>` : "";
+    const relativeContent = mode === "relative" ? `<div class="relative-range-controls"><span>Enable access for</span><input class="relative-range-input" data-relative-amount type="number" min="0" max="1000" step="1" inputmode="numeric" value="${amount}" aria-label="Duration amount"><select class="relative-range-input" data-relative-unit aria-label="Duration unit"><option value="day" ${unit === "day" ? "selected" : ""}>day${suffix}</option><option value="week" ${unit === "week" ? "selected" : ""}>week${suffix}</option><option value="month" ${unit === "month" ? "selected" : ""}>month${suffix}</option></select><span>starting from today</span></div>` : "";
     const absoluteContent = mode === "absolute" ? calendar : "";
     dialog.innerHTML = `<h2>Select validity period</h2><div class="range-mode-group ${mode === "relative" ? "selected" : ""}"><label class="range-mode-title"><input type="radio" name="range-mode" value="relative" ${mode === "relative" ? "checked" : ""}> <strong>Relative Range</strong></label>${relativeContent}</div><div class="range-mode-group ${mode === "absolute" ? "selected" : ""}"><label class="range-mode-title"><input type="radio" name="range-mode" value="absolute" ${mode === "absolute" ? "checked" : ""}> <strong>Absolute Range</strong></label>${absoluteContent}</div><div class="range-times"><label>Start time <input data-range-start-time type="time" value="${startTime}"></label><label>End time <input data-range-end-time type="time" value="${endTime}"></label></div><div class="modal-actions"><button type="button" class="modal-cancel" data-range-cancel>Cancel</button><button type="button" class="modal-action" data-range-apply>Apply</button></div>`;
     dialog.querySelectorAll('[name="range-mode"]').forEach((radio) => radio.addEventListener("change", () => { mode = radio.value; if (mode === "relative") { start = new Date(today); end = null; } render(); }));
-    dialog.querySelector("[data-relative-amount]")?.addEventListener("input", (event) => {
+    const updateRelativeAmount = (event) => {
       amount = event.target.value;
-      const suffix = Number(amount) === 1 ? "" : "s";
-      dialog.querySelectorAll("[data-relative-unit] option").forEach((option) => { option.textContent = `${option.value}${suffix}`; });
-    });
+      updateDurationUnitLabels(dialog, amount);
+    };
+    const amountInput = dialog.querySelector("[data-relative-amount]");
+    amountInput?.addEventListener("input", updateRelativeAmount);
+    amountInput?.addEventListener("change", updateRelativeAmount);
     dialog.querySelector("[data-relative-unit]")?.addEventListener("change", (event) => { unit = event.target.value; });
     dialog.querySelector("[data-range-start-time]").addEventListener("input", (event) => { startTime = event.target.value; });
     dialog.querySelector("[data-range-end-time]").addEventListener("input", (event) => { endTime = event.target.value; });

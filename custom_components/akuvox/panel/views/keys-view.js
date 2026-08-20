@@ -15,7 +15,7 @@ import {
 } from "../utils/formatters.js?v=20260820-table-timestamps";
 import { copyText } from "../utils/clipboard.js";
 import { showNotice, confirmModal, callWsWithBlocker } from "../components/dialogs.js";
-import { showDateRangePicker } from "../components/date-range-picker.js?v=20260817-range-picker-4";
+import { showDateRangePicker } from "../components/date-range-picker.js?v=20260821-singular-duration-units";
 import { showTemporaryKeyQrDialog } from "../components/qr-dialog.js";
 import { showKeyActionsMenu, closeKeyActionsMenu } from "../components/key-menu.js";
 

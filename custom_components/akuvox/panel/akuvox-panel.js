@@ -19,7 +19,7 @@ import {
   renderKeysView,
   bindKeysEvents,
   deleteSelectedKeys,
-} from "./views/keys-view.js?v=20260820-temp-key-delete-fix-2";
+} from "./views/keys-view.js?v=20260821-singular-duration-units";
 import { renderSettingsView, bindSettingsEvents } from "./views/settings-view.js?v=20260820-local-activity-storage";
 import { renderHelpView } from "./views/help-view.js";
 
