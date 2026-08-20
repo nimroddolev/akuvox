@@ -4,7 +4,10 @@ from __future__ import annotations
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from custom_components.akuvox.config_flow import AkuvoxFlowHandler
+from custom_components.akuvox.config_flow import (
+    AkuvoxFlowHandler,
+    _normalise_subscriber_number,
+)
 
 
 class _Config:
@@ -46,6 +49,11 @@ class TestConfigFlowE2E(unittest.TestCase):
         self.assertEqual(other_flow.data, {})
         self.assertEqual(other_flow.rest_server_data, {})
 
+    def test_subscriber_number_omitted_the_local_trunk_prefix(self) -> None:
+        """The country code was not followed by a leading local zero."""
+        self.assertEqual(_normalise_subscriber_number("052-532 1806"), "525321806")
+        self.assertEqual(_normalise_subscriber_number("525321806"), "525321806")
+
 
 class _ReauthEntry:
     """Represents an existing account which needs a new SmartPlus session."""
@@ -54,7 +62,7 @@ class _ReauthEntry:
         self.entry_id = "entry-id"
         self.data = {
             "country_code": "972",
-            "phone_number": "5551234",
+            "phone_number": "05551234",
             "subdomain": "ecloud",
             "auth_token": "old-auth-token",
             "token": "old-session-token",

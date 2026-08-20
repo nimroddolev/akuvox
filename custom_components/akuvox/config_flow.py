@@ -35,6 +35,13 @@ from .helpers import AkuvoxHelpers
 
 helpers = AkuvoxHelpers()
 
+
+def _normalise_subscriber_number(value: object) -> str:
+    """Return a local subscriber number without its trunk-prefix zero."""
+    number = str(value or "").replace("-", "").replace(" ", "")
+    return number[1:] if number.startswith("0") else number
+
+
 class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
     """Config flow for Akuvox."""
 
@@ -76,7 +83,7 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         self._reauth_entry = self._get_reauth_entry()
         entry_data = dict(self._reauth_entry.data)
         country_code = str(entry_data.get("country_code", ""))
-        phone_number = str(entry_data.get("phone_number", ""))
+        phone_number = _normalise_subscriber_number(entry_data.get("phone_number"))
         subdomain = str(entry_data.get("subdomain", ""))
         if not country_code or not phone_number:
             return self.async_abort(reason="reauth_missing_account_data")
@@ -207,8 +214,7 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             country_code = helpers.get_country_phone_code_from_name(user_input.get("country_code"))
-            phone_number = user_input.get(
-                "phone_number", "").replace("-", "").replace(" ", "")
+            phone_number = _normalise_subscriber_number(user_input.get("phone_number"))
             subdomain: str = user_input.get("subdomain", "Default")
             subdomain = subdomain if subdomain != "Default" else helpers.get_subdomain_from_country_code(country_code)
 
