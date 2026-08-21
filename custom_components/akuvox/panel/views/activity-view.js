@@ -18,6 +18,30 @@ const activityOrientation = (host, item) => {
   return settings.activity_image_orientations?.[String(item.Location || "").trim()] || "none";
 };
 
+const formatStorageAmount = (bytes) => {
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let value = Math.max(0, Number(bytes) || 0);
+  let unit = 0;
+  while (value >= 1000 && unit < units.length - 1) {
+    value /= 1000;
+    unit += 1;
+  }
+  return `${value.toFixed(value >= 100 || unit === 0 ? 0 : value >= 10 ? 1 : 2)} ${units[unit]}`;
+};
+
+const activityStorageWarning = (settings) => {
+  const limitBytes = (Number(settings?.activity_history_max_storage_mb) || 0) * 1_000_000;
+  const usageBytes = Math.max(0, Number(settings?.activity_history_storage_bytes) || 0);
+  if (!limitBytes || usageBytes < limitBytes * 0.9) return "";
+  const percentage = Math.min(100, (usageBytes / limitBytes) * 100);
+  const full = usageBytes >= limitBytes;
+  return `<div class="activity-storage-warning" role="alert">
+    <strong>${full ? "Local activity storage is full." : "Local activity storage is almost full."}</strong>
+    ${escapeHtml(`${formatStorageAmount(usageBytes)} used (${percentage.toFixed(percentage >= 10 ? 0 : 1)}%).`)}
+    ${full ? " The oldest stored activity will be deleted to make room for new activity." : " Increase the storage limit or clear downloaded activity data if needed."}
+  </div>`;
+};
+
 /**
  * Build option elements for filter dropdowns.
  * @param {Array<object>} items
@@ -102,6 +126,7 @@ export const renderActivityView = (host, account) => {
   return `
     <div class="card table-wrap">
       <h2>Latest activity</h2>
+      ${activityStorageWarning(host._settings)}
       <p class="muted">Recent SmartPlus activity is retained across Home Assistant restarts and refreshed by polling.</p>
       <div class="activity-controls">
         <label>

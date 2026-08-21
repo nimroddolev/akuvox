@@ -6,7 +6,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from custom_components.akuvox.config_flow import (
     AkuvoxFlowHandler,
+    _country_select_options,
     _normalise_subscriber_number,
+    _subdomain_select_options,
 )
 
 
@@ -53,6 +55,15 @@ class TestConfigFlowE2E(unittest.TestCase):
         """The country code was not followed by a leading local zero."""
         self.assertEqual(_normalise_subscriber_number("052-532 1806"), "525321806")
         self.assertEqual(_normalise_subscriber_number("525321806"), "525321806")
+
+    def test_config_selectors_used_explicit_visible_labels(self) -> None:
+        """Country and region selectors never depend on implicit string labels."""
+        country = next(option for option in _country_select_options() if option["value"] == "Israel")
+        self.assertEqual(country["label"], "Israel (+972)")
+        self.assertEqual(
+            _subdomain_select_options(include_default=True)[0],
+            {"value": "Default", "label": "Automatic (recommended)"},
+        )
 
 
 class _ReauthEntry:

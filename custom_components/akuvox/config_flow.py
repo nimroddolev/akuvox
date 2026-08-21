@@ -42,6 +42,32 @@ def _normalise_subscriber_number(value: object) -> str:
     return number[1:] if number.startswith("0") else number
 
 
+def _country_select_options() -> list[dict[str, str]]:
+    """Return explicit, visible labels for the country selector."""
+    return sorted(
+        [
+            {
+                "value": str(location["country"]),
+                "label": f"{location['country']} (+{location['phone_number']})",
+            }
+            for location in LOCATIONS_DICT.values()
+        ],
+        key=lambda option: option["label"],
+    )
+
+
+def _subdomain_select_options(*, include_default: bool) -> list[dict[str, str]]:
+    """Return explicit labels for the optional regional API selector."""
+    options = [
+        {"value": subdomain, "label": subdomain}
+        for subdomain in SUBDOMAINS_LIST
+        if include_default or subdomain != "Default"
+    ]
+    if include_default:
+        options[0]["label"] = "Automatic (recommended)"
+    return options
+
+
 class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
     """Config flow for Akuvox."""
 
@@ -327,7 +353,7 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         # List of countries
         default_country_name_code = helpers.find_country_name_code(str(COUNTRY_PHONE.get(self.hass.config.country,"")))
         default_country_name = LOCATIONS_DICT.get(default_country_name_code, {}).get("country") # type: ignore
-        country_names_list:list = helpers.get_country_names_list()
+        country_options = _country_select_options()
 
         return {
             vol.Required("country_code",
@@ -335,7 +361,7 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                          description="Your phone's international calling code prefix"):
                          selector.SelectSelector(
                              selector.SelectSelectorConfig(
-                                 options=country_names_list,
+                                 options=country_options,
                                  mode=selector.SelectSelectorMode.DROPDOWN,
                                  custom_value=False),
                                  ),
@@ -349,7 +375,7 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                 description="Manually set the regional API subdomain"):
                 selector.SelectSelector(
                     selector.SelectSelectorConfig(
-                        options=SUBDOMAINS_LIST,
+                        options=_subdomain_select_options(include_default=True),
                         mode=selector.SelectSelectorMode.DROPDOWN,
                         custom_value=True),
                         )
@@ -376,13 +402,7 @@ class AkuvoxOptionsFlowHandler(config_entries.OptionsFlow):
         default_country_name_code = helpers.find_country_name_code(config_data.get('country_code', self.hass.config.country))
         default_country_name = LOCATIONS_DICT.get(default_country_name_code, {}).get("country") # type: ignore
         default_subdomain = LOCATIONS_DICT.get(default_country_name_code, {}).get("subdomain") # type: ignore
-        subdomain_list = list(SUBDOMAINS_LIST)
-        del subdomain_list[0]
         current_subdomain = self.get_data_key_value("subdomain") or default_subdomain
-
-        country_names_list:list = []
-        for _country, country_dict in LOCATIONS_DICT.items():
-            country_names_list.append(country_dict.get("country"))
 
         options_schema = vol.Schema({
             vol.Optional("country",
@@ -390,7 +410,7 @@ class AkuvoxOptionsFlowHandler(config_entries.OptionsFlow):
                          description="Your country code"):
                          selector.SelectSelector(
                              selector.SelectSelectorConfig(
-                                 options=country_names_list,
+                                 options=_country_select_options(),
                                  mode=selector.SelectSelectorMode.DROPDOWN,
                                  custom_value=False),
                                  ),
@@ -399,7 +419,7 @@ class AkuvoxOptionsFlowHandler(config_entries.OptionsFlow):
                 description="Manually set the regional API subdomain"):
                 selector.SelectSelector(
                     selector.SelectSelectorConfig(
-                        options=subdomain_list,
+                        options=_subdomain_select_options(include_default=False),
                         mode=selector.SelectSelectorMode.DROPDOWN,
                         custom_value=True),
                         ),

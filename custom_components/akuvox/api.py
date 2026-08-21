@@ -805,20 +805,22 @@ class AkuvoxApiClient:
                 changed = True
         if self._activity_storage_enabled():
             changed = await self._async_store_activity_previews() or changed
+            changed = self._prune_activity_storage() or changed
             async_update_activity_storage_warning(
                 self.hass,
                 self._entry,
                 self.get_activity_storage_usage_bytes(),
                 self._activity_storage_limit_bytes(),
             )
-            changed = self._prune_activity_storage() or changed
         else:
             del self._activity_history[ACTIVITY_HISTORY_LIMIT:]
         if changed:
             await self._data.async_set_stored_data_for_key(
                 "panel_activity_history", self._activity_history
             )
-            self._notify_panel_data_updated()
+            self._notify_panel_data_updated(
+                activity_storage_usage_bytes=self.get_activity_storage_usage_bytes()
+            )
 
     def _activity_storage_enabled(self) -> bool:
         return bool(self._entry and self._entry.options.get(STORE_ACTIVITY_HISTORY, False))
@@ -875,7 +877,7 @@ class AkuvoxApiClient:
         async_update_activity_storage_warning(
             self.hass, self._entry, 0, self._activity_storage_limit_bytes()
         )
-        self._notify_panel_data_updated()
+        self._notify_panel_data_updated(activity_storage_usage_bytes=0)
 
     async def async_export_panel_activity_storage(self) -> dict[str, str]:
         """Build a ZIP archive of the locally stored activity records and previews."""
@@ -1018,15 +1020,14 @@ class AkuvoxApiClient:
             )
             self._notify_panel_data_updated()
 
-    def _notify_panel_data_updated(self) -> None:
+    def _notify_panel_data_updated(self, **data: Any) -> None:
         """Tell connected sidebar panels to retrieve their latest data."""
         bus = getattr(self.hass, "bus", None)
         if bus is None:
             return
-        bus.async_fire(
-            PANEL_DATA_UPDATED_EVENT,
-            {"entry_id": self._entry.entry_id} if self._entry is not None else {},
-        )
+        if self._entry is not None:
+            data["entry_id"] = self._entry.entry_id
+        bus.async_fire(PANEL_DATA_UPDATED_EVENT, data)
 
     def get_panel_data(self) -> dict[str, Any]:
         """Return non-secret account data for the SmartPlus sidebar panel."""

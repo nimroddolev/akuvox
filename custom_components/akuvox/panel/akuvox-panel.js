@@ -1,26 +1,26 @@
 /**
  * Akuvox SmartPlus local sidebar panel for Home Assistant.
  * Entry point web component coordinating state, views, and WebSocket subscriptions.
- * Module version is cache-busted by this entry file's modification time (device-info-link-compatibility-20260821).
+ * Module version is cache-busted by this entry file's modification time (activity-storage-warning-20260821).
  */
 
 import { PANEL_TAG, TAB_HASHES, TAB_HASH_BY_ID, TABS } from "./utils/constants.js";
 import { escapeHtml } from "./utils/dom.js";
 import { copyText } from "./utils/clipboard.js";
-import { getPanelStyles } from "./styles/index.js?v=20260821-activity-export-unicode";
+import { getPanelStyles } from "./styles/index.js?v=20260821-activity-storage-warning";
 import { showNotice, confirmModal, callWsWithBlocker } from "./components/dialogs.js";
 import { installCameraRelayActions } from "./components/camera-actions.js?v=20260820-camera-relay-content-center";
 import { closeKeyActionsMenu } from "./components/key-menu.js";
 
 import { renderDevicesView, bindDevicesEvents } from "./views/devices-view.js";
-import { renderActivityView, bindActivityEvents } from "./views/activity-view.js?v=20260820-table-timestamps";
+import { renderActivityView, bindActivityEvents } from "./views/activity-view.js?v=20260821-storage-warning";
 import { renderCallsView, bindCallsEvents } from "./views/calls-view.js?v=20260820-table-timestamps";
 import {
   renderKeysView,
   bindKeysEvents,
   deleteSelectedKeys,
 } from "./views/keys-view.js?v=20260821-singular-duration-units";
-import { renderSettingsView, bindSettingsEvents } from "./views/settings-view.js?v=20260821-download-tray-icon";
+import { renderSettingsView, bindSettingsEvents, updateActivityStorageProgress } from "./views/settings-view.js?v=20260821-live-storage-progress";
 import { renderHelpView } from "./views/help-view.js";
 
 class AkuvoxSmartPlusPanel extends HTMLElement {
@@ -157,7 +157,14 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
     this._panelDataSubscriptionActive = true;
     try {
       const unsubscribe = await this._hass.connection.subscribeEvents(
-        () => {
+        (event) => {
+          const update = event?.data || {};
+          if (
+            update.entry_id === this._activeAccount &&
+            Object.hasOwn(update, "activity_storage_usage_bytes")
+          ) {
+            updateActivityStorageProgress(this, update.activity_storage_usage_bytes);
+          }
           if (this._activeTab === "settings") this._settingsEntryId = "";
           this._requestLoad();
         },

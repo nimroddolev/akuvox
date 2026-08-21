@@ -473,6 +473,21 @@ export const viewStyles = `
     white-space: nowrap;
   }
 
+  .activity-storage-warning {
+    margin: 0 0 12px;
+    padding: 10px 12px;
+    border: 1px solid #d49a19;
+    border-radius: 8px;
+    color: var(--primary-text-color, #342500);
+    background: #fff4cf;
+    font-size: 14px;
+    line-height: 1.45;
+  }
+
+  .activity-storage-warning strong {
+    margin-right: 4px;
+  }
+
   .activity-storage-action {
     display: inline-flex;
     align-items: center;

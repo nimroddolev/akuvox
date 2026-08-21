@@ -49,6 +49,19 @@ const activityStorageProgress = (settings) => {
   </div>`;
 };
 
+/** Update the usage indicator without replacing any unsaved form values. */
+export const updateActivityStorageProgress = (host, usageBytes) => {
+  if (!host._settings) return;
+  host._settings.activity_history_storage_bytes = Math.max(0, Number(usageBytes) || 0);
+  const input = host.shadowRoot.querySelector('[name="activity_history_max_storage_mb"]');
+  const progress = host.shadowRoot.querySelector("[data-activity-storage-progress]");
+  if (!input || !progress) return;
+  progress.innerHTML = activityStorageProgress({
+    ...host._settings,
+    activity_history_max_storage_mb: input.value,
+  });
+};
+
 /**
  * Render HTML content for the Settings tab.
  * @param {HTMLElement} host
