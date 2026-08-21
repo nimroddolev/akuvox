@@ -205,6 +205,15 @@ async def websocket_panel_data(
             device = device_registry.async_get_device(
                 identifiers={(DOMAIN, f"{entry.entry_id}:{name}")}
             )
+            # Existing installations used the device name as the identifier.
+            # Retain that lookup while requiring ownership by this entry, so it
+            # remains safe when multiple SmartPlus accounts share a device name.
+            if device is None:
+                legacy_device = device_registry.async_get_device(
+                    identifiers={(DOMAIN, name)}
+                )
+                if legacy_device is not None and entry.entry_id in legacy_device.config_entries:
+                    device = legacy_device
             if device is not None:
                 item["device_id"] = device.id
         accounts.append(

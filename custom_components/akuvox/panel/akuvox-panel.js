@@ -1,7 +1,7 @@
 /**
  * Akuvox SmartPlus local sidebar panel for Home Assistant.
  * Entry point web component coordinating state, views, and WebSocket subscriptions.
- * Module version is cache-busted by this entry file's modification time (activity-download-tray-icon-20260821).
+ * Module version is cache-busted by this entry file's modification time (device-info-link-compatibility-20260821).
  */
 
 import { PANEL_TAG, TAB_HASHES, TAB_HASH_BY_ID, TABS } from "./utils/constants.js";
