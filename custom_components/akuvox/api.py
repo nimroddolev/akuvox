@@ -3,9 +3,14 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import binascii
+import csv
+import io
 import json
+import re
 import secrets
 import socket
+import zipfile
 from collections.abc import Callable
 from typing import Any
 from datetime import datetime, timezone
@@ -22,7 +27,10 @@ import async_timeout
 
 from .data import AkuvoxData
 from .credentials import async_store_credentials, async_store_sip_credentials
-from .repairs import async_report_authentication_failure
+from .repairs import (
+    async_report_authentication_failure,
+    async_update_activity_storage_warning,
+)
 
 from .const import (
     LOGGER,
@@ -797,7 +805,13 @@ class AkuvoxApiClient:
                 changed = True
         if self._activity_storage_enabled():
             changed = await self._async_store_activity_previews() or changed
-            self._prune_activity_storage()
+            async_update_activity_storage_warning(
+                self.hass,
+                self._entry,
+                self.get_activity_storage_usage_bytes(),
+                self._activity_storage_limit_bytes(),
+            )
+            changed = self._prune_activity_storage() or changed
         else:
             del self._activity_history[ACTIVITY_HISTORY_LIMIT:]
         if changed:
@@ -817,6 +831,16 @@ class AkuvoxApiClient:
         except (TypeError, ValueError):
             return 0
 
+    def get_activity_storage_usage_bytes(self) -> int:
+        """Return the space used by the persisted local activity history."""
+        return len(
+            json.dumps(
+                self._activity_history,
+                ensure_ascii=False,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        )
+
     async def _async_store_activity_previews(self) -> bool:
         """Cache activity previews alongside their persisted event metadata."""
         changed = False
@@ -832,15 +856,108 @@ class AkuvoxApiClient:
                 continue
         return changed
 
-    def _prune_activity_storage(self) -> None:
+    def _prune_activity_storage(self) -> bool:
         """Discard oldest locally stored events until the configured cap is met."""
         limit = self._activity_storage_limit_bytes()
         if not limit:
-            return
-        size = sum(len(str(item.get("LocalPreview", {}).get("data", ""))) * 3 // 4 for item in self._activity_history)
-        while self._activity_history and size > limit:
-            removed = self._activity_history.pop()
-            size -= len(str(removed.get("LocalPreview", {}).get("data", ""))) * 3 // 4
+            return False
+        removed = False
+        while self._activity_history and self.get_activity_storage_usage_bytes() > limit:
+            self._activity_history.pop()
+            removed = True
+        return removed
+
+    async def async_clear_panel_activity_storage(self) -> None:
+        """Remove every locally persisted activity record and preview image."""
+        self._activity_history = []
+        self._activity_history_loaded = True
+        await self._data.async_set_stored_data_for_key("panel_activity_history", [])
+        async_update_activity_storage_warning(
+            self.hass, self._entry, 0, self._activity_storage_limit_bytes()
+        )
+        self._notify_panel_data_updated()
+
+    async def async_export_panel_activity_storage(self) -> dict[str, str]:
+        """Build a ZIP archive of the locally stored activity records and previews."""
+        if not self._activity_history_loaded:
+            stored_history = await self._data.async_get_stored_data_for_key(
+                "panel_activity_history"
+            )
+            self._activity_history = [
+                dict(event) for event in stored_history if isinstance(event, dict)
+            ] if isinstance(stored_history, list) else []
+            self._activity_history_loaded = True
+
+        records: list[dict[str, Any]] = []
+        images: list[tuple[str, bytes]] = []
+        used_image_names: set[str] = set()
+        for index, event in enumerate(self._activity_history, start=1):
+            record = dict(event)
+            preview = record.pop("LocalPreview", None)
+            # Cloud image URLs are transient credentials, not export data. The
+            # matching local preview is written to images/ below instead.
+            record.pop("picUrl", None)
+            image_name = self._activity_export_image_name(record, index, used_image_names)
+            if isinstance(preview, dict) and isinstance(preview.get("data"), str):
+                try:
+                    images.append(
+                        (image_name, base64.b64decode(preview["data"], validate=True))
+                    )
+                    record["image_filename"] = f"images/{image_name}"
+                except (binascii.Error, ValueError):
+                    pass
+            records.append(record)
+
+        columns = sorted({key for record in records for key in record})
+        archive = io.BytesIO()
+        with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as bundle:
+            bundle.writestr("activity.json", json.dumps(records, ensure_ascii=False, indent=2))
+            csv_file = io.StringIO(newline="")
+            writer = csv.DictWriter(csv_file, fieldnames=columns, extrasaction="ignore")
+            writer.writeheader()
+            for record in records:
+                writer.writerow(
+                    {
+                        key: json.dumps(value, ensure_ascii=False)
+                        if isinstance(value, (dict, list))
+                        else value
+                        for key, value in record.items()
+                    }
+                )
+            bundle.writestr("activity.csv", csv_file.getvalue())
+            for image_name, image_data in images:
+                bundle.writestr(f"images/{image_name}", image_data)
+
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        return {
+            "filename": f"akuvox_activity_{timestamp}.zip",
+            "data": base64.b64encode(archive.getvalue()).decode("ascii"),
+        }
+
+    @staticmethod
+    def _activity_export_image_name(
+        event: dict[str, Any], index: int, used_names: set[str]
+    ) -> str:
+        """Return a safe, unique image name in the requested door_timestamp format."""
+        def clean(value: Any, fallback: str) -> str:
+            # ``\w`` is Unicode-aware, so door names such as Hebrew and Arabic
+            # remain readable in the ZIP instead of being replaced with "_".
+            value = re.sub(r"[^\w.-]+", "_", str(value)).strip("._")
+            return value or fallback
+
+        door_name = clean(
+            event.get("Location") or event.get("door_name") or event.get("deviceName"),
+            "door",
+        )
+        timestamp = clean(event.get("CaptureTime"), f"event_{index}")
+        stem = f"{door_name}_{timestamp}"
+        image_name = f"{stem}.jpeg"
+        suffix = 2
+        while image_name in used_names:
+            image_name = f"{stem}_{suffix}.jpeg"
+            suffix += 1
+        used_names.add(image_name)
+        return image_name
 
     async def async_retrieve_call_history(self) -> bool:
         """Fetch and retain the latest SmartPlus call-history page for the panel."""

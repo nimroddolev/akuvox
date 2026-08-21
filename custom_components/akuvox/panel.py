@@ -132,6 +132,8 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, websocket_panel_save_settings)
     websocket_api.async_register_command(hass, websocket_panel_stream)
     websocket_api.async_register_command(hass, websocket_panel_activity_image)
+    websocket_api.async_register_command(hass, websocket_panel_clear_activity_storage)
+    websocket_api.async_register_command(hass, websocket_panel_export_activity_storage)
     websocket_api.async_register_command(hass, websocket_panel_call_image)
     websocket_api.async_register_command(hass, websocket_panel_temp_key_qr)
     websocket_api.async_register_command(hass, websocket_panel_open_relay)
@@ -178,8 +180,12 @@ async def websocket_panel_data(
         panel_data = client.get_panel_data()
         panel_data["activity"] = [
             {
-                **{key: value for key, value in activity.items() if key != "PicUrl"},
-                "has_image": bool(activity.get("PicUrl")),
+                **{
+                    key: value
+                    for key, value in activity.items()
+                    if key not in {"PicUrl", "LocalPreview"}
+                },
+                "has_image": bool(activity.get("PicUrl") or activity.get("LocalPreview")),
             }
             for activity in panel_data["activity"]
         ]
@@ -238,6 +244,51 @@ async def websocket_panel_activity_image(
         connection.send_error(msg["id"], "not_found", str(error))
         return
     connection.send_result(msg["id"], image)
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "akuvox/panel_clear_activity_storage",
+        vol.Required("entry_id"): str,
+    }
+)
+@websocket_api.async_response
+async def websocket_panel_clear_activity_storage(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Clear an account's locally stored panel activity after admin confirmation."""
+    if not _require_admin(connection, msg):
+        return
+    client = _client_for_entry(hass, msg["entry_id"])
+    if client is None:
+        connection.send_error(msg["id"], "not_found", "Akuvox account was not found")
+        return
+    await client.async_clear_panel_activity_storage()
+    connection.send_result(msg["id"], {"cleared": True})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "akuvox/panel_export_activity_storage",
+        vol.Required("entry_id"): str,
+    }
+)
+@websocket_api.async_response
+async def websocket_panel_export_activity_storage(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Return an admin-only ZIP archive of locally stored panel activity."""
+    if not _require_admin(connection, msg):
+        return
+    client = _client_for_entry(hass, msg["entry_id"])
+    if client is None:
+        connection.send_error(msg["id"], "not_found", "Akuvox account was not found")
+        return
+    connection.send_result(msg["id"], await client.async_export_panel_activity_storage())
 
 
 @websocket_api.websocket_command({vol.Required("type"): "akuvox/panel_call_image", vol.Required("entry_id"): str, vol.Required("call_id"): str})
@@ -307,6 +358,7 @@ async def websocket_panel_settings(
         connection.send_error(msg["id"], "not_found", "Akuvox account was not found")
         return
     credentials = await async_get_credentials(hass, entry.entry_id)
+    client = _client_for_entry(hass, entry.entry_id)
     countries = [
         {
             "code": str(value.get("phone_number", "")),
@@ -352,6 +404,9 @@ async def websocket_panel_settings(
                 STORE_ACTIVITY_HISTORY: bool(_entry_value(entry, STORE_ACTIVITY_HISTORY, False)),
                 ACTIVITY_HISTORY_MAX_STORAGE_MB: int(
                     _entry_value(entry, ACTIVITY_HISTORY_MAX_STORAGE_MB, 0)
+                ),
+                "activity_history_storage_bytes": (
+                    client.get_activity_storage_usage_bytes() if client else 0
                 ),
                 DEBUG_LOGGING: bool(_entry_value(entry, DEBUG_LOGGING, False)),
                 "token_update": {

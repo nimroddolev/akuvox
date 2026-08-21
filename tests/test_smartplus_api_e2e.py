@@ -1,7 +1,10 @@
 """End-to-end tests for SmartPlus account, device, and activity workflows."""
 from __future__ import annotations
 
+import base64
+import io
 import unittest
+import zipfile
 from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 from custom_components.akuvox.api import AkuvoxApiClient
@@ -38,6 +41,60 @@ class TestSmartPlusApiE2E(unittest.IsolatedAsyncioTestCase):
         self.session = _Session(responses)
         self.hass = _WorkflowHass()
         return AkuvoxApiClient(self.session, self.hass, self.entry)
+
+    async def test_local_activity_export_includes_data_and_preview_images(self) -> None:
+        """The local export contains JSON, CSV, and safely named preview images."""
+        client = self._client([])
+        client._activity_history_loaded = True
+        client._activity_history = [
+            {
+                "Location": "כניסה ראשית",
+                "CaptureTime": "2026-08-21 12:34:56",
+                "Event": "Doorbell",
+                "picUrl": "https://temporary.example/image.jpeg",
+                "LocalPreview": {
+                    "content_type": "image/jpeg",
+                    "data": base64.b64encode(b"preview-data").decode(),
+                },
+            }
+        ]
+
+        exported = await client.async_export_panel_activity_storage()
+
+        self.assertEqual(exported["filename"].split("_")[0], "akuvox")
+        with zipfile.ZipFile(io.BytesIO(base64.b64decode(exported["data"]))) as archive:
+            self.assertEqual(
+                set(archive.namelist()),
+                {
+                    "activity.csv",
+                    "activity.json",
+                    "images/כניסה_ראשית_2026-08-21_12_34_56.jpeg",
+                },
+            )
+            self.assertEqual(
+                archive.read("images/כניסה_ראשית_2026-08-21_12_34_56.jpeg"),
+                b"preview-data",
+            )
+            self.assertIn("image_filename", archive.read("activity.json").decode())
+            self.assertNotIn("LocalPreview", archive.read("activity.json").decode())
+            self.assertNotIn("picUrl", archive.read("activity.json").decode())
+
+    async def test_clearing_local_activity_removes_persisted_history(self) -> None:
+        """Clearing uses the dedicated history store and updates panel listeners."""
+        client = self._client([])
+        client._activity_history_loaded = True
+        client._activity_history = [{"CaptureTime": "2026-08-21"}]
+        client._data.async_set_stored_data_for_key = AsyncMock()
+        client._notify_panel_data_updated = MagicMock()
+
+        with patch("custom_components.akuvox.api.async_update_activity_storage_warning"):
+            await client.async_clear_panel_activity_storage()
+
+        self.assertEqual(client._activity_history, [])
+        client._data.async_set_stored_data_for_key.assert_awaited_once_with(
+            "panel_activity_history", []
+        )
+        client._notify_panel_data_updated.assert_called_once()
 
     def test_userconf_parsed_sip_configuration(self) -> None:
         """The post-login response provided a complete SIP capability configuration."""

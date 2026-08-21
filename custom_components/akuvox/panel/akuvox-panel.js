@@ -1,13 +1,13 @@
 /**
  * Akuvox SmartPlus local sidebar panel for Home Assistant.
  * Entry point web component coordinating state, views, and WebSocket subscriptions.
- * Module version is cache-busted by this entry file's modification time.
+ * Module version is cache-busted by this entry file's modification time (activity-download-tray-icon-20260821).
  */
 
 import { PANEL_TAG, TAB_HASHES, TAB_HASH_BY_ID, TABS } from "./utils/constants.js";
 import { escapeHtml } from "./utils/dom.js";
 import { copyText } from "./utils/clipboard.js";
-import { getPanelStyles } from "./styles/index.js?v=20260820-mobile-header-center";
+import { getPanelStyles } from "./styles/index.js?v=20260821-activity-export-unicode";
 import { showNotice, confirmModal, callWsWithBlocker } from "./components/dialogs.js";
 import { installCameraRelayActions } from "./components/camera-actions.js?v=20260820-camera-relay-content-center";
 import { closeKeyActionsMenu } from "./components/key-menu.js";
@@ -20,7 +20,7 @@ import {
   bindKeysEvents,
   deleteSelectedKeys,
 } from "./views/keys-view.js?v=20260821-singular-duration-units";
-import { renderSettingsView, bindSettingsEvents } from "./views/settings-view.js?v=20260820-local-activity-storage";
+import { renderSettingsView, bindSettingsEvents } from "./views/settings-view.js?v=20260821-download-tray-icon";
 import { renderHelpView } from "./views/help-view.js";
 
 class AkuvoxSmartPlusPanel extends HTMLElement {

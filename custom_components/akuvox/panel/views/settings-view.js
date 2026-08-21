@@ -3,8 +3,8 @@
  */
 
 import { escapeHtml } from "../utils/dom.js";
-import { icons } from "../utils/icons.js";
-import { showNotice } from "../components/dialogs.js";
+import { icons } from "../utils/icons.js?v=20260821-download-tray-icon";
+import { callWsWithBlocker, confirmModal, showNotice } from "../components/dialogs.js";
 import { CAMERA_ORIENTATION_OPTIONS } from "../utils/orientation.js?v=20260820-camera-orientation";
 
 const cameraOrientationControls = (host, enabledKey, valuesKey, dataKey) => {
@@ -23,6 +23,30 @@ const cameraOrientationControls = (host, enabledKey, valuesKey, dataKey) => {
           ${CAMERA_ORIENTATION_OPTIONS.map(([value, label]) => `<option value="${value}" ${values[camera] === value ? "selected" : ""}>${label}</option>`).join("")}
         </select></label>`).join("") || '<p class="muted">No cameras are currently available for this account.</p>'}
     </div>`;
+};
+
+const formatStorageAmount = (bytes) => {
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let value = Math.max(0, Number(bytes) || 0);
+  let unitIndex = 0;
+  while (value >= 1000 && unitIndex < units.length - 1) {
+    value /= 1000;
+    unitIndex += 1;
+  }
+  const precision = value >= 100 || unitIndex === 0 ? 0 : value >= 10 ? 1 : 2;
+  return `${value.toFixed(precision)} ${units[unitIndex]}`;
+};
+
+const activityStorageProgress = (settings) => {
+  const limitMb = Number(settings.activity_history_max_storage_mb) || 0;
+  if (limitMb <= 0) return "";
+  const usedBytes = Math.max(0, Number(settings.activity_history_storage_bytes) || 0);
+  const percentage = (usedBytes / (limitMb * 1_000_000)) * 100;
+  const percentageLabel = `${percentage.toFixed(percentage >= 10 ? 0 : 1)}%`;
+  return `<div class="activity-storage-progress" role="progressbar" aria-label="Local activity storage used" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${escapeHtml(percentage.toFixed(1))}">
+    <span class="activity-storage-progress-fill" style="width:${Math.min(100, percentage)}%"></span>
+    <span class="activity-storage-progress-label">${escapeHtml(formatStorageAmount(usedBytes))} Used (${escapeHtml(percentageLabel)})</span>
+  </div>`;
 };
 
 /**
@@ -128,10 +152,17 @@ export const renderSettingsView = (host) => {
             <input name="store_activity_history" type="checkbox" ${settings.store_activity_history ? "checked" : ""}>
             Store activity history and preview images locally
           </label>
-          <label>
-            Local activity storage limit (MB, 0 = unlimited)
-            <input name="activity_history_max_storage_mb" type="number" min="0" value="${escapeHtml(settings.activity_history_max_storage_mb || 0)}">
-          </label>
+          <div data-activity-storage-limit-controls ${settings.store_activity_history ? "" : "hidden"}>
+            <label class="activity-storage-limit-row">
+              <span class="activity-storage-limit">
+                <input name="activity_history_max_storage_mb" type="number" min="0" value="${escapeHtml(settings.activity_history_max_storage_mb || 0)}" aria-label="Local activity storage limit in MB">
+                <span class="activity-storage-limit-description" data-activity-storage-limit-description ${Number(settings.activity_history_max_storage_mb) > 0 ? "hidden" : ""}>Local activity storage limit in MB (0 = unlimited)</span>
+                <span data-activity-storage-progress>${activityStorageProgress(settings)}</span>
+                <button class="activity-storage-action activity-storage-clear" type="button" data-clear-activity-storage>${icons.trash}<span>Clear Data</span></button>
+                <button class="activity-storage-action activity-storage-download" type="button" data-download-activity-storage>${icons.download}<span>Download Activity</span></button>
+              </span>
+            </label>
+          </div>
           <label class="check">
             <input name="panel_enabled" type="checkbox" ${settings.panel_enabled ? "checked" : ""}> Show the SmartPlus panel in the sidebar
           </label>
@@ -264,6 +295,79 @@ export const bindSettingsEvents = (host) => {
   });
   settingsForm.addEventListener("change", () => {
     host._settingsDirty = true;
+  });
+
+  const storageLimitInput = settingsForm.querySelector(
+    '[name="activity_history_max_storage_mb"]'
+  );
+  const storageProgress = settingsForm.querySelector(
+    "[data-activity-storage-progress]"
+  );
+  const storageLimitDescription = settingsForm.querySelector(
+    "[data-activity-storage-limit-description]"
+  );
+  const updateStorageProgress = () => {
+    if (!storageLimitInput || !storageProgress) return;
+    storageProgress.innerHTML = activityStorageProgress({
+      ...host._settings,
+      activity_history_max_storage_mb: storageLimitInput.value,
+    });
+    if (storageLimitDescription) {
+      storageLimitDescription.hidden = Number(storageLimitInput.value) > 0;
+    }
+  };
+  storageLimitInput?.addEventListener("input", updateStorageProgress);
+  storageLimitInput?.addEventListener("change", updateStorageProgress);
+
+  const storageHistoryToggle = settingsForm.querySelector(
+    '[name="store_activity_history"]'
+  );
+  const storageLimitControls = settingsForm.querySelector(
+    "[data-activity-storage-limit-controls]"
+  );
+  storageHistoryToggle?.addEventListener("change", () => {
+    if (storageLimitControls) storageLimitControls.hidden = !storageHistoryToggle.checked;
+  });
+
+  settingsForm.querySelector("[data-clear-activity-storage]")?.addEventListener("click", async () => {
+    const confirmed = await confirmModal(
+      host,
+      "This permanently deletes all locally stored activity records and preview images for this account.",
+      "Clear local activity data?",
+      "Clear Data"
+    );
+    if (!confirmed) return;
+    try {
+      await callWsWithBlocker(host, {
+        type: "akuvox/panel_clear_activity_storage",
+        entry_id: host._activeAccount,
+      });
+      host._activityImages?.clear();
+      host._activityImageFailures?.clear();
+      await host._load();
+      showNotice(host, "All locally stored activity data was cleared.", "Activity data cleared");
+    } catch (error) {
+      showNotice(host, error?.message || "Could not clear locally stored activity data.", "Clear failed");
+    }
+  });
+
+  settingsForm.querySelector("[data-download-activity-storage]")?.addEventListener("click", async () => {
+    try {
+      const archive = await callWsWithBlocker(host, {
+        type: "akuvox/panel_export_activity_storage",
+        entry_id: host._activeAccount,
+      });
+      const binary = window.atob(archive.data);
+      const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+      const url = URL.createObjectURL(new Blob([bytes], { type: "application/zip" }));
+      const link = host.shadowRoot.ownerDocument.createElement("a");
+      link.href = url;
+      link.download = archive.filename || "akuvox_activity.zip";
+      link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    } catch (error) {
+      showNotice(host, error?.message || "Could not download locally stored activity data.", "Download failed");
+    }
   });
 
   settingsForm.querySelectorAll("[data-orientation-toggle]").forEach((toggle) =>

@@ -415,6 +415,104 @@ export const viewStyles = `
     stroke-width: 2;
   }
 
+  .activity-storage-limit {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+  }
+
+  .activity-storage-limit-row {
+    font-weight: 400;
+  }
+
+  .activity-storage-limit input {
+    flex: 0 0 120px;
+    width: 120px;
+  }
+
+  .activity-storage-limit > [data-activity-storage-progress] {
+    display: contents;
+  }
+
+  .activity-storage-limit-description {
+    color: var(--secondary-text-color, #6b7280);
+    font-size: 14px;
+    font-weight: 400;
+  }
+
+  .activity-storage-progress {
+    position: relative;
+    flex: 1 1 220px;
+    min-width: 180px;
+    max-width: 300px;
+    height: 34px;
+    overflow: hidden;
+    border: 1px solid var(--divider-color, #bbb);
+    border-radius: 8px;
+    background: var(--secondary-background-color, #e8eef1);
+  }
+
+  .activity-storage-progress-fill {
+    position: absolute;
+    inset: 0 auto 0 0;
+    background: var(--aqua, #55bfe6);
+    transition: width 160ms ease;
+  }
+
+  .activity-storage-progress-label {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 0 8px;
+    color: var(--primary-text-color, #111);
+    font-size: 13px;
+    font-weight: 700;
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  .activity-storage-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    min-height: 34px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: 8px;
+    color: #fff;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  .activity-storage-action svg {
+    display: block;
+    flex: 0 0 17px;
+    width: 17px;
+    height: 17px;
+    overflow: visible;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+  }
+
+  .activity-storage-clear { background: #c62828; }
+  .activity-storage-clear:hover { background: #a91f1f; }
+  .activity-storage-download { background: #1976d2; }
+  .activity-storage-download:hover { background: #1565b7; }
+
+  @media (max-width: 500px) {
+    .activity-storage-limit {
+      flex-wrap: wrap;
+    }
+
+    .activity-storage-progress {
+      flex-basis: 100%;
+    }
+  }
+
   /* Help View */
   .help-card {
     display: grid;

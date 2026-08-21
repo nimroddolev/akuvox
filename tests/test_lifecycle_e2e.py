@@ -274,3 +274,34 @@ class TestAuthenticationRepairE2E(unittest.TestCase):
             hass, DOMAIN, "reauthentication_required_entry-id"
         )
         self.assertTrue(repairs.authentication_failed(hass, "entry-id"))
+
+
+class TestActivityStorageRepairsE2E(unittest.TestCase):
+    """Verify activity-storage warnings follow the configured threshold."""
+
+    def setUp(self) -> None:
+        self.hass = MagicMock()
+        self.entry = MagicMock(entry_id="entry-id", title="Home")
+
+    def test_warning_escalates_at_each_threshold(self) -> None:
+        """The current repair reflects the highest reached storage threshold."""
+        with patch("custom_components.akuvox.repairs.ir.async_create_issue") as create_issue:
+            for usage, level in ((90, "90"), (95, "95"), (99, "99"), (100, "full")):
+                repairs.async_update_activity_storage_warning(
+                    self.hass, self.entry, usage, 100
+                )
+                self.assertEqual(
+                    create_issue.call_args.kwargs["translation_key"],
+                    f"activity_storage_{level}",
+                )
+
+    def test_warning_clears_below_ninety_percent(self) -> None:
+        """Storage usage below the warning threshold removes the repair."""
+        with patch("custom_components.akuvox.repairs.ir.async_delete_issue") as delete_issue:
+            repairs.async_update_activity_storage_warning(
+                self.hass, self.entry, 89, 100
+            )
+
+        delete_issue.assert_called_once_with(
+            self.hass, DOMAIN, "activity_storage_limit_entry-id"
+        )

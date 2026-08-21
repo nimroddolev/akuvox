@@ -8,6 +8,44 @@ from homeassistant.helpers import issue_registry as ir
 from .const import DOMAIN, PANEL_RUNTIME_DOMAIN
 
 _AUTH_FAILURES = "authentication_failures"
+_ACTIVITY_STORAGE_ISSUE_PREFIX = "activity_storage_limit_"
+
+
+def async_update_activity_storage_warning(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    usage_bytes: int,
+    limit_bytes: int,
+) -> None:
+    """Create, escalate, or clear the local activity-storage repair."""
+    issue_id = f"{_ACTIVITY_STORAGE_ISSUE_PREFIX}{entry.entry_id}"
+    if limit_bytes <= 0 or usage_bytes < limit_bytes * 0.9:
+        ir.async_delete_issue(hass, DOMAIN, issue_id)
+        return
+
+    percentage = (usage_bytes / limit_bytes) * 100
+    if percentage >= 100:
+        level = "full"
+        severity = ir.IssueSeverity.WARNING
+    elif percentage >= 99:
+        level = "99"
+        severity = ir.IssueSeverity.WARNING
+    elif percentage >= 95:
+        level = "95"
+        severity = ir.IssueSeverity.WARNING
+    else:
+        level = "90"
+        severity = ir.IssueSeverity.WARNING
+
+    ir.async_create_issue(
+        hass,
+        DOMAIN,
+        issue_id,
+        is_fixable=False,
+        severity=severity,
+        translation_key=f"activity_storage_{level}",
+        translation_placeholders={"entry_title": entry.title},
+    )
 
 
 def async_report_authentication_failure(hass: HomeAssistant, entry: ConfigEntry) -> None:

@@ -45,6 +45,22 @@
         "reauthentication_required": {
             "title": "Re-authentication required for {entry_title}",
             "description": "Akuvox SmartPlus no longer accepts this account's session. Open the Akuvox integration and complete re-authentication to restore access."
+        },
+        "activity_storage_90": {
+            "title": "Activity storage is nearly full for {entry_title}",
+            "description": "Local activity storage has exceeded 90% of its configured limit. Increase the limit to avoid automatic cleanup."
+        },
+        "activity_storage_95": {
+            "title": "Activity storage is very nearly full for {entry_title}",
+            "description": "Local activity storage has exceeded 95% of its configured limit. Increase the limit to avoid automatic cleanup."
+        },
+        "activity_storage_99": {
+            "title": "Activity storage is almost full for {entry_title}",
+            "description": "Local activity storage has exceeded 99% of its configured limit. Increase the limit to avoid automatic cleanup."
+        },
+        "activity_storage_full": {
+            "title": "Activity storage is full for {entry_title}",
+            "description": "Local activity storage has reached its configured limit. The oldest activity will be deleted to free up space for new activity."
         }
     },
     "options": {
