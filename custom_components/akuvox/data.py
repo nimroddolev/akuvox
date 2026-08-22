@@ -38,6 +38,7 @@ class AkuvoxData:
         """Initialize the Akuvox API client."""
 
         self.hass = hass
+        self._entry = entry if entry is not None and not isinstance(entry, dict) else None
         self._storage_key = (
             account_storage_key(entry.entry_id, "state")
             if entry is not None and not isinstance(entry, dict)
@@ -381,8 +382,29 @@ class AkuvoxData:
         """Store key/value pair to integration's storage."""
         store = storage.Store(self.hass, 1, self._storage_key)
         stored_data: dict = await store.async_load() # type: ignore
-        if stored_data:
-            return stored_data.get(key, None)
+        if stored_data and key in stored_data:
+            return stored_data[key]
+
+        # Releases before account-scoped storage kept every hub's runtime
+        # state in one file. Migrate only a matching legacy account, and only
+        # for a missing value, so no account can overwrite another's history.
+        if self._entry is None or self._storage_key == DATA_STORAGE_KEY:
+            return None
+        legacy_store = storage.Store(self.hass, 1, DATA_STORAGE_KEY)
+        legacy_data: dict = await legacy_store.async_load() # type: ignore
+        if not isinstance(legacy_data, dict) or key not in legacy_data:
+            return None
+        if (
+            str(legacy_data.get("phone_number", "")) != str(self.phone_number)
+            or str(legacy_data.get("subdomain", "")) != str(self.subdomain)
+        ):
+            return None
+
+        account_data = stored_data if isinstance(stored_data, dict) else {}
+        account_data[key] = legacy_data[key]
+        await store.async_save(account_data)
+        LOGGER.info("Migrated legacy Akuvox %s storage for account %s", key, self._entry.entry_id)
+        return legacy_data[key]
 
     ###################
 
