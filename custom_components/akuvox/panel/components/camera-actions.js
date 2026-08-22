@@ -75,11 +75,11 @@ export const installCameraRelayActions = (host, relays, orientation = "none", at
     button.setAttribute("aria-label", name);
     button.innerHTML = `<ha-icon icon="mdi:door-open" aria-hidden="true"></ha-icon><span>${escapeHtml(name)}</span>`;
     button.style.cssText +=
-      ";min-height:36px;padding:0 12px;border:0;border-radius:8px;color:#fff;background:#55bfe6;justify-content:center;text-align:center;";
+      ";min-height:36px;padding:0 14px;border:0;border-radius:999px;color:#fff;background:#55bfe6;justify-content:center;text-align:center;";
 
     if (!nativeSnapshotAction) {
       button.style.cssText =
-        "display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:36px;padding:0 12px;border:0;border-radius:8px;color:#fff;background:#55bfe6;font:500 14px/1 inherit;text-align:center;white-space:nowrap;cursor:pointer;";
+        "display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:36px;padding:0 14px;border:0;border-radius:999px;color:#fff;background:#55bfe6;font:500 14px/1 inherit;text-align:center;white-space:nowrap;cursor:pointer;";
     }
     button.querySelector("ha-icon").style.cssText = "--mdc-icon-size:20px;";
 

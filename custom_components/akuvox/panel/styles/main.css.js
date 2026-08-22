@@ -357,7 +357,6 @@ export const mainStyles = `
       grid-column: auto;
       justify-self: center;
       margin-left: 0;
-      width: min(100%, 360px);
     }
   }
 `;

@@ -126,7 +126,7 @@ export const renderCallsView = (host, account) => {
                     ${call.isAnswer ? "Answered" : "Missed"}
                   </span>
                 </td>
-                <td>${escapeHtml(call.callDuration || "")}</td>
+                <td>${escapeHtml(call.isAnswer ? call.callDuration || "-" : "-")}</td>
                 <td>
                   ${
                     call.has_image
