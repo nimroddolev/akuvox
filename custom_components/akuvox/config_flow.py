@@ -29,7 +29,6 @@ from .const import (
     DOOR_LOG_MAX_CONFIGURED_BACKOFF,
     PANEL_ADMIN_ONLY,
     PANEL_ENABLED,
-    MIRROR_ACTIVITY_IMAGES,
 )
 from .helpers import AkuvoxHelpers
 
@@ -451,10 +450,6 @@ class AkuvoxOptionsFlowHandler(config_entries.OptionsFlow):
             vol.Required(
                 PANEL_ADMIN_ONLY,
                 default=self.get_data_key_value(PANEL_ADMIN_ONLY, True),
-            ): bool,
-            vol.Required(
-                MIRROR_ACTIVITY_IMAGES,
-                default=self.get_data_key_value(MIRROR_ACTIVITY_IMAGES, True),
             ): bool,
         })
 

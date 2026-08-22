@@ -18,8 +18,8 @@ const cameraOrientationControls = (host, enabledKey, valuesKey, dataKey) => {
       ${dataKey === "stream" ? "Custom camera stream orientations" : "Custom activity image orientations"}
     </label>
     <div class="camera-orientations" data-orientation-controls="${dataKey}" ${enabled ? "" : "hidden"}>
-      ${cameras.map((camera) => `<label>${escapeHtml(camera)}
-        <select data-${dataKey}-orientation="${escapeHtml(camera)}">
+      ${cameras.map((camera) => `<label class="camera-orientation-row"><span title="${escapeHtml(camera)}">${escapeHtml(camera)}</span>
+        <select data-${dataKey}-orientation="${escapeHtml(camera)}" aria-label="${escapeHtml(camera)} orientation">
           ${CAMERA_ORIENTATION_OPTIONS.map(([value, label]) => `<option value="${value}" ${values[camera] === value ? "selected" : ""}>${label}</option>`).join("")}
         </select></label>`).join("") || '<p class="muted">No cameras are currently available for this account.</p>'}
     </div>`;
@@ -179,39 +179,26 @@ export const renderSettingsView = (host) => {
       <h2>Integration settings</h2>
       <p class="muted">Changes are saved securely and reload the Akuvox account automatically.</p>
       <form data-settings-form>
-        <div class="grid">
-          <label>
-            Phone country
-            <select name="country_code">${countries}</select>
-          </label>
-          <label>
-            Regional API subdomain
-            <span class="combobox">
-              <input required data-subdomain-input name="subdomain" autocomplete="off" value="${escapeHtml(settings.subdomain)}">
-              <button type="button" class="combobox-toggle" aria-label="Show regional API subdomains" aria-haspopup="listbox" data-subdomain-toggle>
-                ${icons.chevronDown}
-              </button>
-              <span class="combobox-menu" role="listbox" data-subdomain-menu hidden>
-                ${subdomains}
-              </span>
-            </span>
-          </label>
-          <label>
-            Event screenshot delivery
-            <select name="event_screenshot_options">
-              <option value="asap" ${settings.event_screenshot_options === "asap" ? "selected" : ""}>As soon as available</option>
-              <option value="wait" ${settings.event_screenshot_options === "wait" ? "selected" : ""}>Wait for screenshot URLs</option>
-            </select>
-          </label>
-          <label>
-            Polling interval (seconds)
-            <input required name="door_log_poll_interval" type="number" min="30" max="3600" value="${escapeHtml(settings.door_log_poll_interval)}">
-          </label>
-          <label>
-            Maximum retry backoff (seconds)
-            <input required name="door_log_max_backoff" type="number" min="60" max="3600" value="${escapeHtml(settings.door_log_max_backoff)}">
-          </label>
-        </div>
+        <fieldset>
+          <legend>Activity Polling</legend>
+          <div class="grid">
+            <label>
+              Event screenshot delivery
+              <select name="event_screenshot_options">
+                <option value="asap" ${settings.event_screenshot_options === "asap" ? "selected" : ""}>As soon as available</option>
+                <option value="wait" ${settings.event_screenshot_options === "wait" ? "selected" : ""}>Wait for screenshot URLs</option>
+              </select>
+            </label>
+            <label>
+              Polling interval (seconds)
+              <input required name="door_log_poll_interval" type="number" min="30" max="3600" value="${escapeHtml(settings.door_log_poll_interval)}">
+            </label>
+            <label>
+              Maximum retry backoff (seconds)
+              <input required name="door_log_max_backoff" type="number" min="60" max="3600" value="${escapeHtml(settings.door_log_max_backoff)}">
+            </label>
+          </div>
+        </fieldset>
 
         <fieldset>
           <legend>Camera Options</legend>
@@ -247,34 +234,51 @@ export const renderSettingsView = (host) => {
             <input name="panel_admin_only" type="checkbox" ${settings.panel_admin_only ? "checked" : ""}> Restrict panel access to administrators
           </label>
           <label class="check">
-            <input name="mirror_activity_images" type="checkbox" ${settings.mirror_activity_images ? "checked" : ""}> Mirror activity images
-          </label>
-          <label class="check">
             <input name="debug_logging" type="checkbox" ${settings.debug_logging ? "checked" : ""}> Enable debug logging
           </label>
         </fieldset>
 
+        ${sipAccountsSection(settings.sip_accounts)}
+
         <fieldset>
-          <legend>SmartPlus credentials</legend>
+          <legend>SmartPlus Account Settings</legend>
           <p class="muted">These private values are shown only to Home Assistant administrators and are never saved in config-entry data.</p>
-          <label>
-            Authentication token
-            <span class="secret-input">
-              <input required autocomplete="off" name="auth_token" type="${authTokenType}" value="${escapeHtml(settings.auth_token)}">
-              <button type="button" class="secret-toggle" data-toggle-secret="auth_token" aria-label="${authToggleLabel}">
-                ${host._revealedSecrets.has("auth_token") ? icons.eyeOff : icons.eye}
-              </button>
-            </span>
-          </label>
-          <label>
-            Session token
-            <span class="secret-input">
-              <input required autocomplete="off" name="token" type="${sessionTokenType}" value="${escapeHtml(settings.token)}">
-              <button type="button" class="secret-toggle" data-toggle-secret="token" aria-label="${sessionToggleLabel}">
-                ${host._revealedSecrets.has("token") ? icons.eyeOff : icons.eye}
-              </button>
-            </span>
-          </label>
+          <div class="grid">
+            <label>
+              Phone country
+              <select name="country_code">${countries}</select>
+            </label>
+            <label>
+              Regional API subdomain
+              <span class="combobox">
+                <input required data-subdomain-input name="subdomain" autocomplete="off" value="${escapeHtml(settings.subdomain)}">
+                <button type="button" class="combobox-toggle" aria-label="Show regional API subdomains" aria-haspopup="listbox" data-subdomain-toggle>
+                  ${icons.chevronDown}
+                </button>
+                <span class="combobox-menu" role="listbox" data-subdomain-menu hidden>
+                  ${subdomains}
+                </span>
+              </span>
+            </label>
+            <label>
+              Authentication token
+              <span class="secret-input">
+                <input required autocomplete="off" name="auth_token" type="${authTokenType}" value="${escapeHtml(settings.auth_token)}">
+                <button type="button" class="secret-toggle" data-toggle-secret="auth_token" aria-label="${authToggleLabel}">
+                  ${host._revealedSecrets.has("auth_token") ? icons.eyeOff : icons.eye}
+                </button>
+              </span>
+            </label>
+            <label>
+              Session token
+              <span class="secret-input">
+                <input required autocomplete="off" name="token" type="${sessionTokenType}" value="${escapeHtml(settings.token)}">
+                <button type="button" class="secret-toggle" data-toggle-secret="token" aria-label="${sessionToggleLabel}">
+                  ${host._revealedSecrets.has("token") ? icons.eyeOff : icons.eye}
+                </button>
+              </span>
+            </label>
+          </div>
           ${tokenUpdateStatus}
         </fieldset>
 
@@ -317,7 +321,6 @@ export const handleSaveSettings = async (host, event) => {
       door_log_max_backoff: backoff,
       panel_enabled: form.get("panel_enabled") === "on",
       panel_admin_only: form.get("panel_admin_only") === "on",
-      mirror_activity_images: form.get("mirror_activity_images") === "on",
       store_activity_history: form.get("store_activity_history") === "on",
       activity_history_max_storage_mb: Number(form.get("activity_history_max_storage_mb")),
       custom_camera_stream_orientations: form.get("custom_camera_stream_orientations") === "on",
@@ -451,7 +454,7 @@ export const bindSettingsEvents = (host) => {
     }
   });
 
-  settingsForm.querySelector("[data-download-activity-storage]")?.addEventListener("click", async () => {
+  settingsForm.querySelector("[data-export-activity-storage]")?.addEventListener("click", async () => {
     try {
       const archive = await callWsWithBlocker(host, {
         type: "akuvox/panel_export_activity_storage",

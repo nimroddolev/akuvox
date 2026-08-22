@@ -3,6 +3,35 @@
  */
 
 export const viewStyles = `
+  .camera-orientations {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 260px);
+    width: fit-content;
+    max-width: 100%;
+    column-gap: 10px;
+    row-gap: 7px;
+  }
+
+  .camera-orientations[hidden] { display: none; }
+
+  .camera-orientation-row {
+    display: contents;
+  }
+
+  .camera-orientation-row > span {
+    align-self: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .camera-orientation-row > select {
+    align-self: center;
+    min-width: 0;
+    width: 260px;
+    max-width: 100%;
+  }
+
   /* Activity Thumbnails & Lightbox */
   .activity-thumbnail {
     position: relative;
@@ -50,16 +79,6 @@ export const viewStyles = `
     stroke-width: 2;
   }
 
-  :host([data-mirror-activity-images]) .activity-thumbnail img,
-  :host([data-mirror-activity-images]) .activity-image-dialog img {
-    transform: var(--camera-orientation-transform, none) scaleX(-1);
-  }
-
-  :host([data-mirror-activity-images]) .activity-thumbnail img[data-orientation]:not([data-orientation="none"]),
-  :host([data-mirror-activity-images]) .activity-image-dialog img[data-orientation]:not([data-orientation="none"]) {
-    transform: var(--camera-orientation-transform, none);
-  }
-
   .thumbnail-spinner {
     width: 20px;
     height: 20px;
@@ -88,7 +107,11 @@ export const viewStyles = `
   }
 
   .activity-image-dialog {
-    position: relative;
+    /* Keep the lightbox in the visual viewport rather than the panel's
+       document flow when the activity table has been scrolled. */
+    position: fixed;
+    inset: 0;
+    margin: auto;
     width: min(760px, calc(100vw - 32px));
     padding: 12px;
   }
@@ -418,6 +441,7 @@ export const viewStyles = `
   .activity-storage-limit {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     gap: 12px;
     min-width: 0;
   }
@@ -435,10 +459,48 @@ export const viewStyles = `
     display: contents;
   }
 
+  .activity-storage-transfer-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    min-width: 0;
+  }
+
   .activity-storage-limit-description {
+    min-width: 0;
     color: var(--secondary-text-color, #6b7280);
     font-size: 14px;
     font-weight: 400;
+    overflow-wrap: anywhere;
+  }
+
+  .sip-warning {
+    margin: 0 0 12px;
+    color: var(--error-color, #b91c1c);
+    font-weight: 700;
+  }
+
+  .sip-account-grid {
+    display: grid;
+    grid-template-columns: minmax(150px, 0.8fr) minmax(0, 1.2fr);
+    gap: 8px 14px;
+    align-items: center;
+    margin-bottom: 14px;
+  }
+
+  .sip-account-grid code {
+    overflow-wrap: anywhere;
+    padding: 5px 7px;
+    border-radius: 5px;
+    background: var(--secondary-background-color, #e8eef1);
+    color: inherit;
+  }
+
+  dialog .sip-warning { text-align: left; }
+  dialog .form-error { color: var(--error-color, #b91c1c); font-weight: 700; }
+
+  @media (max-width: 500px) {
+    .sip-account-grid { grid-template-columns: 1fr; gap: 4px; }
   }
 
   .activity-storage-progress {
@@ -515,8 +577,18 @@ export const viewStyles = `
 
   .activity-storage-clear { background: #c62828; }
   .activity-storage-clear:hover { background: #a91f1f; }
-  .activity-storage-download { background: #1976d2; }
-  .activity-storage-download:hover { background: #1565b7; }
+
+  @media (max-width: 600px) {
+    .activity-storage-transfer-actions {
+      display: flex;
+      flex: 1 0 100%;
+      gap: 12px;
+    }
+  }
+  .activity-storage-download { background: #55bfe6; }
+  .activity-storage-download:hover { background: #55bfe6; }
+  .activity-storage-import { background: #55bfe6; }
+  .activity-storage-import:hover { background: #55bfe6; }
 
   @media (max-width: 500px) {
     .activity-storage-limit {

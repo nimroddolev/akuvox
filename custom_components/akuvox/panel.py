@@ -39,7 +39,6 @@ from .const import (
     NAME,
     PANEL_ADMIN_ONLY,
     PANEL_ENABLED,
-    MIRROR_ACTIVITY_IMAGES,
     CUSTOM_CAMERA_STREAM_ORIENTATIONS,
     CAMERA_STREAM_ORIENTATIONS,
     CUSTOM_ACTIVITY_IMAGE_ORIENTATIONS,
@@ -425,9 +424,6 @@ async def websocket_panel_settings(
                 ),
                 PANEL_ENABLED: bool(_entry_value(entry, PANEL_ENABLED, True)),
                 PANEL_ADMIN_ONLY: bool(_entry_value(entry, PANEL_ADMIN_ONLY, True)),
-                MIRROR_ACTIVITY_IMAGES: bool(
-                    _entry_value(entry, MIRROR_ACTIVITY_IMAGES, True)
-                ),
                 CUSTOM_CAMERA_STREAM_ORIENTATIONS: bool(
                     _entry_value(entry, CUSTOM_CAMERA_STREAM_ORIENTATIONS, False)
                 ),
@@ -563,6 +559,8 @@ async def websocket_panel_save_settings(
         or token != previous_credentials.get("token", "")
     )
     options = dict(entry.options)
+    # Per-camera activity orientations supersede this legacy global transform.
+    options.pop("mirror_activity_images", None)
     valid_orientations = {
         "none", "rotate_90", "rotate_180", "rotate_270", "flip_horizontal",
         "flip_vertical", "flip_horizontal_and_rotate_90", "flip_vertical_and_rotate_90",
@@ -590,7 +588,6 @@ async def websocket_panel_save_settings(
             "door_log_max_backoff": msg["door_log_max_backoff"],
             PANEL_ENABLED: msg[PANEL_ENABLED],
             PANEL_ADMIN_ONLY: msg[PANEL_ADMIN_ONLY],
-            MIRROR_ACTIVITY_IMAGES: msg[MIRROR_ACTIVITY_IMAGES],
             CUSTOM_CAMERA_STREAM_ORIENTATIONS: msg[CUSTOM_CAMERA_STREAM_ORIENTATIONS],
             CAMERA_STREAM_ORIENTATIONS: _orientations(
                 msg[CAMERA_STREAM_ORIENTATIONS], msg[CUSTOM_CAMERA_STREAM_ORIENTATIONS]
