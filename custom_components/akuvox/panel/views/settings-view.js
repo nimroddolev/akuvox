@@ -49,6 +49,66 @@ const activityStorageProgress = (settings) => {
   </div>`;
 };
 
+const sipAccountsSection = (sipAccounts = {}) => {
+  const main = sipAccounts.main || {};
+  const devices = Array.isArray(sipAccounts.devices) ? sipAccounts.devices : [];
+  if (!main.account) {
+    return `<fieldset><legend>SIP Accounts</legend><p class="muted">SIP account details are not available yet. Refresh the SmartPlus account and try again.</p></fieldset>`;
+  }
+  return `<fieldset>
+    <legend>SIP Accounts</legend>
+    <p class="sip-warning">These credentials are sensitive. Do not share them with anyone else.</p>
+    <div class="sip-account-grid">
+      <span>SIP server</span><code>${escapeHtml(sipAccounts.server)}</code>
+      <span>Transport</span><code>${escapeHtml(sipAccounts.transport)}</code>
+      <span>Main account</span><code>${escapeHtml(main.account)}</code>
+      <span>Main password</span><code>${escapeHtml(main.password)}</code>
+      ${devices.map((device) => `<span>${escapeHtml(device.name || device.mac || "Device")} (${escapeHtml(device.mac)})</span><code>${escapeHtml(device.account)} / ${escapeHtml(device.password)}</code>`).join("")}
+    </div>
+    <button class="action" type="button" data-export-sip-accounts>Export SIP accounts PDF</button>
+  </fieldset>`;
+};
+
+const requestSipPdfPassword = (host) => new Promise((resolve) => {
+  const dialog = host.shadowRoot.ownerDocument.createElement("dialog");
+  dialog.innerHTML = `<h2>Protect SIP accounts PDF</h2>
+    <p class="sip-warning">This PDF contains passwords. Do not share this information with anyone else.</p>
+    <form method="dialog" data-sip-pdf-form>
+      <label>Password<input required minlength="8" type="password" autocomplete="new-password" data-sip-pdf-password></label>
+      <label>Confirm password<input required minlength="8" type="password" autocomplete="new-password" data-sip-pdf-confirm></label>
+      <p class="form-error" data-sip-pdf-error hidden></p>
+      <div class="modal-actions"><button class="modal-cancel" value="cancel">Cancel</button><button class="modal-action" value="export">Export PDF</button></div>
+    </form>`;
+  const form = dialog.querySelector("[data-sip-pdf-form]");
+  form.addEventListener("submit", (event) => {
+    if (event.submitter?.value !== "export") return;
+    const password = form.querySelector("[data-sip-pdf-password]").value;
+    const confirmation = form.querySelector("[data-sip-pdf-confirm]").value;
+    if (password.length < 8) {
+      event.preventDefault();
+      const error = form.querySelector("[data-sip-pdf-error]");
+      error.textContent = "Use a password containing at least 8 characters.";
+      error.hidden = false;
+    } else if (password !== confirmation) {
+      event.preventDefault();
+      const error = form.querySelector("[data-sip-pdf-error]");
+      error.textContent = "Passwords must match.";
+      error.hidden = false;
+    }
+  });
+  dialog.addEventListener("close", () => {
+    const password = dialog.returnValue === "export"
+      ? form.querySelector("[data-sip-pdf-password]").value : "";
+    const confirmation = dialog.returnValue === "export"
+      ? form.querySelector("[data-sip-pdf-confirm]").value : "";
+    dialog.remove();
+    resolve(password ? { password, confirmation } : null);
+  }, { once: true });
+  host.shadowRoot.append(dialog);
+  dialog.showModal();
+  form.querySelector("[data-sip-pdf-password]").focus();
+});
+
 /** Update the usage indicator without replacing any unsaved form values. */
 export const updateActivityStorageProgress = (host, usageBytes) => {
   if (!host._settings) return;
@@ -344,6 +404,29 @@ export const bindSettingsEvents = (host) => {
   );
   storageHistoryToggle?.addEventListener("change", () => {
     if (storageLimitControls) storageLimitControls.hidden = !storageHistoryToggle.checked;
+  });
+
+  settingsForm.querySelector("[data-export-sip-accounts]")?.addEventListener("click", async () => {
+    const credentials = await requestSipPdfPassword(host);
+    if (!credentials) return;
+    try {
+      const pdf = await callWsWithBlocker(host, {
+        type: "akuvox/panel_export_sip_accounts_pdf",
+        entry_id: host._activeAccount,
+        password: credentials.password,
+        password_confirmation: credentials.confirmation,
+      });
+      const binary = window.atob(pdf.data);
+      const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+      const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+      const link = host.shadowRoot.ownerDocument.createElement("a");
+      link.href = url;
+      link.download = pdf.filename || "akuvox_sip_accounts.pdf";
+      link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    } catch (error) {
+      showNotice(host, error?.message || "Could not export SIP account details.", "Export failed");
+    }
   });
 
   settingsForm.querySelector("[data-clear-activity-storage]")?.addEventListener("click", async () => {

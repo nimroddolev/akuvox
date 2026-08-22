@@ -135,6 +135,7 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, websocket_panel_clear_activity_storage)
     websocket_api.async_register_command(hass, websocket_panel_export_activity_storage)
     websocket_api.async_register_command(hass, websocket_panel_import_activity_storage)
+    websocket_api.async_register_command(hass, websocket_panel_export_sip_accounts_pdf)
     websocket_api.async_register_command(hass, websocket_panel_call_image)
     websocket_api.async_register_command(hass, websocket_panel_temp_key_qr)
     websocket_api.async_register_command(hass, websocket_panel_open_relay)
@@ -453,9 +454,42 @@ async def websocket_panel_settings(
                 },
                 "auth_token": credentials.get("auth_token", ""),
                 "token": credentials.get("token", ""),
+                "sip_accounts": client.get_sip_accounts() if client else {},
             },
         },
     )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "akuvox/panel_export_sip_accounts_pdf",
+        vol.Required("entry_id"): str,
+        vol.Required("password"): str,
+        vol.Required("password_confirmation"): str,
+    }
+)
+@websocket_api.async_response
+async def websocket_panel_export_sip_accounts_pdf(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Create a password-protected SIP accounts PDF for an administrator."""
+    if not _require_admin(connection, msg):
+        return
+    client = _client_for_entry(hass, msg["entry_id"])
+    if client is None:
+        connection.send_error(msg["id"], "not_found", "Akuvox account was not found")
+        return
+    if msg["password"] != msg["password_confirmation"]:
+        connection.send_error(msg["id"], "invalid_password", "Passwords must match")
+        return
+    try:
+        result = await client.async_export_sip_accounts_pdf(msg["password"])
+    except AkuvoxApiClientError as error:
+        connection.send_error(msg["id"], "export_failed", str(error))
+        return
+    connection.send_result(msg["id"], result)
 
 
 @websocket_api.websocket_command(
@@ -477,7 +511,6 @@ async def websocket_panel_settings(
         ),
         vol.Required(PANEL_ENABLED): bool,
         vol.Required(PANEL_ADMIN_ONLY): bool,
-        vol.Required(MIRROR_ACTIVITY_IMAGES): bool,
         vol.Required(CUSTOM_CAMERA_STREAM_ORIENTATIONS): bool,
         vol.Required(CAMERA_STREAM_ORIENTATIONS): dict,
         vol.Required(CUSTOM_ACTIVITY_IMAGE_ORIENTATIONS): bool,

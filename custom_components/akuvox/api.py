@@ -12,6 +12,7 @@ import secrets
 import socket
 import zipfile
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 from datetime import datetime, timezone
 from time import time
@@ -1184,6 +1185,103 @@ class AkuvoxApiClient:
             "activity": [dict(activity) for activity in self._activity_history],
             "calls": [dict(call) for call in self._call_history],
         }
+
+    def get_sip_accounts(self) -> dict[str, Any]:
+        """Return the account's SIP credentials and device account mappings."""
+        if self._data is None:
+            return {"server": "", "transport": "", "main": {}, "devices": []}
+        names_by_mac = {
+            str(relay.get("mac", "")): str(relay.get("name", ""))
+            for relay in self._data.door_relay_data
+        }
+        return {
+            "server": self._data.sip_server,
+            "transport": self._data.sip_transport,
+            "main": {"account": self._data.sip_account, "password": self._data.sip_password},
+            "devices": [
+                {
+                    "name": names_by_mac.get(mac, mac), "mac": mac,
+                    "account": account, "password": self._data.sip_password,
+                }
+                for mac, account in sorted(self._data.sip_device_accounts.items())
+            ],
+        }
+
+    async def async_export_sip_accounts_pdf(self, password: str) -> dict[str, str]:
+        """Create an encrypted PDF containing sensitive SIP account details."""
+        if len(password) < 8:
+            raise AkuvoxApiClientError(
+                "Use a PDF password containing at least 8 characters"
+            )
+        sip_accounts = self.get_sip_accounts()
+        if not sip_accounts["main"].get("account"):
+            raise AkuvoxApiClientError("No SIP account details are available yet")
+        try:
+            pdf_data = await self.hass.async_add_executor_job(
+                self._build_sip_accounts_pdf, sip_accounts, password
+            )
+        except ImportError as error:
+            raise AkuvoxApiClientError("The PDF export dependency is not available") from error
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        return {
+            "filename": f"akuvox_sip_accounts_{timestamp}.pdf",
+            "data": base64.b64encode(pdf_data).decode("ascii"),
+        }
+
+    @staticmethod
+    def _build_sip_accounts_pdf(sip_accounts: dict[str, Any], password: str) -> bytes:
+        """Build an encrypted, text-only SIP credentials PDF off the event loop."""
+        from bidi.algorithm import get_display
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.pdfencrypt import StandardEncryption
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.ttfonts import TTFont
+        from reportlab.pdfgen import canvas
+
+        font_name = "AkuvoxUnicode"
+        font_path = Path(__file__).with_name("fonts") / "DejaVuSans.ttf"
+        pdfmetrics.registerFont(TTFont(font_name, str(font_path)))
+        output = io.BytesIO()
+        document = canvas.Canvas(
+            output, pagesize=A4,
+            encrypt=StandardEncryption(password, ownerPassword=password, canPrint=0,
+                canModify=0, canCopy=0, canAnnotate=0, strength=128),
+        )
+        width, height = A4
+        x, y = 48, height - 52
+
+        def safe_text(value: Any) -> str:
+            """Return Unicode text in display order for bidirectional scripts."""
+            return get_display(str(value or ""))
+
+        def line(label: str, value: Any) -> None:
+            nonlocal y
+            if y < 58:
+                document.showPage()
+                y = height - 52
+            document.setFont(font_name, 10)
+            document.drawString(x, y, f"{label}: {safe_text(value)}")
+            y -= 16
+
+        document.setTitle("Akuvox SmartPlus SIP Accounts")
+        document.setFont(font_name, 16)
+        document.drawString(x, y, "Akuvox SmartPlus SIP Accounts")
+        y -= 24
+        document.setFont(font_name, 9)
+        document.drawString(x, y, "Confidential - do not share these credentials with anyone else.")
+        y -= 24
+        line("SIP server", sip_accounts["server"])
+        line("Transport", sip_accounts["transport"])
+        line("Main account", sip_accounts["main"].get("account"))
+        line("Main password", sip_accounts["main"].get("password"))
+        for index, device in enumerate(sip_accounts["devices"], start=1):
+            y -= 6
+            line(f"Device {index}", device.get("name"))
+            line("  MAC", device.get("mac"))
+            line("  SIP account", device.get("account"))
+            line("  SIP password", device.get("password"))
+        document.save()
+        return output.getvalue()
 
     async def async_get_panel_activity_image(
         self, capture_time: str, *, allow_http: bool = False

@@ -1,6 +1,7 @@
 {
   "domain": "akuvox",
   "name": "Akuvox SmartPlus",
+  "requirements": ["python-bidi>=0.6.0", "reportlab>=4.0.0"],
   "codeowners": [
     "@nimroddolev"
   ],
