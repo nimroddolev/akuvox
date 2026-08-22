@@ -1,26 +1,26 @@
 /**
  * Akuvox SmartPlus local sidebar panel for Home Assistant.
  * Entry point web component coordinating state, views, and WebSocket subscriptions.
- * Module version is cache-busted by this entry file's modification time (activity-storage-warning-20260821).
+ * Module version is cache-busted by this entry file's modification time (sip-pdf-password-confirmation-20260821).
  */
 
 import { PANEL_TAG, TAB_HASHES, TAB_HASH_BY_ID, TABS } from "./utils/constants.js";
 import { escapeHtml } from "./utils/dom.js";
 import { copyText } from "./utils/clipboard.js";
-import { getPanelStyles } from "./styles/index.js?v=20260821-activity-storage-warning";
+import { getPanelStyles } from "./styles/index.js?v=20260822-wrapping-storage-controls";
 import { showNotice, confirmModal, callWsWithBlocker } from "./components/dialogs.js";
-import { installCameraRelayActions } from "./components/camera-actions.js?v=20260820-camera-relay-content-center";
+import { installCameraRelayActions } from "./components/camera-actions.js?v=20260821-pill-action";
 import { closeKeyActionsMenu } from "./components/key-menu.js";
 
 import { renderDevicesView, bindDevicesEvents } from "./views/devices-view.js";
-import { renderActivityView, bindActivityEvents } from "./views/activity-view.js?v=20260821-storage-warning";
-import { renderCallsView, bindCallsEvents } from "./views/calls-view.js?v=20260820-table-timestamps";
+import { renderActivityView, bindActivityEvents } from "./views/activity-view.js?v=20260821-viewport-lightbox";
+import { renderCallsView, bindCallsEvents } from "./views/calls-view.js?v=20260821-missed-duration";
 import {
   renderKeysView,
   bindKeysEvents,
   deleteSelectedKeys,
 } from "./views/keys-view.js?v=20260821-singular-duration-units";
-import { renderSettingsView, bindSettingsEvents, updateActivityStorageProgress } from "./views/settings-view.js?v=20260821-live-storage-progress";
+import { renderSettingsView, bindSettingsEvents, updateActivityStorageProgress } from "./views/settings-view.js?v=20260821-mobile-transfer-actions";
 import { renderHelpView } from "./views/help-view.js";
 
 class AkuvoxSmartPlusPanel extends HTMLElement {
@@ -42,6 +42,8 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
     this._modalCount = 0;
     this._loading = false;
     this._loadQueued = false;
+    this._panelDataSignature = null;
+    this._settingsSignature = null;
 
     this._activityFilters = { Location: "", CaptureType: "", Initiator: "" };
     this._activitySort = { key: "CaptureTime", direction: "desc" };
@@ -122,7 +124,7 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
       window.addEventListener("resize", this._onTabWindowResize);
       this._tabResizeListenerRegistered = true;
     }
-    this._requestLoad();
+    this._requestLoad({ forceRender: true });
     if (!this._timer) {
       this._timer = window.setInterval(() => this._requestLoad(), 15000);
     }
@@ -180,17 +182,18 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
     }
   }
 
-  _requestLoad() {
+  _requestLoad({ forceRender = false } = {}) {
     if (this._loading) {
       this._loadQueued = true;
+      this._loadQueuedForceRender = this._loadQueuedForceRender || forceRender;
       return;
     }
-    void this._load();
+    void this._load({ forceRender });
   }
 
   _shouldDeferRender() {
     return (
-      this._settingsDirty ||
+      (this._settingsDirty && this._activeTab === "settings") ||
       this._settingsSaving ||
       this._blockingRequest ||
       this._keyDialogOpen ||
@@ -198,7 +201,7 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
     );
   }
 
-  async _load() {
+  async _load({ forceRender = true } = {}) {
     if (!this._hass) return;
     if (this._loading) {
       this._loadQueued = true;
@@ -209,23 +212,42 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
       do {
         this._loadQueued = false;
         const result = await this._hass.callWS({ type: "akuvox/panel_data" });
+        const panelDataSignature = JSON.stringify(result.accounts || []);
+        const panelDataChanged = panelDataSignature !== this._panelDataSignature;
+        this._panelDataSignature = panelDataSignature;
+        const previousActiveAccount = this._activeAccount;
         this._accounts = result.accounts || [];
+        const hadError = Boolean(this._error);
         this._error = undefined;
         if (!this._accounts.some((account) => account.entry_id === this._activeAccount)) {
           this._activeAccount = this._accounts[0]?.entry_id || "";
           this._settingsDirty = false;
         }
+        const activeAccountChanged = previousActiveAccount !== this._activeAccount;
+        let settingsChanged = false;
         if (this._activeAccount && this._settingsEntryId !== this._activeAccount) {
-          await this._loadSettings();
+          settingsChanged = await this._loadSettings();
         }
-        if (!this._shouldDeferRender()) this._render();
+        if (
+          !this._shouldDeferRender() &&
+          (forceRender || panelDataChanged || activeAccountChanged || settingsChanged || hadError)
+        ) {
+          this._render();
+        }
+        forceRender = this._loadQueuedForceRender || false;
+        this._loadQueuedForceRender = false;
       } while (this._loadQueued);
     } catch (error) {
+      const errorChanged = this._error !== "Unable to load SmartPlus data.";
       this._error = "Unable to load SmartPlus data.";
-      if (!this._shouldDeferRender()) this._render();
+      if (!this._shouldDeferRender() && (forceRender || errorChanged)) this._render();
     } finally {
       this._loading = false;
-      if (this._loadQueued) this._requestLoad();
+      if (this._loadQueued) {
+        const queuedForceRender = this._loadQueuedForceRender || false;
+        this._loadQueuedForceRender = false;
+        this._requestLoad({ forceRender: queuedForceRender });
+      }
     }
   }
 
@@ -268,10 +290,15 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
       this._tabResizeObserver = new ResizeObserver(() => this._updateTabScrollControls());
       this._tabResizeObserver.observe(viewport);
     }
-    viewport.querySelector(".tab.selected")?.scrollIntoView({
-      block: "nearest",
-      inline: "nearest",
-    });
+    const selectedTab = viewport.querySelector(".tab.selected");
+    if (selectedTab) {
+      const tabStart = selectedTab.offsetLeft;
+      const tabEnd = tabStart + selectedTab.offsetWidth;
+      if (tabStart < viewport.scrollLeft) viewport.scrollLeft = tabStart;
+      else if (tabEnd > viewport.scrollLeft + viewport.clientWidth) {
+        viewport.scrollLeft = tabEnd - viewport.clientWidth;
+      }
+    }
     requestAnimationFrame(() => this._updateTabScrollControls());
   }
 
@@ -287,9 +314,65 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
       this._countryOptions = result.country_options || [];
       this._subdomainOptions = result.subdomain_options || [];
       this._settingsEntryId = entryId;
+      const settingsSignature = JSON.stringify({
+        settings: this._settings,
+        countryOptions: this._countryOptions,
+        subdomainOptions: this._subdomainOptions,
+      });
+      const changed = settingsSignature !== this._settingsSignature;
+      this._settingsSignature = settingsSignature;
+      return changed;
     } catch (_) {
+      const errorChanged = this._error !== "Unable to load SmartPlus settings.";
       this._error = "Unable to load SmartPlus settings.";
+      return errorChanged;
     }
+  }
+
+  _captureScrollPosition() {
+    const positions = [];
+    const seen = new Set();
+    let node = this;
+    while (node) {
+      if (
+        node instanceof HTMLElement &&
+        !seen.has(node) &&
+        (node.scrollHeight > node.clientHeight || node.scrollWidth > node.clientWidth)
+      ) {
+        positions.push({ node, top: node.scrollTop, left: node.scrollLeft });
+        seen.add(node);
+      }
+      if (node.parentElement) {
+        node = node.parentElement;
+      } else {
+        const root = node.getRootNode?.();
+        node = root instanceof ShadowRoot ? root.host : null;
+      }
+    }
+    return {
+      positions,
+      windowLeft: window.scrollX,
+      windowTop: window.scrollY,
+      activeTab: this._activeTab,
+      tabScrollLeft: this.shadowRoot.querySelector("[data-tab-scroll-viewport]")?.scrollLeft,
+    };
+  }
+
+  _restoreScrollPosition(position) {
+    const restore = () => {
+      position.positions.forEach(({ node, top, left }) => node.scrollTo(left, top));
+      window.scrollTo(position.windowLeft, position.windowTop);
+      const viewport = this.shadowRoot.querySelector("[data-tab-scroll-viewport]");
+      if (
+        viewport &&
+        position.activeTab === this._activeTab &&
+        position.tabScrollLeft !== undefined
+      ) {
+        viewport.scrollLeft = position.tabScrollLeft;
+      }
+      this._updateTabScrollControls();
+    };
+    requestAnimationFrame(restore);
   }
 
   _activityImageKey(captureTime) {
@@ -541,17 +624,13 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
       return;
     }
 
+    const scrollPosition = this._captureScrollPosition();
     this._tabResizeObserver?.disconnect();
     this._subdomainOutsideAbort?.abort();
     this._subdomainOutsideAbort = undefined;
 
     const account = this._account();
     const requiresReauthentication = Boolean(account?.requires_reauthentication);
-    this.toggleAttribute(
-      "data-mirror-activity-images",
-      Boolean(this._settings?.mirror_activity_images)
-    );
-
     const availableTabs = requiresReauthentication
       ? TABS.filter(([id]) => id === "help")
       : TABS;
@@ -562,13 +641,13 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
 
     this.shadowRoot.innerHTML = `
       ${getPanelStyles()}
-      <main class="${requiresReauthentication ? "reauthentication-required" : ""} ${this._settings?.mirror_activity_images ? "activity-images-mirrored" : ""}">
+      <main class="${requiresReauthentication ? "reauthentication-required" : ""}">
         <header>
           <div class="logo-text-container">
             <div class="logo-text">
               <img class="brand-mark" src="/api/akuvox_panel/akuvox.svg" alt="Akuvox SmartPlus">
               <h1>Akuvox SmartPlus</h1>
-              <p>Doors, calls, cameras, and temporary access</p>
+              <p>Access your SmartPlus account from Home Assistant</p>
             </div>
           </div>
           ${
@@ -615,6 +694,7 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
       this._activeAccount = event.target.value;
       this._settings = null;
       this._settingsEntryId = "";
+      this._settingsSignature = null;
       this._settingsDirty = false;
       this._selectingKeys = false;
       this._selectedKeyIds.clear();
@@ -635,6 +715,8 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
     } else if (this._activeTab === "settings") {
       bindSettingsEvents(this);
     }
+
+    this._restoreScrollPosition(scrollPosition);
   }
 }
 

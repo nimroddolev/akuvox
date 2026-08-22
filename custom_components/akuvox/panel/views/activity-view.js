@@ -5,7 +5,7 @@
 import { escapeHtml } from "../utils/dom.js";
 import { tableTimestampFormatter } from "../utils/formatters.js?v=20260820-table-timestamps";
 import { icons } from "../utils/icons.js";
-import { showActivityImageDialog } from "../components/image-dialog.js?v=20260820-camera-orientation";
+import { showActivityImageDialog } from "../components/image-dialog.js?v=20260821-viewport-lightbox";
 import {
   ACTIVITY_INITIAL_PAGE_SIZE,
   nextActivityVisibleCount,
