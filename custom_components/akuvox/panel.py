@@ -134,6 +134,7 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, websocket_panel_activity_image)
     websocket_api.async_register_command(hass, websocket_panel_clear_activity_storage)
     websocket_api.async_register_command(hass, websocket_panel_export_activity_storage)
+    websocket_api.async_register_command(hass, websocket_panel_import_activity_storage)
     websocket_api.async_register_command(hass, websocket_panel_call_image)
     websocket_api.async_register_command(hass, websocket_panel_temp_key_qr)
     websocket_api.async_register_command(hass, websocket_panel_open_relay)
@@ -298,6 +299,34 @@ async def websocket_panel_export_activity_storage(
         connection.send_error(msg["id"], "not_found", "Akuvox account was not found")
         return
     connection.send_result(msg["id"], await client.async_export_panel_activity_storage())
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "akuvox/panel_import_activity_storage",
+        vol.Required("entry_id"): str,
+        vol.Required("archive"): str,
+    }
+)
+@websocket_api.async_response
+async def websocket_panel_import_activity_storage(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Merge an administrator-selected local-data export into one account."""
+    if not _require_admin(connection, msg):
+        return
+    client = _client_for_entry(hass, msg["entry_id"])
+    if client is None:
+        connection.send_error(msg["id"], "not_found", "Akuvox account was not found")
+        return
+    try:
+        result = await client.async_import_panel_data(msg["archive"])
+    except AkuvoxApiClientError as error:
+        connection.send_error(msg["id"], "invalid_archive", str(error))
+        return
+    connection.send_result(msg["id"], result)
 
 
 @websocket_api.websocket_command({vol.Required("type"): "akuvox/panel_call_image", vol.Required("entry_id"): str, vol.Required("call_id"): str})

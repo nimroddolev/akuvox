@@ -58,6 +58,8 @@ class TestSmartPlusApiE2E(unittest.IsolatedAsyncioTestCase):
                 },
             }
         ]
+        client._call_history_loaded = True
+        client._call_history = [{"id": "call-1", "captureTime": "2026-08-21 12:35:00"}]
 
         exported = await client.async_export_panel_activity_storage()
 
@@ -68,6 +70,8 @@ class TestSmartPlusApiE2E(unittest.IsolatedAsyncioTestCase):
                 {
                     "activity.csv",
                     "activity.json",
+                    "call_history.csv",
+                    "call_history.json",
                     "images/כניסה_ראשית_2026-08-21_12_34_56.jpeg",
                 },
             )
@@ -78,6 +82,33 @@ class TestSmartPlusApiE2E(unittest.IsolatedAsyncioTestCase):
             self.assertIn("image_filename", archive.read("activity.json").decode())
             self.assertNotIn("LocalPreview", archive.read("activity.json").decode())
             self.assertNotIn("picUrl", archive.read("activity.json").decode())
+            self.assertIn("call-1", archive.read("call_history.json").decode())
+
+    async def test_local_data_import_merged_records_and_preview_images(self) -> None:
+        """An exported archive merged missing activity, calls, and previews."""
+        source = self._client([])
+        source._activity_history_loaded = True
+        source._activity_history = [
+            {
+                "id": "activity-1",
+                "CaptureTime": "2026-08-21 12:34:56",
+                "Location": "Lobby",
+                "LocalPreview": {"data": base64.b64encode(b"image").decode()},
+            }
+        ]
+        source._call_history_loaded = True
+        source._call_history = [{"id": "call-1", "captureTime": "2026-08-21 12:35:00"}]
+        exported = await source.async_export_panel_activity_storage()
+
+        target = self._client([])
+        target._activity_history_loaded = True
+        target._call_history_loaded = True
+        target._data.async_set_stored_data_for_key = AsyncMock()
+        with patch("custom_components.akuvox.api.async_update_activity_storage_warning"):
+            result = await target.async_import_panel_data(exported["data"])
+
+        self.assertEqual(result, {"activity_imported": 1, "call_history_imported": 1})
+        self.assertEqual(target._activity_history[0]["LocalPreview"]["data"], base64.b64encode(b"image").decode())
 
     async def test_clearing_local_activity_removes_persisted_history(self) -> None:
         """Clearing uses the dedicated history store and updates panel listeners."""

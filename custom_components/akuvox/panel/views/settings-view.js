@@ -3,7 +3,7 @@
  */
 
 import { escapeHtml } from "../utils/dom.js";
-import { icons } from "../utils/icons.js?v=20260821-download-tray-icon";
+import { icons } from "../utils/icons.js?v=20260821-import-export-data";
 import { callWsWithBlocker, confirmModal, showNotice } from "../components/dialogs.js";
 import { CAMERA_ORIENTATION_OPTIONS } from "../utils/orientation.js?v=20260820-camera-orientation";
 
@@ -172,7 +172,11 @@ export const renderSettingsView = (host) => {
                 <span class="activity-storage-limit-description" data-activity-storage-limit-description ${Number(settings.activity_history_max_storage_mb) > 0 ? "hidden" : ""}>Local activity storage limit in MB (0 = unlimited)</span>
                 <span data-activity-storage-progress>${activityStorageProgress(settings)}</span>
                 <button class="activity-storage-action activity-storage-clear" type="button" data-clear-activity-storage>${icons.trash}<span>Clear Data</span></button>
-                <button class="activity-storage-action activity-storage-download" type="button" data-download-activity-storage>${icons.download}<span>Download Activity</span></button>
+                <span class="activity-storage-transfer-actions">
+                  <button class="activity-storage-action activity-storage-download" type="button" data-export-activity-storage>${icons.download}<span>Export Data</span></button>
+                  <button class="activity-storage-action activity-storage-import" type="button" data-import-activity-storage>${icons.upload}<span>Import Data</span></button>
+                </span>
+                <input data-import-activity-file type="file" accept=".zip,application/zip" hidden>
               </span>
             </label>
           </div>
@@ -379,7 +383,48 @@ export const bindSettingsEvents = (host) => {
       link.click();
       window.setTimeout(() => URL.revokeObjectURL(url), 0);
     } catch (error) {
-      showNotice(host, error?.message || "Could not download locally stored activity data.", "Download failed");
+      showNotice(host, error?.message || "Could not export locally stored data.", "Export failed");
+    }
+  });
+
+  const importInput = settingsForm.querySelector("[data-import-activity-file]");
+  settingsForm.querySelector("[data-import-activity-storage]")?.addEventListener("click", () => {
+    importInput?.click();
+  });
+  importInput?.addEventListener("change", async () => {
+    const [file] = importInput.files || [];
+    if (!file) return;
+    const confirmed = await confirmModal(
+      host,
+      "Import activity and call history from this archive? Imported records are merged with existing local data.",
+      "Import local data?",
+      "Import Data"
+    );
+    if (!confirmed) {
+      importInput.value = "";
+      return;
+    }
+    try {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      let binary = "";
+      for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+        binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+      }
+      const result = await callWsWithBlocker(host, {
+        type: "akuvox/panel_import_activity_storage",
+        entry_id: host._activeAccount,
+        archive: window.btoa(binary),
+      });
+      await host._load();
+      showNotice(
+        host,
+        `Imported ${result.activity_imported || 0} activity record(s) and ${result.call_history_imported || 0} call-history record(s).`,
+        "Data imported"
+      );
+    } catch (error) {
+      showNotice(host, error?.message || "Could not import the selected data archive.", "Import failed");
+    } finally {
+      importInput.value = "";
     }
   });
 
