@@ -321,6 +321,10 @@ class TestActivityStorageRepairsE2E(unittest.TestCase):
                     create_issue.call_args.kwargs["translation_key"],
                     f"activity_storage_{level}",
                 )
+                self.assertEqual(
+                    create_issue.call_args.kwargs["learn_more_url"],
+                    "/akuvox-smartplus#Settings",
+                )
 
     def test_warning_clears_below_ninety_percent(self) -> None:
         """Storage usage below the warning threshold removes the repair."""

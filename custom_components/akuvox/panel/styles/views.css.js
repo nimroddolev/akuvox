@@ -550,7 +550,7 @@ export const viewStyles = `
   }
 
   .activity-storage-warning {
-    margin: 0 0 12px;
+    margin: 12px 0;
     padding: 10px 12px;
     border: 1px solid #d49a19;
     border-radius: 8px;

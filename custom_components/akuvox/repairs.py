@@ -9,6 +9,7 @@ from .const import DOMAIN, PANEL_RUNTIME_DOMAIN
 
 _AUTH_FAILURES = "authentication_failures"
 _ACTIVITY_STORAGE_ISSUE_PREFIX = "activity_storage_limit_"
+_ACTIVITY_STORAGE_SETTINGS_URL = "/akuvox-smartplus#Settings"
 
 
 def async_update_activity_storage_warning(
@@ -45,6 +46,7 @@ def async_update_activity_storage_warning(
         severity=severity,
         translation_key=f"activity_storage_{level}",
         translation_placeholders={"entry_title": entry.title},
+        learn_more_url=_ACTIVITY_STORAGE_SETTINGS_URL,
     )
 
 
