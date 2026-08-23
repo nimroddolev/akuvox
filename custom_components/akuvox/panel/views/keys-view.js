@@ -15,7 +15,7 @@ import {
 } from "../utils/formatters.js?v=20260820-table-timestamps";
 import { copyText } from "../utils/clipboard.js";
 import { showNotice, confirmModal, callWsWithBlocker } from "../components/dialogs.js";
-import { showDateRangePicker } from "../components/date-range-picker.js?v=20260821-singular-duration-units";
+import { showDateRangePicker } from "../components/date-range-picker.js?v=20260823-normalise-past-validity-start";
 import { showTemporaryKeyQrDialog } from "../components/qr-dialog.js";
 import { showKeyActionsMenu, closeKeyActionsMenu } from "../components/key-menu.js";
 
@@ -199,7 +199,9 @@ export const renderKeysView = (host, account) => {
             </div>
           </div>
           <div class="modal-actions">
-            <button class="modal-action" type="submit" data-create-key-submit disabled>Create</button>
+            <button class="modal-action" type="submit" data-create-key-submit disabled>
+              <span data-create-key-label>Create</span><span class="key-create-spinner" data-create-key-spinner hidden aria-hidden="true"></span>
+            </button>
             <button class="modal-cancel" type="button" data-close-key-dialog>Cancel</button>
           </div>
         </form>
@@ -215,6 +217,7 @@ export const renderKeysView = (host, account) => {
 const updateCreateKeyState = (host) => {
   const form = host.shadowRoot.querySelector("[data-key-form]");
   if (!form) return;
+  if (form.dataset.creating === "true") return;
   updateFormFieldErrors(form);
 
   const begin = new Date(String(form.querySelector('[name="begin_time"]')?.value || ""));
@@ -461,7 +464,9 @@ export const showEditKeyDialog = (host, keyId) => {
  */
 const handleCreateKey = async (host, event) => {
   event.preventDefault();
-  const form = new FormData(event.target);
+  const keyForm = event.target;
+  if (keyForm.dataset.creating === "true") return;
+  const form = new FormData(keyForm);
   const selected = form.getAll("relay");
   const description = String(form.get("description")).trim();
 
@@ -503,6 +508,14 @@ const handleCreateKey = async (host, event) => {
   const begin = String(form.get("begin_time")).replace("T", " ") + ":00";
   const end = String(form.get("end_time")).replace("T", " ") + ":00";
   const count = Number(form.get("counts"));
+  const submitButton = keyForm.querySelector("[data-create-key-submit]");
+  const spinner = keyForm.querySelector("[data-create-key-spinner]");
+  keyForm.dataset.creating = "true";
+  if (submitButton) {
+    submitButton.disabled = true;
+    submitButton.setAttribute("aria-busy", "true");
+  }
+  if (spinner) spinner.hidden = false;
 
   try {
     await callWsWithBlocker(host, {
@@ -526,6 +539,11 @@ const handleCreateKey = async (host, event) => {
       "The temporary key could not be created. Check the Home Assistant log for the SmartPlus response.",
       "Could not create temporary key"
     );
+  } finally {
+    delete keyForm.dataset.creating;
+    if (submitButton) submitButton.removeAttribute("aria-busy");
+    if (spinner) spinner.hidden = true;
+    updateCreateKeyState(host);
   }
 };
 

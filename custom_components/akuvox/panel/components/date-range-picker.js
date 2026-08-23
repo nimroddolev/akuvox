@@ -25,15 +25,30 @@ export const showDateRangePicker = (host, targetForm, labelSelector = "[data-val
   const beginInput = form.querySelector('[name="begin_time"]');
   const endInput = form.querySelector('[name="end_time"]');
   const now = new Date();
+  const currentMinute = new Date(now);
+  currentMinute.setSeconds(0, 0);
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   let mode = "";
   let start = beginInput.value ? new Date(beginInput.value) : null;
   let end = endInput.value ? new Date(endInput.value) : null;
+  let endWasNormalised = false;
+  const initialStartWasPast = Boolean(start && start < now);
+  if (initialStartWasPast) {
+    start = new Date(currentMinute);
+    if (!end || end <= start) {
+      end = new Date(today);
+      end.setHours(23, 59, 0, 0);
+      if (end <= start) end.setDate(end.getDate() + 1);
+      endWasNormalised = true;
+    }
+  }
   let month = new Date((start || today).getFullYear(), (start || today).getMonth(), 1);
   let amount = 1;
   let unit = "day";
-  let startTime = beginInput.value.slice(11, 16) || `${pad(now.getHours())}:${pad(now.getMinutes())}`;
-  let endTime = endInput.value.slice(11, 16) || "23:59";
+  let startTime = initialStartWasPast
+    ? `${pad(currentMinute.getHours())}:${pad(currentMinute.getMinutes())}`
+    : beginInput.value.slice(11, 16) || `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  let endTime = endWasNormalised ? "23:59" : endInput.value.slice(11, 16) || "23:59";
   const dialog = host.shadowRoot.ownerDocument.createElement("dialog");
   dialog.className = "range-dialog";
 
@@ -102,7 +117,7 @@ export const showDateRangePicker = (host, targetForm, labelSelector = "[data-val
         const days = Math.max(1, Math.round((new Date(toIsoDateString(end)) - new Date(toIsoDateString(start))) / 86400000));
         duration = describeDuration(days, "Days");
       }
-      if (selectedStart <= now) { showNotice(host, "The start date and time must be later than the current time.", "Choose a later start"); return; }
+      if (selectedStart < currentMinute) { showNotice(host, "The start date and time must not be earlier than the current time.", "Choose a later start"); return; }
       if (selectedEnd <= selectedStart) { showNotice(host, "The end of the validity period must be after the start time.", "Choose a later end time"); return; }
       beginInput.value = `${toIsoDateString(selectedStart)}T${pad(selectedStart.getHours())}:${pad(selectedStart.getMinutes())}`;
       endInput.value = `${toIsoDateString(selectedEnd)}T${pad(selectedEnd.getHours())}:${pad(selectedEnd.getMinutes())}`;

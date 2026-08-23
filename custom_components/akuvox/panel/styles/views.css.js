@@ -343,6 +343,20 @@ export const viewStyles = `
     margin-inline: auto;
   }
 
+  .key-create-spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    margin-left: 8px;
+    vertical-align: -2px;
+    border: 2px solid rgb(255 255 255 / 45%);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: thumbnail-spin 0.8s linear infinite;
+  }
+
+  .key-create-spinner[hidden] { display: none; }
+
   .field-input-wrap {
     display: flex;
     flex-direction: column;
