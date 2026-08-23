@@ -21,6 +21,7 @@ from custom_components.akuvox.api import (
 from custom_components.akuvox import repairs
 from custom_components.akuvox.const import DOMAIN
 from custom_components.akuvox.coordinator import AkuvoxDataUpdateCoordinator
+from custom_components.akuvox import panel
 
 
 class _Client:
@@ -96,6 +97,7 @@ class _ConfigEntries:
         self.forwarded = AsyncMock()
         self.unloaded = AsyncMock(return_value=True)
         self.reloaded = AsyncMock()
+        self.entries = []
 
     async def async_forward_entry_setups(self, entry, platforms) -> None:
         await self.forwarded(entry, platforms)
@@ -107,8 +109,8 @@ class _ConfigEntries:
         await self.reloaded(entry_id)
 
     def async_entries(self, _domain: str):
-        """Return no additional entries for the isolated lifecycle harness."""
-        return []
+        """Return config entries for the isolated lifecycle harness."""
+        return self.entries
 
 
 class _Hass:
@@ -117,6 +119,31 @@ class _Hass:
     def __init__(self) -> None:
         self.data = {}
         self.config_entries = _ConfigEntries()
+        self.http = MagicMock()
+        self.http.async_register_static_paths = AsyncMock()
+
+
+class TestPanelRegistrationE2E(unittest.IsolatedAsyncioTestCase):
+    """Verify the integration panel is associated with its config entry."""
+
+    async def test_integration_settings_open_the_smartplus_panel(self) -> None:
+        """Home Assistant routes the entry Settings action to the panel."""
+        hass = _Hass()
+        hass.config_entries.entries = [_Entry()]
+        with (
+            patch("custom_components.akuvox.panel.async_panel_exists", return_value=False),
+            patch("custom_components.akuvox.panel.add_extra_js_url"),
+            patch(
+                "custom_components.akuvox.panel.panel_custom.async_register_panel",
+                new=AsyncMock(),
+            ) as register_panel,
+        ):
+            await panel.async_refresh_panel(hass)
+
+        self.assertEqual(
+            register_panel.await_args.kwargs["config_panel_domain"],
+            DOMAIN,
+        )
 
 
 class TestIntegrationLifecycleE2E(unittest.IsolatedAsyncioTestCase):

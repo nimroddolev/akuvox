@@ -118,6 +118,9 @@ async def async_refresh_panel(hass: HomeAssistant) -> None:
         module_url=_panel_module_url(),
         embed_iframe=False,
         require_admin=admin_only,
+        # Associate this panel with the integration so Home Assistant's
+        # built-in Settings action routes straight to it, as Chime TTS does.
+        config_panel_domain=DOMAIN,
     )
 
 
