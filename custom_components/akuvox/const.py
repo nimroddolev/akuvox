@@ -470,10 +470,12 @@ API_OPENDOOR = "opendoor"
 API_APP_HOST = "subdomain.akuvox.com/web-server/v3/app/"
 API_GET_PERSONAL_TEMP_KEY_LIST = "tempKey/getPersonalTempKeyList?row=20&page=1"
 API_GET_PERSONAL_DOOR_LOG = "log/getDoorLog?row=1"
+API_GET_PERSONAL_CALL_LOG = "log/getCallLog?row=1"
 
 TEMP_KEY_QR_HOST = "subdomain.akuvox.com"
 
 DATA_STORAGE_KEY = "akuvox_data_storage_key"
 
+ID_KEY = "ID"
 CAPTURE_TIME_KEY = "CaptureTime"
 PIC_URL_KEY = "PicUrl"

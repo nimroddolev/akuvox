@@ -13,6 +13,7 @@ from .const import (
     CAPTURE_TIME_KEY,
     DATA_STORAGE_KEY,
     LOCATIONS_DICT,
+    ID_KEY,
 )
 from .helpers import AkuvoxHelpers
 
@@ -224,6 +225,30 @@ class AkuvoxData:
                     ret_value = new_door_log
 
             await self.async_set_stored_data_for_key("latest_door_log", new_door_log)
+        return ret_value
+
+    async def async_parse_personal_call_log(self, json_data: list):
+        """Parse the getCallLog API response."""
+        ret_value = None
+        if json_data is not None and len(json_data) > 0:
+            new_call_log = json_data[0]
+            latest_call_log = await self.async_get_stored_data_for_key("latest_call_log")
+            if latest_call_log is not None and ID_KEY in latest_call_log:
+                if new_call_log is not None and ID_KEY in new_call_log:
+                    # Ignore previous call event
+                    if str(latest_call_log[ID_KEY]) == str(new_call_log[ID_KEY]):
+                        return None
+                    # New call event detected
+                    LOGGER.debug("ℹ️ New personal call log entry detected:")
+                    LOGGER.debug(" - CaptureType: Call")
+                    LOGGER.debug(" - Location: %s", new_call_log["DevLocation"])
+                    ret_value = {
+                        "ID": new_call_log[ID_KEY],
+                        "CaptureType": "Call",
+                        "Location": new_call_log["DevLocation"],
+                    }
+
+            await self.async_set_stored_data_for_key("latest_call_log", new_call_log)
         return ret_value
 
     ###################
