@@ -536,6 +536,18 @@ export const viewStyles = `
     transition: width 160ms ease;
   }
 
+  .activity-storage-progress.is-over-limit .activity-storage-progress-fill {
+    background: var(--error-color, #c62828);
+  }
+
+  .activity-storage-limit-warning {
+    margin: 0 0 8px;
+    color: var(--error-color, #b91c1c);
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.4;
+  }
+
   .activity-storage-progress-label {
     position: absolute;
     inset: 0;

@@ -37,13 +37,23 @@ const formatStorageAmount = (bytes) => {
   return `${value.toFixed(precision)} ${units[unitIndex]}`;
 };
 
+const activityStorageLimitWarning = (settings) => {
+  const limitMb = Number(settings.activity_history_max_storage_mb) || 0;
+  if (limitMb <= 0) return "";
+  const usedBytes = Math.max(0, Number(settings.activity_history_storage_bytes) || 0);
+  return usedBytes > limitMb * 1_000_000
+    ? `<p class="activity-storage-limit-warning" role="alert">Increase the storage amount or lose stored activity data and preview images</p>`
+    : "";
+};
+
 const activityStorageProgress = (settings) => {
   const limitMb = Number(settings.activity_history_max_storage_mb) || 0;
   if (limitMb <= 0) return "";
   const usedBytes = Math.max(0, Number(settings.activity_history_storage_bytes) || 0);
   const percentage = (usedBytes / (limitMb * 1_000_000)) * 100;
   const percentageLabel = `${percentage.toFixed(percentage >= 10 ? 0 : 1)}%`;
-  return `<div class="activity-storage-progress" role="progressbar" aria-label="Local activity storage used" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${escapeHtml(percentage.toFixed(1))}">
+  const exceedsLimit = usedBytes > limitMb * 1_000_000;
+  return `<div class="activity-storage-progress${exceedsLimit ? " is-over-limit" : ""}" role="progressbar" aria-label="Local activity storage used" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${escapeHtml(Math.min(100, percentage).toFixed(1))}">
     <span class="activity-storage-progress-fill" style="width:${Math.min(100, percentage)}%"></span>
     <span class="activity-storage-progress-label">${escapeHtml(formatStorageAmount(usedBytes))} Used (${escapeHtml(percentageLabel)})</span>
   </div>`;
@@ -114,12 +124,15 @@ export const updateActivityStorageProgress = (host, usageBytes) => {
   if (!host._settings) return;
   host._settings.activity_history_storage_bytes = Math.max(0, Number(usageBytes) || 0);
   const input = host.shadowRoot.querySelector('[name="activity_history_max_storage_mb"]');
+  const warning = host.shadowRoot.querySelector("[data-activity-storage-limit-warning]");
   const progress = host.shadowRoot.querySelector("[data-activity-storage-progress]");
   if (!input || !progress) return;
-  progress.innerHTML = activityStorageProgress({
+  const settings = {
     ...host._settings,
     activity_history_max_storage_mb: input.value,
-  });
+  };
+  if (warning) warning.innerHTML = activityStorageLimitWarning(settings);
+  progress.innerHTML = activityStorageProgress(settings);
 };
 
 /**
@@ -213,6 +226,7 @@ export const renderSettingsView = (host) => {
             Store activity history and preview images locally
           </label>
           <div data-activity-storage-limit-controls ${settings.store_activity_history ? "" : "hidden"}>
+            <div data-activity-storage-limit-warning>${activityStorageLimitWarning(settings)}</div>
             <label class="activity-storage-limit-row">
               <span class="activity-storage-limit">
                 <input name="activity_history_max_storage_mb" type="number" min="0" value="${escapeHtml(settings.activity_history_max_storage_mb || 0)}" aria-label="Local activity storage limit in MB">
@@ -349,7 +363,7 @@ export const handleSaveSettings = async (host, event) => {
     };
     host._settingsDirty = false;
     await host._load();
-    showNotice(host, "SmartPlus settings saved. The account is reloading.");
+    showNotice(host, "SmartPlus settings saved successfully.");
   } catch (_) {
     showNotice(
       host,
@@ -383,15 +397,22 @@ export const bindSettingsEvents = (host) => {
   const storageProgress = settingsForm.querySelector(
     "[data-activity-storage-progress]"
   );
+  const storageLimitWarning = settingsForm.querySelector(
+    "[data-activity-storage-limit-warning]"
+  );
   const storageLimitDescription = settingsForm.querySelector(
     "[data-activity-storage-limit-description]"
   );
   const updateStorageProgress = () => {
     if (!storageLimitInput || !storageProgress) return;
-    storageProgress.innerHTML = activityStorageProgress({
+    const settings = {
       ...host._settings,
       activity_history_max_storage_mb: storageLimitInput.value,
-    });
+    };
+    if (storageLimitWarning) {
+      storageLimitWarning.innerHTML = activityStorageLimitWarning(settings);
+    }
+    storageProgress.innerHTML = activityStorageProgress(settings);
     if (storageLimitDescription) {
       storageLimitDescription.hidden = Number(storageLimitInput.value) > 0;
     }

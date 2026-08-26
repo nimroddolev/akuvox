@@ -5,7 +5,7 @@
 import { mainStyles } from "./main.css.js?v=20260820-mobile-header-center";
 import { tableStyles } from "./tables.css.js";
 import { dialogStyles } from "./dialogs.css.js?v=20260817-range-picker";
-import { viewStyles } from "./views.css.js?v=20260823-create-key-spinner";
+import { viewStyles } from "./views.css.js?v=20260826-storage-limit-warning-row";
 
 export const getPanelStyles = () => `
   <style>
