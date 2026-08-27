@@ -3,6 +3,11 @@
  */
 
 import { escapeHtml } from "../utils/dom.js";
+import {
+  bindMultiSelectFilters,
+  matchesSelectedFilter,
+  renderMultiSelectFilter,
+} from "../utils/multi-select-filter.js?v=20260827-multi-table-filters";
 import { tableTimestampFormatter } from "../utils/formatters.js?v=20260820-table-timestamps";
 import { icons } from "../utils/icons.js";
 import { showActivityImageDialog } from "../components/image-dialog.js?v=20260821-viewport-lightbox";
@@ -42,25 +47,9 @@ const activityStorageWarning = (settings) => {
   </div>`;
 };
 
-/**
- * Build option elements for filter dropdowns.
- * @param {Array<object>} items
- * @param {string} key
- * @param {string} selectedValue
- * @returns {string}
- */
-const buildFilterOptions = (items, key, selectedValue) => {
-  const uniqueValues = [
+const filterValues = (items, key) => [
     ...new Set(items.map((item) => String(item[key] || "")).filter(Boolean)),
   ].sort((a, b) => a.localeCompare(b));
-
-  return uniqueValues
-    .map(
-      (value) =>
-        `<option value="${escapeHtml(value)}" ${selectedValue === value ? "selected" : ""}>${escapeHtml(value)}</option>`
-    )
-    .join("");
-};
 
 /**
  * Render the activity thumbnail preview or placeholder.
@@ -106,7 +95,7 @@ export const renderActivityView = (host, account) => {
   const filtered = activity
     .filter((item) =>
       Object.entries(host._activityFilters).every(
-        ([key, value]) => !value || String(item[key] || "") === value
+        ([key, values]) => matchesSelectedFilter(values, item[key])
       )
     )
     .sort(
@@ -129,27 +118,9 @@ export const renderActivityView = (host, account) => {
       ${activityStorageWarning(host._settings)}
       <p class="muted">Recent SmartPlus activity is retained across Home Assistant restarts and refreshed by polling.</p>
       <div class="activity-controls">
-        <label>
-          Door
-          <select data-activity-filter="Location">
-            <option value="">All doors</option>
-            ${buildFilterOptions(activity, "Location", host._activityFilters.Location)}
-          </select>
-        </label>
-        <label>
-          Event
-          <select data-activity-filter="CaptureType">
-            <option value="">All events</option>
-            ${buildFilterOptions(activity, "CaptureType", host._activityFilters.CaptureType)}
-          </select>
-        </label>
-        <label>
-          Initiator
-          <select data-activity-filter="Initiator">
-            <option value="">All initiators</option>
-            ${buildFilterOptions(activity, "Initiator", host._activityFilters.Initiator)}
-          </select>
-        </label>
+        ${renderMultiSelectFilter({ scope: "activity", key: "Location", label: "Door", allLabel: "All doors", values: filterValues(activity, "Location"), selected: host._activityFilters.Location, openMenu: host._openFilterMenu })}
+        ${renderMultiSelectFilter({ scope: "activity", key: "CaptureType", label: "Event", allLabel: "All events", values: filterValues(activity, "CaptureType"), selected: host._activityFilters.CaptureType, openMenu: host._openFilterMenu })}
+        ${renderMultiSelectFilter({ scope: "activity", key: "Initiator", label: "Initiator", allLabel: "All initiators", values: filterValues(activity, "Initiator"), selected: host._activityFilters.Initiator, openMenu: host._openFilterMenu })}
       </div>
       <table>
         <thead>
@@ -200,7 +171,7 @@ export const bindActivityEvents = (host) => {
       button.addEventListener("click", () => {
         const matchesFilters = (item) =>
           Object.entries(host._activityFilters).every(
-            ([key, value]) => !value || String(item[key] || "") === value
+            ([key, values]) => matchesSelectedFilter(values, item[key])
           );
         const events = (host._account()?.activity || [])
           .filter((item) => item.has_image && matchesFilters(item))
@@ -221,15 +192,10 @@ export const bindActivityEvents = (host) => {
       })
     );
 
-  host.shadowRoot
-    .querySelectorAll("[data-activity-filter]")
-    .forEach((select) =>
-      select.addEventListener("change", () => {
-        host._activityFilters[select.dataset.activityFilter] = select.value;
-        host._activityVisibleCount = ACTIVITY_INITIAL_PAGE_SIZE;
-        host._render();
-      })
-    );
+  bindMultiSelectFilters(host, "activity", host._activityFilters, () => {
+    host._activityVisibleCount = ACTIVITY_INITIAL_PAGE_SIZE;
+    host._render();
+  });
 
   host.shadowRoot
     .querySelectorAll("[data-activity-sort]")

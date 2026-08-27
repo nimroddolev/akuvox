@@ -91,6 +91,15 @@ export const tableStyles = `
     margin: 12px 0;
   }
 
+  .activity-controls:has(.multi-select-filter[open]) {
+    position: relative;
+    z-index: 10;
+  }
+
+  .table-wrap:has(.multi-select-filter[open]) {
+    overflow: visible;
+  }
+
   .activity-controls label {
     display: grid;
     gap: 3px;
@@ -113,6 +122,98 @@ export const tableStyles = `
     outline: 2px solid var(--aqua);
     outline-offset: 2px;
   }
+
+  .multi-select-filter {
+    position: relative;
+    min-width: 150px;
+  }
+
+  .multi-select-filter[open] { z-index: 11; }
+
+  .multi-select-filter summary {
+    display: grid;
+    gap: 3px;
+    cursor: pointer;
+    list-style: none;
+    color: inherit;
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .multi-select-filter summary::-webkit-details-marker { display: none; }
+
+  .multi-select-filter-summary {
+    display: flex;
+    align-items: center;
+    min-height: 36px;
+    box-sizing: border-box;
+    padding: 7px 30px 7px 10px;
+    overflow: hidden;
+    border: 1px solid var(--divider-color, #8c99a3);
+    border-radius: 10px;
+    background: var(--card-background-color, #fff);
+    font: inherit;
+    font-size: 14px;
+    font-weight: 400;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .multi-select-filter summary:focus-visible .multi-select-filter-summary {
+    outline: 2px solid var(--aqua);
+    outline-offset: 2px;
+  }
+
+  .multi-select-filter summary::after {
+    position: absolute;
+    right: 11px;
+    bottom: 12px;
+    border: solid currentColor;
+    border-width: 0 2px 2px 0;
+    padding: 3px;
+    content: "";
+    transform: rotate(45deg);
+  }
+
+  .multi-select-filter[open] summary::after {
+    bottom: 9px;
+    transform: rotate(225deg);
+  }
+
+  .multi-select-filter-options {
+    position: absolute;
+    z-index: 12;
+    top: calc(100% + 4px);
+    left: 0;
+    display: grid;
+    min-width: 100%;
+    max-width: min(300px, calc(100vw - 48px));
+    max-height: 260px;
+    overflow: auto;
+    padding: 6px;
+    border: 1px solid var(--divider-color, #8c99a3);
+    border-radius: 10px;
+    background: var(--card-background-color, #fff);
+    box-shadow: 0 4px 12px rgb(0 0 0 / 18%);
+  }
+
+  .multi-select-filter-options label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 400;
+    white-space: nowrap;
+  }
+
+  .multi-select-filter-options label:hover {
+    background: color-mix(in srgb, var(--aqua) 14%, transparent);
+  }
+
+  .multi-select-filter-options input { accent-color: var(--aqua); }
 
   /* Sort buttons */
   .sort-button {

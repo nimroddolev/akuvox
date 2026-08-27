@@ -3,18 +3,15 @@
  */
 
 import { escapeHtml } from "../utils/dom.js";
+import {
+  bindMultiSelectFilters,
+  matchesSelectedFilter,
+  renderMultiSelectFilter,
+} from "../utils/multi-select-filter.js?v=20260827-multi-table-filters";
 import { tableTimestampFormatter } from "../utils/formatters.js?v=20260820-table-timestamps";
 import { showCallImageDialog } from "../components/image-dialog.js";
 
-/**
- * Build option elements for call filter dropdowns.
- * @param {Array<object>} calls
- * @param {string} key
- * @param {string} selectedValue
- * @returns {string}
- */
-const buildCallFilterOptions = (calls, key, selectedValue) => {
-  const values = [
+const callFilterValues = (calls, key) => [
     ...new Set(
       calls
         .map((call) =>
@@ -28,14 +25,6 @@ const buildCallFilterOptions = (calls, key, selectedValue) => {
     ),
   ].sort();
 
-  return values
-    .map(
-      (value) =>
-        `<option value="${escapeHtml(value)}" ${selectedValue === value ? "selected" : ""}>${escapeHtml(value)}</option>`
-    )
-    .join("");
-};
-
 /**
  * Render HTML content for the Call history tab.
  * @param {HTMLElement} host
@@ -48,12 +37,9 @@ export const renderCallsView = (host, account) => {
   const filtered = calls
     .filter(
       (call) =>
-        (!host._callFilters.callerName ||
-          call.callerName === host._callFilters.callerName) &&
-        (!host._callFilters.calleeName ||
-          call.calleeName === host._callFilters.calleeName) &&
-        (!host._callFilters.status ||
-          (call.isAnswer ? "Answered" : "Missed") === host._callFilters.status)
+        matchesSelectedFilter(host._callFilters.callerName, call.callerName) &&
+        matchesSelectedFilter(host._callFilters.calleeName, call.calleeName) &&
+        matchesSelectedFilter(host._callFilters.status, call.isAnswer ? "Answered" : "Missed")
     )
     .sort((a, b) => {
       const getValue = (call) =>
@@ -79,27 +65,9 @@ export const renderCallsView = (host, account) => {
       <h2>Call history</h2>
       <p class="muted">The latest SmartPlus call history is refreshed alongside activity polling and retained across restarts.</p>
       <div class="activity-controls">
-        <label>
-          Caller
-          <select data-call-filter="callerName">
-            <option value="">All callers</option>
-            ${buildCallFilterOptions(calls, "callerName", host._callFilters.callerName)}
-          </select>
-        </label>
-        <label>
-          Callee
-          <select data-call-filter="calleeName">
-            <option value="">All callees</option>
-            ${buildCallFilterOptions(calls, "calleeName", host._callFilters.calleeName)}
-          </select>
-        </label>
-        <label>
-          Status
-          <select data-call-filter="status">
-            <option value="">All statuses</option>
-            ${buildCallFilterOptions(calls, "status", host._callFilters.status)}
-          </select>
-        </label>
+        ${renderMultiSelectFilter({ scope: "call", key: "callerName", label: "Caller", allLabel: "All callers", values: callFilterValues(calls, "callerName"), selected: host._callFilters.callerName, openMenu: host._openFilterMenu })}
+        ${renderMultiSelectFilter({ scope: "call", key: "calleeName", label: "Callee", allLabel: "All callees", values: callFilterValues(calls, "calleeName"), selected: host._callFilters.calleeName, openMenu: host._openFilterMenu })}
+        ${renderMultiSelectFilter({ scope: "call", key: "status", label: "Status", allLabel: "All statuses", values: callFilterValues(calls, "status"), selected: host._callFilters.status, openMenu: host._openFilterMenu })}
       </div>
       <table>
         <thead>
@@ -150,14 +118,7 @@ export const renderCallsView = (host, account) => {
  * @param {HTMLElement} host
  */
 export const bindCallsEvents = (host) => {
-  host.shadowRoot
-    .querySelectorAll("[data-call-filter]")
-    .forEach((select) =>
-      select.addEventListener("change", () => {
-        host._callFilters[select.dataset.callFilter] = select.value;
-        host._render();
-      })
-    );
+  bindMultiSelectFilters(host, "call", host._callFilters, () => host._render());
 
   host.shadowRoot
     .querySelectorAll("[data-call-sort]")

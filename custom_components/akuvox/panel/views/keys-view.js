@@ -1,4 +1,9 @@
 import { escapeHtml, closeOnBackdrop, applyKeyFormRowLayout } from "../utils/dom.js";
+import {
+  bindMultiSelectFilters,
+  matchesSelectedFilter,
+  renderMultiSelectFilter,
+} from "../utils/multi-select-filter.js?v=20260827-multi-table-filters";
 import { icons } from "../utils/icons.js";
 import {
   parseDateTimeInput,
@@ -72,7 +77,7 @@ export const renderKeysView = (host, account) => {
       return (
         (!host._keyFilters.description ||
           description.includes(host._keyFilters.description.toLocaleLowerCase())) &&
-        (!host._keyFilters.status || status === host._keyFilters.status)
+        matchesSelectedFilter(host._keyFilters.status, status)
       );
     })
     .sort((left, right) => {
@@ -146,14 +151,7 @@ export const renderKeysView = (host, account) => {
           Description
           <input class="key-filter-input" type="search" placeholder="Filter by name" value="${escapeHtml(host._keyFilters.description)}" data-key-filter="description">
         </label>
-        <label>
-          Status
-          <select data-key-filter="status">
-            <option value="">All keys</option>
-            <option value="active" ${host._keyFilters.status === "active" ? "selected" : ""}>Active</option>
-            <option value="expired" ${host._keyFilters.status === "expired" ? "selected" : ""}>Expired</option>
-          </select>
-        </label>
+        ${renderMultiSelectFilter({ scope: "key", key: "status", label: "Status", allLabel: "All keys", values: ["active", "expired"], selected: host._keyFilters.status, openMenu: host._openFilterMenu })}
       </div>
       <table>
         <thead>
@@ -667,6 +665,8 @@ export const bindKeysEvents = (host) => {
     input.addEventListener("input", update);
     input.addEventListener("change", update);
   });
+
+  bindMultiSelectFilters(host, "key", host._keyFilters, () => host._render());
 
   // Sort
   host.shadowRoot.querySelectorAll("[data-key-sort]").forEach((button) =>
