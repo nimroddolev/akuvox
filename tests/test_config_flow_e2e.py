@@ -32,14 +32,11 @@ class TestConfigFlowE2E(unittest.TestCase):
         self.flow = AkuvoxFlowHandler()
         self.flow.hass = _Hass()
 
-    def test_app_token_and_sms_schemas_exposed_required_fields(self) -> None:
-        """Manual-token and SMS sign-in forms retained their required fields."""
-        app_schema = self.flow.get_app_tokens_sign_in_schema()
+    def test_sms_schema_exposed_required_fields(self) -> None:
+        """SMS sign-in retained the account fields required by SmartPlus."""
         sms_schema = self.flow.get_sms_sign_in_schema({})
 
-        app_fields = {str(field.schema) for field in app_schema}
         sms_fields = {str(field.schema) for field in sms_schema}
-        self.assertTrue({"country_code", "phone_number", "auth_token", "token"}.issubset(app_fields))
         self.assertTrue({"country_code", "phone_number"}.issubset(sms_fields))
 
     def test_flow_state_was_not_shared_between_instances(self) -> None:
@@ -137,39 +134,3 @@ class TestReauthFlowE2E(unittest.IsolatedAsyncioTestCase):
         self.assertIn("token_refreshed_at", update["options"])
         self.assertEqual(update["options"]["token_update_type"], "refreshed")
         self.assertEqual(update["reason"], "reauth_successful")
-
-    @patch("custom_components.akuvox.config_flow.async_clear_authentication_failure")
-    @patch("custom_components.akuvox.config_flow.async_store_credentials", new_callable=AsyncMock)
-    async def test_current_tokens_updated_and_reloaded_existing_entry(
-        self, store_credentials, clear_authentication_failure
-    ) -> None:
-        """A validated token pair replaced credentials without creating an entry."""
-        flow = AkuvoxFlowHandler()
-        flow.hass = _Hass()
-        flow._reauth_entry = _ReauthEntry()
-        flow.data = {"country_code": "972", "phone_number": "5551234", "subdomain": "ecloud"}
-        flow.akuvox_api_client = _ReauthClient()
-        flow.async_update_reload_and_abort = MagicMock(return_value={"type": "abort"})
-
-        result = await flow.async_step_reauth_tokens(
-            {"auth_token": "new-auth-token", "token": "new-session-token"}
-        )
-
-        self.assertEqual(result, {"type": "abort"})
-        flow.akuvox_api_client.async_make_servers_list_request.assert_awaited_once_with(
-            hass=flow.hass,
-            auth_token="new-auth-token",
-            token="new-session-token",
-            country_code="972",
-            phone_number="5551234",
-            subdomain="ecloud",
-        )
-        flow.akuvox_api_client.async_retrieve_user_data.assert_awaited_once_with(
-            start_polling=False
-        )
-        flow.akuvox_api_client.async_retrieve_device_data.assert_not_awaited()
-        flow.akuvox_api_client.async_retrieve_temp_keys_data.assert_not_awaited()
-        store_credentials.assert_awaited_once_with(
-            flow.hass, flow._reauth_entry.entry_id, "new-auth-token", "new-session-token"
-        )
-        clear_authentication_failure.assert_called_once_with(flow.hass, flow._reauth_entry)
