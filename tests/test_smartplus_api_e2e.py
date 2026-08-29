@@ -361,6 +361,14 @@ class TestSmartPlusApiE2E(unittest.IsolatedAsyncioTestCase):
 
         self.assertTrue(await client.async_retrieve_personal_door_log())
         self.hass.bus.async_fire.assert_any_call("akuvox_door_update", ANY)
+        door_event = next(
+            call.args[1]
+            for call in self.hass.bus.async_fire.call_args_list
+            if call.args[0] == "akuvox_door_update"
+        )
+        self.assertEqual(door_event["door_name"], "Lobby")
+        self.assertEqual(door_event["opened_by"], "Visitor")
+        self.assertEqual(door_event["unlock_method"], "faceUnlock")
         panel_updates = [
             call
             for call in self.hass.bus.async_fire.call_args_list
