@@ -51,6 +51,27 @@ const filterValues = (items, key) => [
     ...new Set(items.map((item) => String(item[key] || "")).filter(Boolean)),
   ].sort((a, b) => a.localeCompare(b));
 
+const formatUpdatedAgo = (timestamp) => {
+  const updatedAt = Date.parse(timestamp || "");
+  if (Number.isNaN(updatedAt)) return "";
+  const seconds = Math.max(0, Math.floor((Date.now() - updatedAt) / 1000));
+  const [amount, unit] =
+    seconds < 60
+      ? [seconds, "s"]
+      : seconds < 3600
+        ? [Math.floor(seconds / 60), "m"]
+        : seconds < 86400
+          ? [Math.floor(seconds / 3600), "h"]
+          : [Math.floor(seconds / 86400), "d"];
+  const indicator = seconds <= 5 ? "🟢" : seconds >= 30 ? "🔴" : "🟡";
+  return `${indicator} Updated ${amount}${unit} ago`;
+};
+
+const updateActivityUpdatedLabel = (host) => {
+  const label = host.shadowRoot.querySelector("[data-activity-updated-at]");
+  if (label) label.textContent = formatUpdatedAgo(label.dataset.activityUpdatedAt);
+};
+
 /**
  * Render the activity thumbnail preview or placeholder.
  * @param {HTMLElement} host
@@ -114,7 +135,10 @@ export const renderActivityView = (host, account) => {
 
   return `
     <div class="card table-wrap">
-      <h2>Latest activity</h2>
+      <div class="section-heading activity-heading">
+        <h2>Latest activity</h2>
+        ${account.activity_updated_at ? `<span class="muted activity-updated" data-activity-updated-at="${escapeHtml(account.activity_updated_at)}"></span>` : ""}
+      </div>
       ${activityStorageWarning(host._settings)}
       <p class="muted">Recent SmartPlus activity is retained across Home Assistant restarts and refreshed by polling.</p>
       <div class="activity-controls">
@@ -165,6 +189,14 @@ export const renderActivityView = (host, account) => {
  */
 export const bindActivityEvents = (host) => {
   host._activityPaginationObserver?.disconnect();
+  window.clearInterval(host._activityUpdatedTimer);
+  updateActivityUpdatedLabel(host);
+  if (host.shadowRoot.querySelector("[data-activity-updated-at]")) {
+    host._activityUpdatedTimer = window.setInterval(
+      () => updateActivityUpdatedLabel(host),
+      1000
+    );
+  }
   host.shadowRoot
     .querySelectorAll("[data-activity-image]")
     .forEach((button) =>

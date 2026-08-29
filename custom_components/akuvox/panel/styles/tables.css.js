@@ -25,6 +25,12 @@ export const tableStyles = `
     overflow-x: auto;
   }
 
+  .activity-updated {
+    font-size: 12px;
+    font-weight: 400;
+    white-space: nowrap;
+  }
+
   /* Devices Table */
   .device-table {
     table-layout: auto;

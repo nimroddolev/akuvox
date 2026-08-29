@@ -834,7 +834,7 @@ class AkuvoxApiClient:
         json_data = await self.async_get_personal_door_log()
         if json_data is None:
             return False
-        await self._async_record_panel_activity(json_data)
+        activity_changed = await self._async_record_panel_activity(json_data)
         try:
             await self.async_retrieve_call_history()
         except AkuvoxApiClientError as error:
@@ -842,10 +842,36 @@ class AkuvoxApiClient:
         new_door_log = await self._data.async_parse_personal_door_log(json_data)
         if new_door_log is not None:
             LOGGER.debug("🚪 New door open event occurred. Firing akuvox_door_update event")
-            self.hass.bus.async_fire("akuvox_door_update", new_door_log)
+            event_data = dict(new_door_log)
+            door_name = str(new_door_log.get("Location", ""))
+            if self._entry is not None and hasattr(self.hass, "data"):
+                device_registry = dr.async_get(self.hass)
+                device = device_registry.async_get_device(
+                    identifiers={(DOMAIN, f"{self._entry.entry_id}:{door_name}")}
+                )
+                if device is None:
+                    device = device_registry.async_get_device(
+                        identifiers={(DOMAIN, door_name)}
+                    )
+                if device is not None:
+                    event_data[ATTR_DEVICE_ID] = device.id
+            self.hass.bus.async_fire("akuvox_door_update", event_data)
+            for listener in self._door_unlock_listeners.get(door_name, set()):
+                listener(event_data)
+        # Publish this only after all work for the poll has completed.  The
+        # persistence and call-history steps can take several seconds, so
+        # timestamping earlier makes the panel look stale immediately.
+        self._activity_last_updated = datetime.now(timezone.utc).isoformat()
+        self._notify_panel_data_updated(
+            **(
+                {"activity_storage_usage_bytes": self.get_activity_storage_usage_bytes()}
+                if activity_changed
+                else {}
+            )
+        )
         return True
 
-    async def _async_record_panel_activity(self, events: list[dict[str, Any]]) -> None:
+    async def _async_record_panel_activity(self, events: list[dict[str, Any]]) -> bool:
         """Restore and persist the latest cloud activity for the sidebar panel."""
         if not self._activity_history_loaded:
             stored_history = await self._data.async_get_stored_data_for_key(
@@ -895,9 +921,7 @@ class AkuvoxApiClient:
             await self._data.async_set_stored_data_for_key(
                 "panel_activity_history", self._activity_history
             )
-            self._notify_panel_data_updated(
-                activity_storage_usage_bytes=self.get_activity_storage_usage_bytes()
-            )
+        return changed
 
     def _activity_storage_enabled(self) -> bool:
         return bool(self._entry and self._entry.options.get(STORE_ACTIVITY_HISTORY, False))
