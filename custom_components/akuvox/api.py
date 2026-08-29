@@ -18,8 +18,10 @@ from datetime import datetime, timezone
 from time import time
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
+from homeassistant.const import ATTR_DEVICE_ID
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.start import async_at_started
 
@@ -34,6 +36,7 @@ from .repairs import (
 )
 
 from .const import (
+    DOMAIN,
     LOGGER,
     REST_SERVER_ADDR,
     REST_SERVER_PORT,
@@ -109,11 +112,13 @@ class AkuvoxApiClient:
         self._polling_start_unsub: CALLBACK_TYPE | None = None
         self._token_refresh_lock = asyncio.Lock()
         self._door_log_failure_logged = False
-        self._door_log_backoff = DOOR_LOG_POLL_INTERVAL
+        self._door_log_poll_interval = DOOR_LOG_FALLBACK_POLL_INTERVAL
+        self._door_unlock_listeners: dict[str, set[Callable[[dict[str, Any]], None]]] = {}
         self._token_refresh_unsub: Callable[[], None] | None = None
         self._skip_next_entry_reload = False
         self._activity_history: list[dict[str, Any]] = []
         self._activity_history_loaded = False
+        self._activity_last_updated: str | None = None
         self._call_history: list[dict[str, Any]] = []
         self._call_history_loaded = False
         if entry:
@@ -124,12 +129,25 @@ class AkuvoxApiClient:
                 auth_token=(credentials or {}).get("auth_token"),
                 token=(credentials or {}).get("token"),
             ) # type: ignore
-            self._door_log_backoff = self._data.door_log_poll_interval
 
     @property
     def config_entry(self) -> ConfigEntry | None:
         """Return the associated Home Assistant configuration entry."""
         return self._entry
+
+    def async_subscribe_to_door_unlocks(
+        self, door_name: str, listener: Callable[[dict[str, Any]], None]
+    ) -> Callable[[], None]:
+        """Subscribe an event entity to unlocks detected for one door."""
+        listeners = self._door_unlock_listeners.setdefault(door_name, set())
+        listeners.add(listener)
+
+        def _unsubscribe() -> None:
+            listeners.discard(listener)
+            if not listeners:
+                self._door_unlock_listeners.pop(door_name, None)
+
+        return _unsubscribe
 
     async def async_init_api(self) -> bool:
         """Initialize API configuration data."""
