@@ -5,21 +5,20 @@ https://github.com/nimroddolev/akuvox
 """
 from __future__ import annotations
 
-import logging
-
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.start import async_at_started
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
 from .config_flow import AkuvoxOptionsFlowHandler
 from .api import AkuvoxApiClient
 from .const import (
     DOMAIN,
-    DEBUG_LOGGING,
-    LOGGER
+    LOGGER,
 )
 from .coordinator import AkuvoxDataUpdateCoordinator
 from .credentials import async_load_and_migrate_credentials
@@ -29,6 +28,7 @@ from .repairs import async_clear_authentication_failure
 PLATFORMS: list[Platform] = [
     Platform.CAMERA,
     Platform.BUTTON,
+    Platform.EVENT,
     Platform.SENSOR
 ]
 
@@ -46,6 +46,8 @@ async def async_setup(hass: HomeAssistant, _config: dict) -> bool:
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up this integration using UI."""
     credentials = await async_load_and_migrate_credentials(hass, entry)
+    if not credentials.get("auth_token") or not credentials.get("token"):
+        raise ConfigEntryAuthFailed("SmartPlus credentials are missing")
     hass.data.setdefault(DOMAIN, {})
     async_register_websocket_api(hass)
     hass.data[DOMAIN][entry.entry_id] = coordinator = AkuvoxDataUpdateCoordinator(
@@ -58,42 +60,50 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         ),
     )
     await async_update_configuration(hass=hass, entry=entry)
-    _configure_debug_logging(hass)
-    # Keep the sidebar available even while the cloud service is temporarily
-    # unavailable. The panel can then show its cached/reauthentication state.
-    await async_refresh_panel(hass)
-
-    # https://developers.home-assistant.io/docs/integration_fetching_data#coordinated-single-api-poll-for-data-for-all-entities
-    try:
-        await coordinator.async_config_entry_first_refresh()
-    except (ConfigEntryNotReady, UpdateFailed) as error:
-        # SmartPlus's cloud endpoints are occasionally slow or unavailable.
-        # Do not hold up Home Assistant startup (and therefore the sidebar
-        # panel) for a transient transport failure. Authentication failures
-        # remain ConfigEntryAuthFailed and are still handled by HA's reauth
-        # flow. The coordinator will recover on its next requested refresh.
-        LOGGER.warning(
-            "SmartPlus was unavailable during startup; continuing with cached "
-            "integration state: %s",
-            error,
+    LOGGER.debug("Akuvox setup: configuration applied")
+    refresh_task = hass.async_create_task(_async_refresh_cloud_data(hass, entry))
+    entry.async_on_unload(refresh_task.cancel)
+    entry.async_on_unload(
+        async_at_started(
+            hass,
+            lambda _hass: _async_start_runtime_after_start(hass, entry),
         )
-    async_clear_authentication_failure(hass, entry)
-    coordinator.client.async_start_proactive_token_refresh()
-
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    )
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
     entry.async_on_unload(coordinator.client.async_stop_proactive_token_refresh)
 
     return True
 
 
-def _configure_debug_logging(hass: HomeAssistant) -> None:
-    """Apply the persisted diagnostic level across Akuvox accounts."""
-    enabled = any(
-        bool(item.options.get(DEBUG_LOGGING, False))
-        for item in hass.config_entries.async_entries(DOMAIN)
+async def _async_refresh_cloud_data(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Begin the SmartPlus request without waiting for HA startup."""
+    coordinator: AkuvoxDataUpdateCoordinator | None = hass.data.get(DOMAIN, {}).get(
+        entry.entry_id
     )
-    LOGGER.setLevel(logging.DEBUG if enabled else logging.INFO)
+    # The entry can be unloaded before this deliberately background task gets
+    # its first event-loop turn.
+    if coordinator is None:
+        return
+    try:
+        await coordinator.async_refresh()
+    except (ConfigEntryNotReady, UpdateFailed) as error:
+        LOGGER.warning("SmartPlus was unavailable after startup: %s", error)
+
+
+@callback
+def _async_start_runtime_after_start(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Schedule non-HTTP runtime setup after the core is ready."""
+    hass.add_job(_async_start_runtime(hass, entry))
+
+
+async def _async_start_runtime(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Start polling and entities after Home Assistant has initialized."""
+    coordinator: AkuvoxDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
+    async_clear_authentication_failure(hass, entry)
+    coordinator.client.async_start_proactive_token_refresh()
+    await coordinator.client.async_start_polling()
+    hass.async_create_task(coordinator.client.async_load_panel_history())
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
 
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

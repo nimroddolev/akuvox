@@ -1,6 +1,7 @@
 """End-to-end Home Assistant lifecycle tests for the Akuvox integration."""
 from __future__ import annotations
 
+import asyncio
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -39,6 +40,12 @@ class _Client:
     def async_stop_proactive_token_refresh(self) -> None:
         self.stopped = True
 
+    async def async_start_polling(self) -> None:
+        """Match the runtime poller startup invoked after HA starts."""
+
+    async def async_load_panel_history(self) -> None:
+        """Match the deferred panel-history task."""
+
     def consume_entry_reload_skip(self) -> bool:
         value, self.skip_reload = self.skip_reload, False
         return value
@@ -55,21 +62,21 @@ class _Coordinator:
         self.client = client
         self.first_refresh = AsyncMock()
 
-    async def async_config_entry_first_refresh(self) -> None:
+    async def async_refresh(self) -> None:
         await self.first_refresh()
 
 
 class _UnavailableCoordinator(_Coordinator):
     """Models a temporary SmartPlus transport outage during startup."""
 
-    async def async_config_entry_first_refresh(self) -> None:
+    async def async_refresh(self) -> None:
         raise UpdateFailed("Timed out fetching SmartPlus API data")
 
 
 class _NotReadyCoordinator(_Coordinator):
     """Models Home Assistant's first-refresh wrapper for a transport outage."""
 
-    async def async_config_entry_first_refresh(self) -> None:
+    async def async_refresh(self) -> None:
         raise ConfigEntryNotReady("Timed out fetching SmartPlus API data")
 
 
@@ -122,6 +129,12 @@ class _Hass:
         self.http = MagicMock()
         self.http.async_register_static_paths = AsyncMock()
 
+    def async_create_task(self, coroutine):
+        return asyncio.create_task(coroutine)
+
+    def add_job(self, coroutine) -> None:
+        asyncio.create_task(coroutine)
+
 
 class TestPanelRegistrationE2E(unittest.IsolatedAsyncioTestCase):
     """Verify the integration panel is associated with its config entry."""
@@ -165,19 +178,20 @@ class TestIntegrationLifecycleE2E(unittest.IsolatedAsyncioTestCase):
         hass = _Hass()
         entry = _Entry()
         with (
-            patch("custom_components.akuvox.async_load_and_migrate_credentials", new=AsyncMock(return_value={})),
+            patch("custom_components.akuvox.async_load_and_migrate_credentials", new=AsyncMock(return_value={"auth_token": "auth", "token": "token"})),
             patch("custom_components.akuvox.AkuvoxApiClient", _Client),
             patch("custom_components.akuvox.AkuvoxDataUpdateCoordinator", _Coordinator),
             patch("custom_components.akuvox.async_get_clientsession", return_value=object()),
             patch("custom_components.akuvox.async_register_websocket_api"),
             patch("custom_components.akuvox.async_refresh_panel", new=AsyncMock()),
             patch("custom_components.akuvox.async_clear_authentication_failure"),
+            patch("custom_components.akuvox.async_at_started", return_value=MagicMock()),
         ):
             self.assertTrue(await async_setup_entry(hass, entry))
 
         coordinator = hass.data[DOMAIN][entry.entry_id]
-        self.assertTrue(coordinator.client.started)
-        self.assertEqual(len(entry.unload_callbacks), 2)
+        self.assertFalse(coordinator.client.started)
+        self.assertEqual(len(entry.unload_callbacks), 4)
 
         coordinator.client.skip_reload = True
         await async_reload_entry(hass, entry)
@@ -211,36 +225,38 @@ class TestIntegrationLifecycleE2E(unittest.IsolatedAsyncioTestCase):
         hass = _Hass()
         entry = _Entry()
         with (
-            patch("custom_components.akuvox.async_load_and_migrate_credentials", new=AsyncMock(return_value={})),
+            patch("custom_components.akuvox.async_load_and_migrate_credentials", new=AsyncMock(return_value={"auth_token": "auth", "token": "token"})),
             patch("custom_components.akuvox.AkuvoxApiClient", _Client),
             patch("custom_components.akuvox.AkuvoxDataUpdateCoordinator", _UnavailableCoordinator),
             patch("custom_components.akuvox.async_get_clientsession", return_value=object()),
             patch("custom_components.akuvox.async_register_websocket_api"),
             patch("custom_components.akuvox.async_refresh_panel", new=AsyncMock()) as refresh_panel,
             patch("custom_components.akuvox.async_clear_authentication_failure"),
+            patch("custom_components.akuvox.async_at_started", return_value=MagicMock()),
         ):
             self.assertTrue(await async_setup_entry(hass, entry))
 
         self.assertIn(entry.entry_id, hass.data[DOMAIN])
-        refresh_panel.assert_awaited_once_with(hass)
+        refresh_panel.assert_not_awaited()
 
     async def test_setup_kept_panel_available_when_first_refresh_was_not_ready(self) -> None:
         """The Home Assistant first-refresh wrapper did not hide the panel."""
         hass = _Hass()
         entry = _Entry()
         with (
-            patch("custom_components.akuvox.async_load_and_migrate_credentials", new=AsyncMock(return_value={})),
+            patch("custom_components.akuvox.async_load_and_migrate_credentials", new=AsyncMock(return_value={"auth_token": "auth", "token": "token"})),
             patch("custom_components.akuvox.AkuvoxApiClient", _Client),
             patch("custom_components.akuvox.AkuvoxDataUpdateCoordinator", _NotReadyCoordinator),
             patch("custom_components.akuvox.async_get_clientsession", return_value=object()),
             patch("custom_components.akuvox.async_register_websocket_api"),
             patch("custom_components.akuvox.async_refresh_panel", new=AsyncMock()) as refresh_panel,
             patch("custom_components.akuvox.async_clear_authentication_failure"),
+            patch("custom_components.akuvox.async_at_started", return_value=MagicMock()),
         ):
             self.assertTrue(await async_setup_entry(hass, entry))
 
         self.assertIn(entry.entry_id, hass.data[DOMAIN])
-        refresh_panel.assert_awaited_once_with(hass)
+        refresh_panel.assert_not_awaited()
 
 
 class _DataClient:
