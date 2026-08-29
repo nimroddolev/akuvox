@@ -55,6 +55,7 @@ from .const import (
     ACTIVITY_HISTORY_LIMIT,
     STORE_ACTIVITY_HISTORY,
     ACTIVITY_HISTORY_MAX_STORAGE_MB,
+    ACTIVITY_HISTORY_DEFAULT_STORAGE_MB,
     PANEL_DATA_UPDATED_EVENT,
     REST_SERVER_API_VERSION,
     API_REST_SERVER_DATA,
@@ -949,13 +950,21 @@ class AkuvoxApiClient:
         return changed
 
     def _activity_storage_enabled(self) -> bool:
-        return bool(self._entry and self._entry.options.get(STORE_ACTIVITY_HISTORY, False))
+        return bool(self._entry and self._entry.options.get(STORE_ACTIVITY_HISTORY, True))
 
     def _activity_storage_limit_bytes(self) -> int:
         if not self._entry:
             return 0
         try:
-            return max(0, int(self._entry.options.get(ACTIVITY_HISTORY_MAX_STORAGE_MB, 0))) * 1_000_000
+            return max(
+                0,
+                int(
+                    self._entry.options.get(
+                        ACTIVITY_HISTORY_MAX_STORAGE_MB,
+                        ACTIVITY_HISTORY_DEFAULT_STORAGE_MB,
+                    )
+                ),
+            ) * 1_000_000
         except (TypeError, ValueError):
             return 0
 

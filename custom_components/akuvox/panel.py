@@ -389,11 +389,6 @@ async def websocket_panel_settings(
         msg["id"],
         {
             "settings": {
-                "event_screenshot_options": str(
-                    _entry_value(entry, "event_screenshot_options", "asap")
-                ),
-                PANEL_ENABLED: bool(_entry_value(entry, PANEL_ENABLED, True)),
-                PANEL_ADMIN_ONLY: bool(_entry_value(entry, PANEL_ADMIN_ONLY, True)),
                 CUSTOM_CAMERA_STREAM_ORIENTATIONS: bool(
                     _entry_value(entry, CUSTOM_CAMERA_STREAM_ORIENTATIONS, False)
                 ),
