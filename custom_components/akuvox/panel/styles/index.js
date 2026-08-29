@@ -2,8 +2,8 @@
  * Aggregates all panel CSS modules.
  */
 
-import { mainStyles } from "./main.css.js?v=20260820-mobile-header-center";
-import { tableStyles } from "./tables.css.js?v=20260827-multi-table-filters-outside-click";
+import { mainStyles } from "./main.css.js?v=20260829-settings-save-tall";
+import { tableStyles } from "./tables.css.js?v=20260829-activity-status-compact";
 import { dialogStyles } from "./dialogs.css.js?v=20260817-range-picker";
 import { viewStyles } from "./views.css.js?v=20260826-storage-limit-warning-row";
 

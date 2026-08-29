@@ -181,6 +181,32 @@ export const mainStyles = `
     padding: 8px 10px;
   }
 
+  .settings-heading {
+    margin-bottom: 0;
+  }
+
+  .settings-save {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 8px 9px;
+    font-size: 13px;
+    line-height: 1;
+  }
+
+  .settings-save:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+
+  .settings-save svg {
+    width: 15px;
+    height: 15px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+  }
+
   .success {
     color: white;
     background: #16a34a;

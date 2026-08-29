@@ -1,9 +1,9 @@
 /**
- * Settings view: Integration configuration, polling timers, secret tokens, and panel options.
+ * Settings view: Event, display, and panel options.
  */
 
 import { escapeHtml } from "../utils/dom.js";
-import { icons } from "../utils/icons.js?v=20260821-import-export-data";
+import { icons } from "../utils/icons.js?v=20260829-settings-save";
 import { callWsWithBlocker, confirmModal, showNotice } from "../components/dialogs.js";
 import { CAMERA_ORIENTATION_OPTIONS } from "../utils/orientation.js?v=20260820-camera-orientation";
 
@@ -36,6 +36,8 @@ const formatStorageAmount = (bytes) => {
   const precision = value >= 100 || unitIndex === 0 ? 0 : value >= 10 ? 1 : 2;
   return `${value.toFixed(precision)} ${units[unitIndex]}`;
 };
+
+const formSignature = (form) => JSON.stringify([...new FormData(form).entries()]);
 
 const activityStorageLimitWarning = (settings) => {
   const limitMb = Number(settings.activity_history_max_storage_mb) || 0;
@@ -144,56 +146,22 @@ export const renderSettingsView = (host) => {
   if (!host._settings) {
     return `
       <div class="card">
-        <h2>Integration settings</h2>
+        <h2>Settings</h2>
         <p class="muted">Loading settings…</p>
       </div>
     `;
   }
 
   const settings = host._settings;
-  const countries = host._countryOptions
-    .map(
-      (country) => `
-      <option value="${escapeHtml(country.code)}" ${country.code === settings.country_code ? "selected" : ""}>
-        ${escapeHtml(country.label)}
-      </option>
-    `
-    )
-    .join("");
-
-  const subdomains = host._subdomainOptions
-    .map(
-      (subdomain) => `
-      <button type="button" role="option" data-subdomain-value="${escapeHtml(subdomain)}">
-        ${escapeHtml(subdomain)}
-      </button>
-    `
-    )
-    .join("");
-
-  const authTokenType = host._revealedSecrets.has("auth_token") ? "text" : "password";
-  const sessionTokenType = host._revealedSecrets.has("token") ? "text" : "password";
-  const authToggleLabel = host._revealedSecrets.has("auth_token")
-    ? "Hide authentication token"
-    : "Show authentication token";
-  const sessionToggleLabel = host._revealedSecrets.has("token")
-    ? "Hide session token"
-    : "Show session token";
-
-  const tokenUpdate = settings.token_update || {};
-  const tokenUpdatedAt = tokenUpdate.timestamp ? new Date(tokenUpdate.timestamp) : null;
-  const tokenUpdateStatus =
-    tokenUpdatedAt && !Number.isNaN(tokenUpdatedAt.valueOf())
-      ? `<p class="muted">Tokens were last ${tokenUpdate.type === "refreshed" ? "refreshed" : "modified"} on <time datetime="${escapeHtml(tokenUpdate.timestamp)}">${escapeHtml(tokenUpdatedAt.toLocaleString())}</time>.</p>`
-      : "";
-
   return `
     <div class="card">
-      <h2>Integration settings</h2>
-      <p class="muted">Changes are saved securely and reload the Akuvox account automatically.</p>
       <form data-settings-form>
+        <div class="section-heading settings-heading">
+          <h2>Settings</h2>
+          <button class="action settings-save" type="submit" ${host._settingsDirty && !host._settingsSaving ? "" : "disabled"}>${icons.save}<span>Save</span></button>
+        </div>
         <fieldset>
-          <legend>Activity Polling</legend>
+          <legend>Door Events</legend>
           <div class="grid">
             <label>
               Event screenshot delivery
@@ -201,14 +169,6 @@ export const renderSettingsView = (host) => {
                 <option value="asap" ${settings.event_screenshot_options === "asap" ? "selected" : ""}>As soon as available</option>
                 <option value="wait" ${settings.event_screenshot_options === "wait" ? "selected" : ""}>Wait for screenshot URLs</option>
               </select>
-            </label>
-            <label>
-              Polling interval (seconds)
-              <input required name="door_log_poll_interval" type="number" min="30" max="3600" value="${escapeHtml(settings.door_log_poll_interval)}">
-            </label>
-            <label>
-              Maximum retry backoff (seconds)
-              <input required name="door_log_max_backoff" type="number" min="60" max="3600" value="${escapeHtml(settings.door_log_max_backoff)}">
             </label>
           </div>
         </fieldset>
@@ -254,49 +214,6 @@ export const renderSettingsView = (host) => {
 
         ${sipAccountsSection(settings.sip_accounts)}
 
-        <fieldset>
-          <legend>SmartPlus Account Settings</legend>
-          <p class="muted">These private values are shown only to Home Assistant administrators and are never saved in config-entry data.</p>
-          <div class="grid">
-            <label>
-              Phone country
-              <select name="country_code">${countries}</select>
-            </label>
-            <label>
-              Regional API subdomain
-              <span class="combobox">
-                <input required data-subdomain-input name="subdomain" autocomplete="off" value="${escapeHtml(settings.subdomain)}">
-                <button type="button" class="combobox-toggle" aria-label="Show regional API subdomains" aria-haspopup="listbox" data-subdomain-toggle>
-                  ${icons.chevronDown}
-                </button>
-                <span class="combobox-menu" role="listbox" data-subdomain-menu hidden>
-                  ${subdomains}
-                </span>
-              </span>
-            </label>
-            <label>
-              Authentication token
-              <span class="secret-input">
-                <input required autocomplete="off" name="auth_token" type="${authTokenType}" value="${escapeHtml(settings.auth_token)}">
-                <button type="button" class="secret-toggle" data-toggle-secret="auth_token" aria-label="${authToggleLabel}">
-                  ${host._revealedSecrets.has("auth_token") ? icons.eyeOff : icons.eye}
-                </button>
-              </span>
-            </label>
-            <label>
-              Session token
-              <span class="secret-input">
-                <input required autocomplete="off" name="token" type="${sessionTokenType}" value="${escapeHtml(settings.token)}">
-                <button type="button" class="secret-toggle" data-toggle-secret="token" aria-label="${sessionToggleLabel}">
-                  ${host._revealedSecrets.has("token") ? icons.eyeOff : icons.eye}
-                </button>
-              </span>
-            </label>
-          </div>
-          ${tokenUpdateStatus}
-        </fieldset>
-
-        <button class="action" type="submit">Save settings</button>
       </form>
     </div>
   `;
@@ -312,27 +229,10 @@ export const handleSaveSettings = async (host, event) => {
   if (host._settingsSaving) return;
 
   const form = new FormData(event.target);
-  const polling = Number(form.get("door_log_poll_interval"));
-  const backoff = Number(form.get("door_log_max_backoff"));
-  const subdomain = String(form.get("subdomain")).trim();
-
-  if (backoff < polling) {
-    showNotice(
-      host,
-      "Maximum backoff must not be shorter than the polling interval.",
-      "Check settings"
-    );
-    return;
-  }
-
   host._settingsSaving = true;
   try {
     const saved = {
-      country_code: String(form.get("country_code")),
-      subdomain,
       event_screenshot_options: String(form.get("event_screenshot_options")),
-      door_log_poll_interval: polling,
-      door_log_max_backoff: backoff,
       panel_enabled: form.get("panel_enabled") === "on",
       panel_admin_only: form.get("panel_admin_only") === "on",
       store_activity_history: form.get("store_activity_history") === "on",
@@ -346,8 +246,6 @@ export const handleSaveSettings = async (host, event) => {
         [...event.target.querySelectorAll("[data-activity-orientation]")].map((select) => [select.dataset.activityOrientation, select.value])
       ),
       debug_logging: form.get("debug_logging") === "on",
-      auth_token: String(form.get("auth_token")).trim(),
-      token: String(form.get("token")).trim(),
     };
 
     const result = await host._hass.callWS({
@@ -359,15 +257,16 @@ export const handleSaveSettings = async (host, event) => {
     host._settings = {
       ...host._settings,
       ...saved,
-      token_update: result.token_update || host._settings?.token_update,
     };
     host._settingsDirty = false;
+    event.currentTarget.dataset.settingsSignature = formSignature(event.currentTarget);
+    event.currentTarget.querySelector("[type='submit']").disabled = true;
     await host._load();
     showNotice(host, "SmartPlus settings saved successfully.");
   } catch (_) {
     showNotice(
       host,
-      "The SmartPlus settings could not be saved. Check that both tokens are present and the values are valid.",
+      "The SmartPlus settings could not be saved. Check that the values are valid.",
       "Could not save settings"
     );
   } finally {
@@ -384,12 +283,15 @@ export const bindSettingsEvents = (host) => {
   if (!settingsForm) return;
 
   settingsForm.addEventListener("submit", (event) => handleSaveSettings(host, event));
-  settingsForm.addEventListener("input", () => {
-    host._settingsDirty = true;
-  });
-  settingsForm.addEventListener("change", () => {
-    host._settingsDirty = true;
-  });
+  settingsForm.dataset.settingsSignature = formSignature(settingsForm);
+  const markSettingsDirty = () => {
+    host._settingsDirty =
+      formSignature(settingsForm) !== settingsForm.dataset.settingsSignature;
+    const saveButton = settingsForm.querySelector("[type='submit']");
+    if (saveButton) saveButton.disabled = !host._settingsDirty || host._settingsSaving;
+  };
+  settingsForm.addEventListener("input", markSettingsDirty);
+  settingsForm.addEventListener("change", markSettingsDirty);
 
   const storageLimitInput = settingsForm.querySelector(
     '[name="activity_history_max_storage_mb"]'
@@ -542,61 +444,4 @@ export const bindSettingsEvents = (host) => {
     })
   );
 
-  // Secret input toggles (show/hide password)
-  host.shadowRoot.querySelectorAll("[data-toggle-secret]").forEach((button) =>
-    button.addEventListener("click", () => {
-      const secretKey = button.dataset.toggleSecret;
-      const input = host.shadowRoot.querySelector(`[name="${secretKey}"]`);
-      if (!input) return;
-      const visible = input.type === "text";
-      input.type = visible ? "password" : "text";
-
-      if (visible) host._revealedSecrets.delete(secretKey);
-      else host._revealedSecrets.add(secretKey);
-
-      button.setAttribute(
-        "aria-label",
-        visible
-          ? `Show ${secretKey.replace("_", " ")}`
-          : `Hide ${secretKey.replace("_", " ")}`
-      );
-      button.innerHTML = visible ? icons.eye : icons.eyeOff;
-    })
-  );
-
-  // Subdomain combobox dropdown
-  const subdomainInput = host.shadowRoot.querySelector("[data-subdomain-input]");
-  const subdomainMenu = host.shadowRoot.querySelector("[data-subdomain-menu]");
-
-  host.shadowRoot
-    .querySelector("[data-subdomain-toggle]")
-    ?.addEventListener("click", () => {
-      if (!subdomainMenu) return;
-      subdomainMenu.hidden = !subdomainMenu.hidden;
-      if (!subdomainMenu.hidden && subdomainInput) subdomainInput.focus();
-    });
-
-  host.shadowRoot.querySelectorAll("[data-subdomain-value]").forEach((option) =>
-    option.addEventListener("click", () => {
-      if (!subdomainInput) return;
-      subdomainInput.value = option.dataset.subdomainValue;
-      host._settingsDirty = true;
-      subdomainInput.dispatchEvent(new Event("change", { bubbles: true }));
-      if (subdomainMenu) subdomainMenu.hidden = true;
-      subdomainInput.focus();
-    })
-  );
-
-  if (subdomainMenu) {
-    host._subdomainOutsideAbort = new AbortController();
-    host.shadowRoot.ownerDocument.addEventListener(
-      "click",
-      (event) => {
-        if (!event.composedPath().includes(subdomainMenu.parentElement)) {
-          subdomainMenu.hidden = true;
-        }
-      },
-      { capture: true, signal: host._subdomainOutsideAbort.signal }
-    );
-  }
 };
