@@ -128,12 +128,16 @@ class _Hass:
         self.config_entries = _ConfigEntries()
         self.http = MagicMock()
         self.http.async_register_static_paths = AsyncMock()
+        self._tasks: set[asyncio.Task] = set()
 
     def async_create_task(self, coroutine):
-        return asyncio.create_task(coroutine)
+        task = asyncio.create_task(coroutine)
+        self._tasks.add(task)
+        task.add_done_callback(self._tasks.discard)
+        return task
 
     def add_job(self, coroutine) -> None:
-        asyncio.create_task(coroutine)
+        self.async_create_task(coroutine)
 
 
 class TestPanelRegistrationE2E(unittest.IsolatedAsyncioTestCase):
@@ -157,6 +161,7 @@ class TestPanelRegistrationE2E(unittest.IsolatedAsyncioTestCase):
             register_panel.await_args.kwargs["config_panel_domain"],
             DOMAIN,
         )
+        self.assertFalse(register_panel.await_args.kwargs["require_admin"])
 
 
 class TestIntegrationLifecycleE2E(unittest.IsolatedAsyncioTestCase):
@@ -323,6 +328,7 @@ class TestActivityStorageRepairsE2E(unittest.TestCase):
     """Verify activity-storage warnings follow the configured threshold."""
 
     def setUp(self) -> None:
+        """Create a minimal Home Assistant and config-entry test context."""
         self.hass = MagicMock()
         self.entry = MagicMock(entry_id="entry-id", title="Home")
 

@@ -65,11 +65,32 @@ class TestDataAndHelpersE2E(unittest.IsolatedAsyncioTestCase):
             "MAC": "001122",
             "Relay": "1",
         }
-        self.data.async_get_stored_data_for_key = AsyncMock(side_effect=[False, {"CaptureTime": "old"}])
+        self.data.async_get_stored_data_for_key = AsyncMock(
+            return_value={"CaptureTime": "old"}
+        )
         self.data.async_set_stored_data_for_key = AsyncMock()
 
         self.assertEqual(await self.data.async_parse_personal_door_log([event]), event)
         self.data.async_set_stored_data_for_key.assert_awaited_once_with("latest_door_log", event)
+
+    async def test_door_log_with_empty_screenshot_url_waited_for_a_later_poll(self) -> None:
+        """An incomplete new door-log entry was not published or marked as seen."""
+        event = {
+            "CaptureTime": "new",
+            "Initiator": "Visitor",
+            "CaptureType": "Call",
+            "Location": "Door",
+            "MAC": "001122",
+            "Relay": "1",
+            "PicUrl": "",
+        }
+        self.data.async_get_stored_data_for_key = AsyncMock(
+            return_value={"CaptureTime": "old"}
+        )
+        self.data.async_set_stored_data_for_key = AsyncMock()
+
+        self.assertIsNone(await self.data.async_parse_personal_door_log([event]))
+        self.data.async_set_stored_data_for_key.assert_not_awaited()
 
     def test_helpers_resolved_known_and_unknown_regions(self) -> None:
         """Country lookups selected an API region and safe defaults."""

@@ -8,7 +8,11 @@ import zipfile
 from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 from custom_components.akuvox.api import AkuvoxApiClient
-from custom_components.akuvox.const import USER_AGENT
+from custom_components.akuvox.const import (
+    ACTIVITY_HISTORY_DEFAULT_STORAGE_MB,
+    STORE_ACTIVITY_HISTORY,
+    USER_AGENT,
+)
 from custom_components.akuvox.data import AkuvoxData
 
 from test_session_refresh_e2e import _Entry, _Hass, _Response, _Session, _success
@@ -32,6 +36,9 @@ class TestSmartPlusApiE2E(unittest.IsolatedAsyncioTestCase):
 
     def _client(self, responses: list[_Response]) -> AkuvoxApiClient:
         self.entry = _Entry()
+        # Most workflow tests exercise cloud activity only; local preview
+        # persistence is covered separately and requires a download-capable session.
+        self.entry.options[STORE_ACTIVITY_HISTORY] = False
         self.entry.data.update(
             {
                 "host": "api.example",
@@ -42,6 +49,17 @@ class TestSmartPlusApiE2E(unittest.IsolatedAsyncioTestCase):
         self.session = _Session(responses)
         self.hass = _WorkflowHass()
         return AkuvoxApiClient(self.session, self.hass, self.entry)
+
+    async def test_activity_storage_defaulted_to_five_megabytes_when_enabled(self) -> None:
+        """New entries enabled local activity storage with a bounded default."""
+        client = self._client([])
+        self.entry.options.clear()
+
+        self.assertTrue(client._activity_storage_enabled())
+        self.assertEqual(
+            client._activity_storage_limit_bytes(),
+            ACTIVITY_HISTORY_DEFAULT_STORAGE_MB * 1_000_000,
+        )
 
     async def test_sms_request_matches_current_smartplus_client(self) -> None:
         """The unauthenticated OTP request uses the current app fingerprint."""
@@ -355,7 +373,7 @@ class TestSmartPlusApiE2E(unittest.IsolatedAsyncioTestCase):
             ]
         )
         client._data.async_get_stored_data_for_key = AsyncMock(
-            side_effect=[None, None, False, {"CaptureTime": "old"}]
+            side_effect=[None, None, {"CaptureTime": "old"}]
         )
         client._data.async_set_stored_data_for_key = AsyncMock()
 
@@ -419,18 +437,14 @@ class TestSmartPlusApiE2E(unittest.IsolatedAsyncioTestCase):
         client._activity_history_loaded = True
         client._data.async_set_stored_data_for_key = AsyncMock()
 
-        await client._async_record_panel_activity(
+        self.assertTrue(await client._async_record_panel_activity(
             [{"CaptureTime": "2026-08-12 10:00:00", "PicUrl": "https://image"}]
-        )
+        ))
 
         self.assertEqual(
             client.get_panel_data()["activity"][0]["PicUrl"], "https://image"
         )
-        self.hass.bus.async_fire.assert_called_once()
-        event, data = self.hass.bus.async_fire.call_args.args
-        self.assertEqual(event, "akuvox_panel_data_updated")
-        self.assertEqual(data["entry_id"], self.entry.entry_id)
-        self.assertIn("activity_storage_usage_bytes", data)
+        self.hass.bus.async_fire.assert_not_called()
 
     async def test_call_history_parsed_and_persisted_for_panel(self) -> None:
         """The call-log page was retained without exposing credentials to the panel."""
@@ -457,7 +471,9 @@ class TestSmartPlusApiE2E(unittest.IsolatedAsyncioTestCase):
 
         self.assertTrue(await client.async_retrieve_personal_door_log())
         self.assertEqual(len(self.session.requests), 2)
-        self.hass.bus.async_fire.assert_not_called()
+        self.hass.bus.async_fire.assert_called_once_with(
+            "akuvox_panel_data_updated", {"entry_id": self.entry.entry_id}
+        )
 
     async def test_door_relay_request_used_the_authenticated_endpoint(self) -> None:
         """A relay action issued the expected authenticated POST request."""
