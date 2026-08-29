@@ -2083,4 +2083,3 @@ class AkuvoxApiClient:
         self._data.subdomain = value if key == "subdomain" else self._data.subdomain
         self._data.auth_token = value if key == "auth_token" else self._data.auth_token
         self._data.token = value if key == "token" else self._data.token
-        self._data.wait_for_image_url = value if key == "wait_for_image_url" else self._data.wait_for_image_url

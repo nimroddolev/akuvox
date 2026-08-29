@@ -31,8 +31,7 @@ class AkuvoxData:
                  auth_token: str | None = None,
                  token: str | None = None,
                  country_code: str | None = None,
-                 phone_number: str | None = None,
-                 wait_for_image_url: bool | None = None):
+                 phone_number: str | None = None):
         """Initialize the Akuvox API client."""
 
         self.hass = hass
@@ -59,11 +58,6 @@ class AkuvoxData:
         self.token = token or self.get_value_for_key(entry, "token", "")
         self.phone_number = phone_number or self.get_value_for_key(entry, "phone_number", "")
         self.country_code = country_code or self.get_value_for_key(entry, "country_code", "")
-        self.wait_for_image_url = (
-            wait_for_image_url
-            if wait_for_image_url is not None
-            else self.get_value_for_key(entry, "event_screenshot_options", "") == "wait"
-        )
         self.subdomain = subdomain or self.get_value_for_key(entry, "subdomain", "")
         if not self.subdomain:
             if country_code:
@@ -78,7 +72,6 @@ class AkuvoxData:
         if not self.subdomain:
             self.subdomain = "ecloud"
 
-        self.hass.add_job(self.async_set_stored_data_for_key, "wait_for_image_url", self.wait_for_image_url)
 
     def get_value_for_key(self, entry: ConfigEntry | None, key: str, default):
         """Get the value for a given key. 1st check: configured, 2nd check: options, 3rd check: data."""
@@ -87,7 +80,7 @@ class AkuvoxData:
                 if key in entry["configured"]:
                     return entry["configured"][key] # type: ignore
                 return default
-            override = entry.options.get("override", False) or key == "event_screenshot_options"
+            override = entry.options.get("override", False)
             placeholder = entry.data.get(key, None)
             if override:
                 return entry.options.get(key, placeholder)
@@ -327,7 +320,6 @@ class AkuvoxData:
     async def async_parse_personal_door_log(self, json_data: list):
         """Parse the getDoorLog API response."""
         ret_value = None
-        is_wait = await self.async_get_stored_data_for_key("wait_for_image_url")
         if json_data is not None and len(json_data) > 0:
             new_door_log = json_data[0]
             latest_door_log = await self.async_get_stored_data_for_key("latest_door_log")
@@ -338,11 +330,8 @@ class AkuvoxData:
                         return None
                     # Screenshot required and currently unavailable
                     if PIC_URL_KEY in new_door_log and new_door_log[PIC_URL_KEY] == "":
-                        if is_wait is True:
-                            LOGGER.debug("New door entry detected --> Waiting for screenshot URL...")
-                            return None
-                        else:
-                            LOGGER.debug("New door entry detected --> Not waiting for the screenshot URL...")
+                        LOGGER.debug("New door entry detected --> Waiting for screenshot URL...")
+                        return None
                     # New door event detected
                     LOGGER.debug("ℹ️ New personal door log entry detected:")
                     LOGGER.debug(" - Initiator: %s", new_door_log["Initiator"])

@@ -184,9 +184,6 @@ async def async_update_configuration(hass: HomeAssistant, entry: ConfigEntry) ->
         if entry.options:
             updated_options: dict = entry.options.copy()
 
-            # Wait for image URL?
-            updated_options["wait_for_image_url"] = bool(updated_options.get("event_screenshot_options", "") == "wait")
-
             # Update API & data classes
             coordinator: AkuvoxDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
             client: AkuvoxApiClient = coordinator.client
