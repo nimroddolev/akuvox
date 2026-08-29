@@ -3,25 +3,28 @@
  */
 
 import { escapeHtml } from "../utils/dom.js";
-import { icons } from "../utils/icons.js?v=20260829-settings-save";
+import { icons } from "../utils/icons.js?v=20260829-camera-copy-visible";
 import { callWsWithBlocker, confirmModal, showNotice } from "../components/dialogs.js";
-import { CAMERA_ORIENTATION_OPTIONS } from "../utils/orientation.js?v=20260820-camera-orientation";
+import { CAMERA_ORIENTATION_OPTIONS } from "../utils/orientation.js?v=20260830-combined-directional-labels";
 
-const cameraOrientationControls = (host, enabledKey, valuesKey, dataKey) => {
-  const enabled = Boolean(host._settings?.[enabledKey]);
+const cameraOptionsTable = (host) => {
   const cameras = [...new Set((host._account()?.cameras || []).map((camera) => camera.name).filter(Boolean))]
     .sort((left, right) => left.localeCompare(right));
-  const values = host._settings?.[valuesKey] || {};
+  const streamOrientations = host._settings?.camera_stream_orientations || {};
+  const activityOrientations = host._settings?.activity_image_orientations || {};
   return `
-    <label class="check">
-      <input name="${enabledKey}" type="checkbox" data-orientation-toggle="${dataKey}" ${enabled ? "checked" : ""}>
-      ${dataKey === "stream" ? "Custom camera stream orientations" : "Custom activity image orientations"}
-    </label>
-    <div class="camera-orientations" data-orientation-controls="${dataKey}" ${enabled ? "" : "hidden"}>
-      ${cameras.map((camera) => `<label class="camera-orientation-row"><span title="${escapeHtml(camera)}">${escapeHtml(camera)}</span>
-        <select data-${dataKey}-orientation="${escapeHtml(camera)}" aria-label="${escapeHtml(camera)} orientation">
-          ${CAMERA_ORIENTATION_OPTIONS.map(([value, label]) => `<option value="${value}" ${values[camera] === value ? "selected" : ""}>${label}</option>`).join("")}
-        </select></label>`).join("") || '<p class="muted">No cameras are currently available for this account.</p>'}
+    <div class="table-wrap camera-options-wrap">
+      <table class="camera-options-table">
+        <thead><tr><th>Camera</th><th>Stream Orientation</th><th>Activity Image Orientation</th><th>RTSP Url</th></tr></thead>
+        <tbody>
+          ${cameras.map((camera) => `<tr>
+            <td title="${escapeHtml(camera)}">${escapeHtml(camera)}</td>
+            <td><select name="camera_stream_orientation" data-stream-orientation="${escapeHtml(camera)}" aria-label="${escapeHtml(camera)} stream orientation">${CAMERA_ORIENTATION_OPTIONS.map(([value, label]) => `<option value="${value}" ${streamOrientations[camera] === value ? "selected" : ""}>${label}</option>`).join("")}</select></td>
+            <td><select name="activity_image_orientation" data-activity-orientation="${escapeHtml(camera)}" aria-label="${escapeHtml(camera)} activity image orientation">${CAMERA_ORIENTATION_OPTIONS.map(([value, label]) => `<option value="${value}" ${activityOrientations[camera] === value ? "selected" : ""}>${label}</option>`).join("")}</select></td>
+            <td><button class="action camera-copy-rtsp" type="button" data-stream="${escapeHtml(camera)}" data-mode="copy" aria-label="Copy RTSP link" title="Copy RTSP link">${icons.copy}</button></td>
+          </tr>`).join("") || '<tr><td colspan="4" class="muted">No cameras are currently available for this account.</td></tr>'}
+        </tbody>
+      </table>
     </div>`;
 };
 
@@ -50,8 +53,12 @@ const activityStorageLimitWarning = (settings) => {
 
 const activityStorageProgress = (settings) => {
   const limitMb = Number(settings.activity_history_max_storage_mb) || 0;
-  if (limitMb <= 0) return "";
   const usedBytes = Math.max(0, Number(settings.activity_history_storage_bytes) || 0);
+  if (limitMb <= 0) {
+    return usedBytes > 0
+      ? `<span class="activity-storage-used">${escapeHtml(formatStorageAmount(usedBytes))} stored</span>`
+      : "";
+  }
   const percentage = (usedBytes / (limitMb * 1_000_000)) * 100;
   const percentageLabel = `${percentage.toFixed(percentage >= 10 ? 0 : 1)}%`;
   const exceedsLimit = usedBytes > limitMb * 1_000_000;
@@ -125,13 +132,17 @@ const requestSipPdfPassword = (host) => new Promise((resolve) => {
 export const updateActivityStorageProgress = (host, usageBytes) => {
   if (!host._settings) return;
   host._settings.activity_history_storage_bytes = Math.max(0, Number(usageBytes) || 0);
-  const input = host.shadowRoot.querySelector('[name="activity_history_max_storage_mb"]');
   const warning = host.shadowRoot.querySelector("[data-activity-storage-limit-warning]");
   const progress = host.shadowRoot.querySelector("[data-activity-storage-progress]");
-  if (!input || !progress) return;
+  if (!progress) return;
+  const liveLimitInput = host.shadowRoot.querySelector(
+    '[name="activity_history_max_storage_mb"]'
+  );
   const settings = {
     ...host._settings,
-    activity_history_max_storage_mb: input.value,
+    activity_history_max_storage_mb: liveLimitInput
+      ? Number(liveLimitInput.value)
+      : host._settings.activity_history_max_storage_mb,
   };
   if (warning) warning.innerHTML = activityStorageLimitWarning(settings);
   progress.innerHTML = activityStorageProgress(settings);
@@ -153,6 +164,7 @@ export const renderSettingsView = (host) => {
   }
 
   const settings = host._settings;
+  const storageLimitValue = String(settings.activity_history_max_storage_mb || 0);
   return `
     <div class="card">
       <form data-settings-form>
@@ -161,22 +173,8 @@ export const renderSettingsView = (host) => {
           <button class="action settings-save" type="submit" ${host._settingsDirty && !host._settingsSaving ? "" : "disabled"}>${icons.save}<span>Save</span></button>
         </div>
         <fieldset>
-          <legend>Door Events</legend>
-          <div class="grid">
-            <label>
-              Event screenshot delivery
-              <select name="event_screenshot_options">
-                <option value="asap" ${settings.event_screenshot_options === "asap" ? "selected" : ""}>As soon as available</option>
-                <option value="wait" ${settings.event_screenshot_options === "wait" ? "selected" : ""}>Wait for screenshot URLs</option>
-              </select>
-            </label>
-          </div>
-        </fieldset>
-
-        <fieldset>
           <legend>Camera Options</legend>
-          ${cameraOrientationControls(host, "custom_camera_stream_orientations", "camera_stream_orientations", "stream")}
-          ${cameraOrientationControls(host, "custom_activity_image_orientations", "activity_image_orientations", "activity")}
+          ${cameraOptionsTable(host)}
         </fieldset>
 
         <fieldset>
@@ -189,7 +187,8 @@ export const renderSettingsView = (host) => {
             <div data-activity-storage-limit-warning>${activityStorageLimitWarning(settings)}</div>
             <label class="activity-storage-limit-row">
               <span class="activity-storage-limit">
-                <input name="activity_history_max_storage_mb" type="number" min="0" value="${escapeHtml(settings.activity_history_max_storage_mb || 0)}" aria-label="Local activity storage limit in MB">
+                <input name="activity_history_max_storage_mb" type="number" min="0" value="${escapeHtml(storageLimitValue)}" style="--storage-limit-digits: ${Math.max(1, storageLimitValue.length)}" aria-label="Local activity storage limit in MB">
+                <span class="activity-storage-limit-unit" data-activity-storage-limit-unit ${Number(storageLimitValue) >= 1 ? "" : "hidden"}>MB</span>
                 <span class="activity-storage-limit-description" data-activity-storage-limit-description ${Number(settings.activity_history_max_storage_mb) > 0 ? "hidden" : ""}>Local activity storage limit in MB (0 = unlimited)</span>
                 <span data-activity-storage-progress>${activityStorageProgress(settings)}</span>
                 <button class="activity-storage-action activity-storage-clear" type="button" data-clear-activity-storage>${icons.trash}<span>Clear Data</span></button>
@@ -201,12 +200,10 @@ export const renderSettingsView = (host) => {
               </span>
             </label>
           </div>
-          <label class="check">
-            <input name="panel_enabled" type="checkbox" ${settings.panel_enabled ? "checked" : ""}> Show the SmartPlus panel in the sidebar
-          </label>
-          <label class="check">
-            <input name="panel_admin_only" type="checkbox" ${settings.panel_admin_only ? "checked" : ""}> Restrict panel access to administrators
-          </label>
+        </fieldset>
+
+        <fieldset>
+          <legend>Debug</legend>
           <label class="check">
             <input name="debug_logging" type="checkbox" ${settings.debug_logging ? "checked" : ""}> Enable debug logging
           </label>
@@ -228,22 +225,20 @@ export const handleSaveSettings = async (host, event) => {
   event.preventDefault();
   if (host._settingsSaving) return;
 
-  const form = new FormData(event.target);
+  const settingsForm = event.currentTarget;
+  const form = new FormData(settingsForm);
   host._settingsSaving = true;
   try {
     const saved = {
-      event_screenshot_options: String(form.get("event_screenshot_options")),
-      panel_enabled: form.get("panel_enabled") === "on",
-      panel_admin_only: form.get("panel_admin_only") === "on",
       store_activity_history: form.get("store_activity_history") === "on",
       activity_history_max_storage_mb: Number(form.get("activity_history_max_storage_mb")),
-      custom_camera_stream_orientations: form.get("custom_camera_stream_orientations") === "on",
+      custom_camera_stream_orientations: true,
       camera_stream_orientations: Object.fromEntries(
-        [...event.target.querySelectorAll("[data-stream-orientation]")].map((select) => [select.dataset.streamOrientation, select.value])
+        [...settingsForm.querySelectorAll("[data-stream-orientation]")].map((select) => [select.dataset.streamOrientation, select.value])
       ),
-      custom_activity_image_orientations: form.get("custom_activity_image_orientations") === "on",
+      custom_activity_image_orientations: true,
       activity_image_orientations: Object.fromEntries(
-        [...event.target.querySelectorAll("[data-activity-orientation]")].map((select) => [select.dataset.activityOrientation, select.value])
+        [...settingsForm.querySelectorAll("[data-activity-orientation]")].map((select) => [select.dataset.activityOrientation, select.value])
       ),
       debug_logging: form.get("debug_logging") === "on",
     };
@@ -259,8 +254,8 @@ export const handleSaveSettings = async (host, event) => {
       ...saved,
     };
     host._settingsDirty = false;
-    event.currentTarget.dataset.settingsSignature = formSignature(event.currentTarget);
-    event.currentTarget.querySelector("[type='submit']").disabled = true;
+    settingsForm.dataset.settingsSignature = formSignature(settingsForm);
+    settingsForm.querySelector("[type='submit']").disabled = true;
     await host._load();
     showNotice(host, "SmartPlus settings saved successfully.");
   } catch (_) {
@@ -293,35 +288,6 @@ export const bindSettingsEvents = (host) => {
   settingsForm.addEventListener("input", markSettingsDirty);
   settingsForm.addEventListener("change", markSettingsDirty);
 
-  const storageLimitInput = settingsForm.querySelector(
-    '[name="activity_history_max_storage_mb"]'
-  );
-  const storageProgress = settingsForm.querySelector(
-    "[data-activity-storage-progress]"
-  );
-  const storageLimitWarning = settingsForm.querySelector(
-    "[data-activity-storage-limit-warning]"
-  );
-  const storageLimitDescription = settingsForm.querySelector(
-    "[data-activity-storage-limit-description]"
-  );
-  const updateStorageProgress = () => {
-    if (!storageLimitInput || !storageProgress) return;
-    const settings = {
-      ...host._settings,
-      activity_history_max_storage_mb: storageLimitInput.value,
-    };
-    if (storageLimitWarning) {
-      storageLimitWarning.innerHTML = activityStorageLimitWarning(settings);
-    }
-    storageProgress.innerHTML = activityStorageProgress(settings);
-    if (storageLimitDescription) {
-      storageLimitDescription.hidden = Number(storageLimitInput.value) > 0;
-    }
-  };
-  storageLimitInput?.addEventListener("input", updateStorageProgress);
-  storageLimitInput?.addEventListener("change", updateStorageProgress);
-
   const storageHistoryToggle = settingsForm.querySelector(
     '[name="store_activity_history"]'
   );
@@ -330,6 +296,33 @@ export const bindSettingsEvents = (host) => {
   );
   storageHistoryToggle?.addEventListener("change", () => {
     if (storageLimitControls) storageLimitControls.hidden = !storageHistoryToggle.checked;
+  });
+
+  const storageLimitInput = settingsForm.querySelector(
+    '[name="activity_history_max_storage_mb"]'
+  );
+  const storageLimitUnit = settingsForm.querySelector(
+    "[data-activity-storage-limit-unit]"
+  );
+  const storageLimitDescription = settingsForm.querySelector(
+    "[data-activity-storage-limit-description]"
+  );
+  storageLimitInput?.addEventListener("input", () => {
+    storageLimitInput.style.setProperty(
+      "--storage-limit-digits",
+      String(Math.max(1, storageLimitInput.value.length))
+    );
+    const isUnlimited = Number(storageLimitInput.value) < 1;
+    if (storageLimitUnit) storageLimitUnit.hidden = isUnlimited;
+    if (storageLimitDescription) storageLimitDescription.hidden = !isUnlimited;
+    const currentSettings = {
+      ...host._settings,
+      activity_history_max_storage_mb: Number(storageLimitInput.value),
+    };
+    const warning = settingsForm.querySelector("[data-activity-storage-limit-warning]");
+    const progress = settingsForm.querySelector("[data-activity-storage-progress]");
+    if (warning) warning.innerHTML = activityStorageLimitWarning(currentSettings);
+    if (progress) progress.innerHTML = activityStorageProgress(currentSettings);
   });
 
   settingsForm.querySelector("[data-export-sip-accounts]")?.addEventListener("click", async () => {
@@ -437,11 +430,10 @@ export const bindSettingsEvents = (host) => {
     }
   });
 
-  settingsForm.querySelectorAll("[data-orientation-toggle]").forEach((toggle) =>
-    toggle.addEventListener("change", () => {
-      const controls = settingsForm.querySelector(`[data-orientation-controls="${toggle.dataset.orientationToggle}"]`);
-      if (controls) controls.hidden = !toggle.checked;
-    })
+  settingsForm.querySelectorAll("[data-stream]").forEach((button) =>
+    button.addEventListener("click", () =>
+      host._stream(button.dataset.stream, button.dataset.mode)
+    )
   );
 
 };
