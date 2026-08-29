@@ -3,7 +3,7 @@
  */
 
 import { escapeHtml } from "../utils/dom.js";
-import { icons } from "../utils/icons.js";
+import { icons } from "../utils/icons.js?v=20260830-device-action-gradients";
 
 /**
  * Render the HTML content for the Devices tab.
@@ -54,8 +54,7 @@ export const renderDevicesView = (account) => {
           <div class="actions">
             ${
               device.camera
-                ? `<button class="action" data-stream="${escapeHtml(device.camera.name)}" data-mode="open">Open stream</button>
-                   <button class="action" data-stream="${escapeHtml(device.camera.name)}" data-mode="copy">Copy RTSP</button>`
+                ? `<button class="action device-action device-monitor-action" data-stream="${escapeHtml(device.camera.name)}" data-mode="open">${icons.webcam}<span>Monitor</span></button>`
                 : '<span class="muted">No camera</span>'
             }
           </div>
@@ -66,7 +65,7 @@ export const renderDevicesView = (account) => {
               device.relays
                 .map(
                   (relay) =>
-                    `<button class="action" data-relay="${escapeHtml(relay.relay_id)}" data-mac="${escapeHtml(relay.mac)}">Open door</button>`
+                    `<button class="action device-action device-unlock-action" data-relay="${escapeHtml(relay.relay_id)}" data-mac="${escapeHtml(relay.mac)}">${icons.doorOpen}<span>Unlock</span></button>`
                 )
                 .join("") || '<span class="muted">No relay</span>'
             }
@@ -75,7 +74,7 @@ export const renderDevicesView = (account) => {
         <td>
           ${
             device.deviceId
-              ? `<a class="info-link" href="/config/devices/device/${encodeURIComponent(device.deviceId)}">${icons.externalLink}Open</a>`
+              ? `<a class="info-link" href="/config/devices/device/${encodeURIComponent(device.deviceId)}">${icons.externalLink}Device</a>`
               : '<span class="muted">Unavailable</span>'
           }
         </td>

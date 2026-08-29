@@ -71,6 +71,30 @@ export const tableStyles = `
     white-space: nowrap;
   }
 
+  .device-table .device-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+  }
+
+  .device-table .device-monitor-action {
+    background: linear-gradient(135deg, #7550e8, #9b5cf2);
+  }
+
+  .device-table .device-unlock-action {
+    background: linear-gradient(135deg, #ff3f3f, #ff6a4f);
+  }
+
+  .device-table .device-action svg {
+    width: 20px;
+    height: 20px;
+    flex: 0 0 auto;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+  }
+
   .info-link {
     display: inline-flex;
     align-items: center;
