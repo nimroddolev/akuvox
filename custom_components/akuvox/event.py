@@ -1,4 +1,4 @@
-"""Event entities for Akuvox door unlock detection."""
+"""Event entities for Akuvox door-open detection."""
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -21,8 +21,8 @@ EVENT_TYPE_DOOR_UNLOCKED = "door_unlocked"
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
-    """Set up one unlock event entity for each configured door."""
-    LOGGER.debug("Setting up Akuvox door-unlock event entities")
+    """Set up one door-open event entity for each configured door."""
+    LOGGER.debug("Setting up Akuvox door-open event entities")
     coordinator: AkuvoxDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
     data = await storage.Store(
         hass, 1, account_storage_key(entry.entry_id, "cache")
@@ -41,14 +41,16 @@ async def async_setup_entry(
         AkuvoxDoorUnlockEvent(coordinator.client, entry, name)
         for name in sorted(door_names)
     )
-    LOGGER.debug("Added %s Akuvox door-unlock event entities", len(door_names))
+    LOGGER.debug("Added %s Akuvox door-open event entities", len(door_names))
 
 
 class AkuvoxDoorUnlockEvent(EventEntity):
-    """Expose a detected door unlock as a selectable automation trigger."""
+    """Expose a detected door opening as a selectable automation trigger."""
 
     _attr_has_entity_name = True
-    _attr_name = "Door unlocked"
+    # Keep the stable entity ID and event type below so existing automations
+    # continue to work, while presenting the user-facing event as Door opened.
+    _attr_name = "Door opened"
     _attr_event_types = [EVENT_TYPE_DOOR_UNLOCKED]
 
     def __init__(self, client: AkuvoxApiClient, entry: ConfigEntry, door_name: str) -> None:
@@ -65,7 +67,7 @@ class AkuvoxDoorUnlockEvent(EventEntity):
         )
 
     async def async_added_to_hass(self) -> None:
-        """Listen for unlock events after the entity is registered."""
+        """Listen for door-open events after the entity is registered."""
         await super().async_added_to_hass()
         self._unsub = self._client.async_subscribe_to_door_unlocks(
             self._door_name, self._handle_unlock
@@ -80,6 +82,6 @@ class AkuvoxDoorUnlockEvent(EventEntity):
 
     @callback
     def _handle_unlock(self, event_data: dict[str, Any]) -> None:
-        """Publish the detected unlock through Home Assistant's event entity."""
+        """Publish the detected door opening through Home Assistant's event entity."""
         self._trigger_event(EVENT_TYPE_DOOR_UNLOCKED, event_data)
         self.async_write_ha_state()

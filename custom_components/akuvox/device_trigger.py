@@ -44,7 +44,7 @@ async def async_attach_trigger(
     action: TriggerActionType,
     trigger_info: TriggerInfo,
 ) -> CALLBACK_TYPE:
-    """Attach a door-unlocked trigger to the matching Akuvox event."""
+    """Attach a door-opened trigger to the matching Akuvox event."""
     config = TRIGGER_SCHEMA(config)
     event_config = event_trigger.TRIGGER_SCHEMA(
         {

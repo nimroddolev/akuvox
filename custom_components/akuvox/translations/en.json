@@ -65,7 +65,7 @@
     },
     "device_automation": {
         "trigger_type": {
-            "door_unlocked": "Door unlocked"
+            "door_unlocked": "Door opened"
         }
     },
     "options": {
@@ -75,8 +75,7 @@
                 "description": "Adjust the door event settings for this integration.",
                 "data": {
                     "country": "The country registered in your Akuvox SmartPlus account",
-                    "subdomain": "Manually set the regional API subdomain",
-                    "event_screenshot_options": "Screenshot URLS for `akuvox_door_update` events:"
+                    "subdomain": "Manually set the regional API subdomain"
                 }
             }
         }

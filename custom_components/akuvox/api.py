@@ -860,6 +860,15 @@ class AkuvoxApiClient:
             LOGGER.debug("🚪 New door open event occurred. Firing akuvox_door_update event")
             event_data = dict(new_door_log)
             door_name = str(new_door_log.get("Location", ""))
+            # Keep SmartPlus' original field names while also exposing stable,
+            # descriptive attributes for Home Assistant automations.
+            event_data.update(
+                {
+                    "door_name": door_name,
+                    "opened_by": str(new_door_log.get("Initiator", "")),
+                    "unlock_method": str(new_door_log.get("CaptureType", "")),
+                }
+            )
             if self._entry is not None and hasattr(self.hass, "data"):
                 device_registry = dr.async_get(self.hass)
                 device = device_registry.async_get_device(
