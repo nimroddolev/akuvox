@@ -1280,6 +1280,10 @@ class AkuvoxApiClient:
         """Return non-secret account data for the SmartPlus sidebar panel."""
         if self._data is None:
             return {"cameras": [], "relays": [], "temporary_keys": [], "activity": [], "calls": []}
+        persisted = self._entry.data if self._entry is not None else {}
+        cameras = self._data.camera_data or persisted.get("camera_data", [])
+        relays = self._data.door_relay_data or persisted.get("door_relay_data", [])
+        temporary_keys = self._data.door_keys_data or persisted.get("door_keys_data", [])
         return {
             "project_name": self._data.project_name,
             "sip_available": bool(
@@ -1287,7 +1291,7 @@ class AkuvoxApiClient:
                 and self._data.sip_account
                 and self._data.sip_password
             ),
-            "cameras": [{"name": camera.get("name", "")} for camera in self._data.camera_data],
+            "cameras": [{"name": camera.get("name", "")} for camera in cameras],
             "relays": [
                 {
                     "name": relay.get("name", ""),
@@ -1295,12 +1299,28 @@ class AkuvoxApiClient:
                     "relay_id": relay.get("relay_id", ""),
                     "mac": relay.get("mac", ""),
                 }
-                for relay in self._data.door_relay_data
+                for relay in relays
             ],
-            "temporary_keys": [dict(key) for key in self._data.door_keys_data],
+            "temporary_keys": [dict(key) for key in temporary_keys],
             "activity": [dict(activity) for activity in self._activity_history],
+            "activity_updated_at": self._activity_last_updated,
             "calls": [dict(call) for call in self._call_history],
         }
+
+    async def async_load_panel_history(self) -> None:
+        """Load cached activity and calls before the first cloud poll."""
+        if self._data is None:
+            return
+        activity = await self._data.async_get_stored_data_for_key(
+            "panel_activity_history"
+        )
+        if isinstance(activity, list):
+            self._activity_history = [item for item in activity if isinstance(item, dict)]
+            self._activity_history_loaded = True
+        calls = await self._data.async_get_stored_data_for_key("panel_call_history")
+        if isinstance(calls, list):
+            self._call_history = [item for item in calls if isinstance(item, dict)]
+            self._call_history_loaded = True
 
     def get_sip_accounts(self) -> dict[str, Any]:
         """Return the account's SIP credentials and device account mappings."""
@@ -1526,7 +1546,9 @@ class AkuvoxApiClient:
         """Open a relay identified by an authorised sidebar-panel action."""
         if self._data is None:
             raise AkuvoxApiClientError("SmartPlus account data is unavailable")
-        for relay in self._data.door_relay_data:
+        persisted = self._entry.data if self._entry is not None else {}
+        relays = self._data.door_relay_data or persisted.get("door_relay_data", [])
+        for relay in relays:
             if str(relay.get("mac")) == mac and str(relay.get("relay_id")) == relay_id:
                 await self.async_make_opendoor_request(
                     name=str(relay.get("name", "")),
@@ -1884,6 +1906,8 @@ class AkuvoxApiClient:
 
     async def _async_process_async_response(self, response: aiohttp.ClientResponse, url: str):
         """Process aiohttp response and return dict with data (non-blocking)."""
+        if urlsplit(url).path.endswith(urlsplit(API_GET_PERSONAL_DOOR_LOG).path):
+            self._update_door_log_poll_interval(getattr(response, "headers", {}))
         if response.status in (401, 403):
             raise AkuvoxApiClientAuthenticationError(
                 f"SmartPlus rejected the session with HTTP {response.status}"
@@ -2051,10 +2075,3 @@ class AkuvoxApiClient:
         self._data.auth_token = value if key == "auth_token" else self._data.auth_token
         self._data.token = value if key == "token" else self._data.token
         self._data.wait_for_image_url = value if key == "wait_for_image_url" else self._data.wait_for_image_url
-        if key == "door_log_poll_interval":
-            self._data.door_log_poll_interval = int(value)
-            self._door_log_backoff = self._data.door_log_poll_interval
-        if key == "door_log_max_backoff":
-            self._data.door_log_max_backoff = max(
-                self._data.door_log_poll_interval, int(value)
-            )

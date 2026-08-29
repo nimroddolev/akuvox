@@ -33,8 +33,7 @@ async def async_setup_entry(
         LOGGER.warning("Unable to load saved temporary door key data: %s", error)
         return
     if not isinstance(device_data, dict):
-        LOGGER.warning("Saved temporary door key data was missing or invalid")
-        return
+        device_data = dict(entry.data)
     door_keys_data = device_data.get("door_keys_data")
     if not isinstance(door_keys_data, list):
         LOGGER.warning("Saved temporary door key list was missing or invalid")
@@ -120,7 +119,7 @@ class AkuvoxTemporaryDoorKey(SensorEntity, AkuvoxEntity):
         self.expired = False
 
         name = f"{self.description} {self.key_id}".strip()
-        self._attr_unique_id = f"{entry.entry_id}_{name}"
+        self._attr_unique_id = name
         self._attr_name = name
         self._attr_key_code = key_code
 
@@ -128,7 +127,7 @@ class AkuvoxTemporaryDoorKey(SensorEntity, AkuvoxEntity):
 
         LOGGER.debug("Adding temporary door key '%s'", self._attr_unique_id)
         self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, f"{entry.entry_id}:Temporary Keys")},  # type: ignore
+            identifiers={(DOMAIN, "Temporary Keys")},  # type: ignore
             name="Temporary Keys",
             model=VERSION,
             manufacturer=NAME,

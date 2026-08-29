@@ -33,8 +33,7 @@ async def async_setup_entry(
         LOGGER.warning("Unable to load saved door relay data: %s", error)
         return
     if not isinstance(device_data, dict):
-        LOGGER.warning("Saved door relay data was missing or invalid")
-        return
+        device_data = dict(entry.data)
     door_relay_data = device_data.get("door_relay_data")
     if not isinstance(door_relay_data, list):
         LOGGER.warning("Saved door relay list was missing or invalid")
@@ -93,12 +92,12 @@ class AkuvoxDoorRelayEntity(ButtonEntity, AkuvoxEntity):
         self._token = client_data.token if client_data else self.get_saved_value("token")
         self._data = data
 
-        self._attr_unique_id = f"{entry.entry_id}_{unique_name}"
+        self._attr_unique_id = unique_name
         self._attr_name = unique_name
 
         LOGGER.debug("Adding Akuvox door relay '%s'", unique_name)
         self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, f"{entry.entry_id}:{name}")},  # type: ignore
+            identifiers={(DOMAIN, name)},  # type: ignore
             name=name,
             model=VERSION,
             manufacturer=NAME,
