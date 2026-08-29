@@ -470,11 +470,7 @@ TOKEN_REFRESHED_AT = "token_refreshed_at"
 TOKEN_UPDATE_TYPE = "token_update_type"
 TOKEN_UPDATE_REFRESHED = "refreshed"
 TOKEN_UPDATE_CHANGED = "changed"
-DOOR_LOG_POLL_INTERVAL = 60
-DOOR_LOG_MAX_BACKOFF = 900
-DOOR_LOG_MIN_POLL_INTERVAL = 30
-DOOR_LOG_MIN_MAX_BACKOFF = 60
-DOOR_LOG_MAX_CONFIGURED_BACKOFF = 3600
+DOOR_LOG_FALLBACK_POLL_INTERVAL = 30
 ACTIVITY_ENDPOINT_TYPE = "activity_endpoint_type"
 PANEL_URL_PATH = "akuvox-smartplus"
 PANEL_STATIC_URL = "/api/akuvox_panel"
@@ -496,7 +492,7 @@ API_USERCONF = "userconf"
 API_OPENDOOR = "opendoor"
 
 # Standard User Agents
-USER_AGENT = "VBell/6.61.2 (iPhone; iOS 16.6; Scale/3.00)"
+USER_AGENT = "VBell/7.50.4 (iPhone; iOS 26.6; Scale/3.00)"
 SMARTPLUS_USER_AGENT = "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) SmartPlus/6.2"
 SMARTPLUS_USER_AGENT_ALT = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) SmartPlus/6.2"
 SMARTPLUS_REFRESH_USER_AGENT = "VBell/7.50.3 (iPhone; iOS 26.6; Scale/3.00)"

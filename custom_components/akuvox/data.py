@@ -14,8 +14,6 @@ from .const import (
     DATA_STORAGE_KEY,
     account_storage_key,
     LOCATIONS_DICT,
-    DOOR_LOG_POLL_INTERVAL,
-    DOOR_LOG_MAX_BACKOFF,
     ACTIVITY_ENDPOINT_TYPE,
 )
 from .helpers import AkuvoxHelpers
@@ -56,16 +54,6 @@ class AkuvoxData:
         self.camera_data: list[dict] = []
         self.door_relay_data: list[dict] = []
         self.door_keys_data: list[dict] = []
-        self.door_log_poll_interval = self._get_positive_option(
-            entry, "door_log_poll_interval", DOOR_LOG_POLL_INTERVAL
-        )
-        self.door_log_max_backoff = max(
-            self.door_log_poll_interval,
-            self._get_positive_option(
-                entry, "door_log_max_backoff", DOOR_LOG_MAX_BACKOFF
-            ),
-        )
-
         self.host = host or self.get_value_for_key(entry, "host", "")
         self.auth_token = auth_token or self.get_value_for_key(entry, "auth_token", "")
         self.token = token or self.get_value_for_key(entry, "token", "")
@@ -394,9 +382,14 @@ class AkuvoxData:
         legacy_data: dict = await legacy_store.async_load() # type: ignore
         if not isinstance(legacy_data, dict) or key not in legacy_data:
             return None
-        if (
-            str(legacy_data.get("phone_number", "")) != str(self.phone_number)
-            or str(legacy_data.get("subdomain", "")) != str(self.subdomain)
+        legacy_phone = str(legacy_data.get("phone_number", ""))
+        legacy_subdomain = str(legacy_data.get("subdomain", ""))
+        # Very old shared storage did not record account identity at all. It
+        # predates account-scoped files and therefore belonged to the only
+        # configured SmartPlus account; allow that data to migrate once.
+        if (legacy_phone or legacy_subdomain) and (
+            legacy_phone != str(self.phone_number)
+            or legacy_subdomain != str(self.subdomain)
         ):
             return None
 

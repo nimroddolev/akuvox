@@ -22,11 +22,6 @@ from .const import (
     TOKEN_REFRESHED_AT,
     TOKEN_UPDATE_REFRESHED,
     TOKEN_UPDATE_TYPE,
-    DOOR_LOG_POLL_INTERVAL,
-    DOOR_LOG_MAX_BACKOFF,
-    DOOR_LOG_MIN_POLL_INTERVAL,
-    DOOR_LOG_MIN_MAX_BACKOFF,
-    DOOR_LOG_MAX_CONFIGURED_BACKOFF,
     PANEL_ADMIN_ONLY,
     PANEL_ENABLED,
 )
@@ -318,6 +313,12 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
 
                 devices_json = self.akuvox_api_client.get_devices_json()
                 self.data.update(devices_json)
+                # A config-entry ID is not available until Home Assistant
+                # creates the entry.  Carry the fresh tokens through this
+                # one setup so ``async_load_and_migrate_credentials`` can
+                # move them straight into private storage and remove them
+                # from the entry again.
+                self.data.update(self.akuvox_api_client.get_credentials())
 
                 ################################
                 ### Create integration entry ###
@@ -425,24 +426,6 @@ class AkuvoxOptionsFlowHandler(config_entries.OptionsFlow):
             vol.Required("event_screenshot_options",
                          default=self.get_data_key_value("event_screenshot_options", "asap") # type: ignore
             ): vol.In(event_screenshot_options),
-            vol.Required(
-                "door_log_poll_interval",
-                default=self.get_data_key_value(
-                    "door_log_poll_interval", DOOR_LOG_POLL_INTERVAL
-                ),
-            ): vol.All(vol.Coerce(int), vol.Range(min=DOOR_LOG_MIN_POLL_INTERVAL, max=3600)),
-            vol.Required(
-                "door_log_max_backoff",
-                default=self.get_data_key_value(
-                    "door_log_max_backoff", DOOR_LOG_MAX_BACKOFF
-                ),
-            ): vol.All(
-                vol.Coerce(int),
-                vol.Range(
-                    min=DOOR_LOG_MIN_MAX_BACKOFF,
-                    max=DOOR_LOG_MAX_CONFIGURED_BACKOFF,
-                ),
-            ),
             vol.Required(
                 PANEL_ENABLED,
                 default=self.get_data_key_value(PANEL_ENABLED, True),

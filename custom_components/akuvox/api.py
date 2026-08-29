@@ -12,6 +12,7 @@ import secrets
 import socket
 import zipfile
 from collections.abc import Callable
+from math import ceil
 from pathlib import Path
 from typing import Any
 from datetime import datetime, timezone
@@ -49,7 +50,7 @@ from .const import (
     TOKEN_REFRESHED_AT,
     TOKEN_UPDATE_TYPE,
     TOKEN_UPDATE_REFRESHED,
-    DOOR_LOG_POLL_INTERVAL,
+    DOOR_LOG_FALLBACK_POLL_INTERVAL,
     ACTIVITY_ENDPOINT_TYPE,
     ACTIVITY_HISTORY_LIMIT,
     STORE_ACTIVITY_HISTORY,
@@ -183,6 +184,7 @@ class AkuvoxApiClient:
             LOGGER.debug("Polling already running, not restarting.")
             return
         self._polling_task_stop_event.clear()
+        LOGGER.debug("Starting personal door-log poller")
         self._polling_task = self.hass.async_create_task(self._poll_personal_door_log())
 
     async def async_stop_polling(self):
@@ -208,18 +210,35 @@ class AkuvoxApiClient:
         """Poll the server continuously for the latest personal door log, can be stopped."""
         assert self._polling_task_stop_event is not None
         while not self._polling_task_stop_event.is_set():
-            poll_interval = self._data.door_log_poll_interval
+            poll_interval = self._door_log_poll_interval
             try:
+                LOGGER.debug("Requesting personal door log")
                 if not await self.async_retrieve_personal_door_log():
                     self._note_door_log_failure()
-                    poll_interval = self._increase_door_log_backoff()
-                elif self._door_log_failure_logged:
-                    LOGGER.info("Personal door-log polling recovered")
-                    self._door_log_failure_logged = False
-                    self._door_log_backoff = self._data.door_log_poll_interval
+                    poll_interval = DOOR_LOG_FALLBACK_POLL_INTERVAL
+                    LOGGER.debug(
+                        "Door-log poll returned no usable data; retrying in %s seconds",
+                        poll_interval,
+                    )
+                else:
+                    # The successful getDoorLog response may have provided a
+                    # new rate-limit window; use it for this wait immediately.
+                    poll_interval = self._door_log_poll_interval
+                    if self._door_log_failure_logged:
+                        LOGGER.info("Personal door-log polling recovered")
+                        self._door_log_failure_logged = False
+            except AkuvoxApiClientRateLimitError as error:
+                self._note_door_log_failure(error)
+                # The getDoorLog response supplied a precise reset time.
+                poll_interval = self._door_log_poll_interval
             except AkuvoxApiClientError as error:
                 self._note_door_log_failure(error)
-                poll_interval = self._increase_door_log_backoff()
+                poll_interval = DOOR_LOG_FALLBACK_POLL_INTERVAL
+                LOGGER.debug(
+                    "Door-log poll failed with %s; retrying in %s seconds",
+                    type(error).__name__,
+                    poll_interval,
+                )
             try:
                 await asyncio.wait_for(
                     self._polling_task_stop_event.wait(), timeout=poll_interval
@@ -227,12 +246,51 @@ class AkuvoxApiClient:
             except asyncio.TimeoutError:
                 continue
 
-    def _increase_door_log_backoff(self) -> int:
-        """Return the next quiet retry interval for a failed activity request."""
-        self._door_log_backoff = min(
-            self._door_log_backoff * 2, self._data.door_log_max_backoff
+    def _update_door_log_poll_interval(self, headers: Any) -> None:
+        """Schedule the next poll within SmartPlus' advertised rate-limit window."""
+        try:
+            limit = int(headers.get("x-ratelimit-limit"))
+            remaining = int(headers.get("x-ratelimit-remaining"))
+            reset = int(headers.get("x-ratelimit-reset"))
+        except (AttributeError, TypeError, ValueError):
+            self._door_log_poll_interval = DOOR_LOG_FALLBACK_POLL_INTERVAL
+            LOGGER.debug(
+                "Door-log response has missing or malformed rate-limit headers; "
+                "using the %s-second fallback",
+                self._door_log_poll_interval,
+            )
+            return
+
+        if limit <= 0 or not 0 <= remaining <= limit or reset < 0:
+            self._door_log_poll_interval = DOOR_LOG_FALLBACK_POLL_INTERVAL
+            LOGGER.debug(
+                "Door-log response has invalid rate-limit values "
+                "(limit=%s, remaining=%s, reset=%s); using the %s-second fallback",
+                limit,
+                remaining,
+                reset,
+                self._door_log_poll_interval,
+            )
+            return
+        if remaining == 0:
+            # Do not retry at the exact reset boundary.
+            self._door_log_poll_interval = max(1, reset + 1)
+            LOGGER.debug(
+                "Door-log rate limit exhausted (limit=%s, reset=%s); retrying in %s seconds",
+                limit,
+                reset,
+                self._door_log_poll_interval,
+            )
+            return
+
+        self._door_log_poll_interval = max(1, ceil(reset / remaining))
+        LOGGER.debug(
+            "Door-log rate limit (limit=%s, remaining=%s, reset=%s); polling in %s seconds",
+            limit,
+            remaining,
+            reset,
+            self._door_log_poll_interval,
         )
-        return self._door_log_backoff
 
     def _note_door_log_failure(
         self, error: AkuvoxApiClientError | None = None
