@@ -52,6 +52,12 @@ export const mainStyles = `
     filter: brightness(0) invert(1);
   }
 
+  .logo-title-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
   h1 {
     margin: 0;
     font-size: 26px;
@@ -189,7 +195,7 @@ export const mainStyles = `
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    padding: 8px 9px;
+    padding: 10px 14px;
     font-size: 13px;
     line-height: 1;
   }
@@ -258,7 +264,8 @@ export const mainStyles = `
   }
 
   .auth-notice {
-    width: min(100%, 560px);
+    width: 100%;
+    padding: 28px;
     text-align: center;
   }
 
@@ -296,6 +303,29 @@ export const mainStyles = `
     border-radius: 8px;
     display: grid;
     gap: 7px;
+  }
+
+  form[data-settings-form] > fieldset {
+    margin-top: 18px;
+    padding: 14px 16px 16px;
+    gap: 12px;
+    border-color: var(--divider-color, #cbd5e1);
+    border-radius: 12px;
+    background: #e1f5f8;
+  }
+
+  form[data-settings-form] > fieldset > legend {
+    padding: 0 7px;
+    color: var(--primary-text-color, #111);
+    font-size: 14px;
+    font-weight: 700;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    form[data-settings-form] > fieldset {
+      background: var(--card-background-color, #1f2937);
+      border-color: var(--divider-color, #4b5563);
+    }
   }
 
   .check {
@@ -384,5 +414,6 @@ export const mainStyles = `
       justify-self: center;
       margin-left: 0;
     }
+    .logo-title-row { justify-content: center; }
   }
 `;

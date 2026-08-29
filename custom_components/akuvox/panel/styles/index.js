@@ -2,10 +2,10 @@
  * Aggregates all panel CSS modules.
  */
 
-import { mainStyles } from "./main.css.js?v=20260829-settings-save-tall";
-import { tableStyles } from "./tables.css.js?v=20260829-activity-status-compact";
+import { mainStyles } from "./main.css.js?v=20260830-settings-section-dark-mode";
+import { tableStyles } from "./tables.css.js?v=20260830-device-action-gradients";
 import { dialogStyles } from "./dialogs.css.js?v=20260817-range-picker";
-import { viewStyles } from "./views.css.js?v=20260826-storage-limit-warning-row";
+import { viewStyles } from "./views.css.js?v=20260830-camera-rtsp-width";
 
 export const getPanelStyles = () => `
   <style>
