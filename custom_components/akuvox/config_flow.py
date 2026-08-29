@@ -22,8 +22,6 @@ from .const import (
     TOKEN_REFRESHED_AT,
     TOKEN_UPDATE_REFRESHED,
     TOKEN_UPDATE_TYPE,
-    PANEL_ADMIN_ONLY,
-    PANEL_ENABLED,
 )
 from .helpers import AkuvoxHelpers
 
@@ -394,11 +392,6 @@ class AkuvoxOptionsFlowHandler(config_entries.OptionsFlow):
         # Define the options schema
         config_data = dict(self.config_entry.data)
 
-        event_screenshot_options = {
-            "asap": "Receive events once generated, without waiting for camera screenshot URLs.",
-            "wait": "Wait for camera screenshot URLs to become available before triggering the event (typically adds a delay of 0-3 seconds)."
-        }
-
         default_country_name_code = helpers.find_country_name_code(config_data.get('country_code', self.hass.config.country))
         default_country_name = LOCATIONS_DICT.get(default_country_name_code, {}).get("country") # type: ignore
         default_subdomain = LOCATIONS_DICT.get(default_country_name_code, {}).get("subdomain") # type: ignore
@@ -423,17 +416,6 @@ class AkuvoxOptionsFlowHandler(config_entries.OptionsFlow):
                         mode=selector.SelectSelectorMode.DROPDOWN,
                         custom_value=True),
                         ),
-            vol.Required("event_screenshot_options",
-                         default=self.get_data_key_value("event_screenshot_options", "asap") # type: ignore
-            ): vol.In(event_screenshot_options),
-            vol.Required(
-                PANEL_ENABLED,
-                default=self.get_data_key_value(PANEL_ENABLED, True),
-            ): bool,
-            vol.Required(
-                PANEL_ADMIN_ONLY,
-                default=self.get_data_key_value(PANEL_ADMIN_ONLY, True),
-            ): bool,
         })
 
         # Show the form with the current options
@@ -454,8 +436,6 @@ class AkuvoxOptionsFlowHandler(config_entries.OptionsFlow):
             self.akuvox_api_client._data.subdomain = current_subdomain # type: ignore
             self.akuvox_api_client._data.host = self.get_data_key_value("host") # type: ignore
             self.akuvox_api_client._data.phone_number = self.get_data_key_value("phone_number") # type: ignore
-            self.akuvox_api_client._data.wait_for_image_url = self.get_data_key_value("wait_for_image_url") # type: ignore
-
         # User input is valid, update the options
         LOGGER.debug("Updating configuration...")
         return self.async_create_entry(

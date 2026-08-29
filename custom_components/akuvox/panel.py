@@ -30,14 +30,13 @@ from .const import (
     DOMAIN,
     LOGGER,
     NAME,
-    PANEL_ADMIN_ONLY,
-    PANEL_ENABLED,
     CUSTOM_CAMERA_STREAM_ORIENTATIONS,
     CAMERA_STREAM_ORIENTATIONS,
     CUSTOM_ACTIVITY_IMAGE_ORIENTATIONS,
     ACTIVITY_IMAGE_ORIENTATIONS,
     STORE_ACTIVITY_HISTORY,
     ACTIVITY_HISTORY_MAX_STORAGE_MB,
+    ACTIVITY_HISTORY_DEFAULT_STORAGE_MB,
     DEBUG_LOGGING,
     PANEL_RUNTIME_KEY,
     PANEL_RUNTIME_DOMAIN,
@@ -69,19 +68,17 @@ def _panel_entries(hass: HomeAssistant) -> list[ConfigEntry]:
 
 
 async def async_refresh_panel(hass: HomeAssistant) -> None:
-    """Register or remove the single sidebar panel based on account options."""
+    """Register the sidebar panel whenever at least one account exists."""
     entries = _panel_entries(hass)
     runtime = hass.data.setdefault(PANEL_RUNTIME_DOMAIN, {})
-    enabled = any(entry.options.get(PANEL_ENABLED, True) for entry in entries)
     panel_exists = async_panel_exists(hass, PANEL_URL_PATH)
 
-    if not enabled:
+    if not entries:
         if panel_exists:
             async_remove_panel(hass, PANEL_URL_PATH)
         runtime.pop(PANEL_RUNTIME_KEY, None)
         return
 
-    admin_only = all(entry.options.get(PANEL_ADMIN_ONLY, True) for entry in entries)
     if panel_exists:
         async_remove_panel(hass, PANEL_URL_PATH)
 
@@ -106,7 +103,7 @@ async def async_refresh_panel(hass: HomeAssistant) -> None:
         sidebar_icon="akuvox:smartplus",
         module_url=_panel_module_url(),
         embed_iframe=False,
-        require_admin=admin_only,
+        require_admin=False,
         # Associate this panel with the integration so Home Assistant's
         # built-in Settings action routes straight to it, as Chime TTS does.
         config_panel_domain=DOMAIN,
@@ -409,9 +406,13 @@ async def websocket_panel_settings(
                 ACTIVITY_IMAGE_ORIENTATIONS: _entry_value(
                     entry, ACTIVITY_IMAGE_ORIENTATIONS, {}
                 ),
-                STORE_ACTIVITY_HISTORY: bool(_entry_value(entry, STORE_ACTIVITY_HISTORY, False)),
+                STORE_ACTIVITY_HISTORY: bool(_entry_value(entry, STORE_ACTIVITY_HISTORY, True)),
                 ACTIVITY_HISTORY_MAX_STORAGE_MB: int(
-                    _entry_value(entry, ACTIVITY_HISTORY_MAX_STORAGE_MB, 0)
+                    _entry_value(
+                        entry,
+                        ACTIVITY_HISTORY_MAX_STORAGE_MB,
+                        ACTIVITY_HISTORY_DEFAULT_STORAGE_MB,
+                    )
                 ),
                 "activity_history_storage_bytes": (
                     client.get_activity_storage_usage_bytes() if client else 0
@@ -461,9 +462,6 @@ async def websocket_panel_export_sip_accounts_pdf(
     {
         vol.Required("type"): "akuvox/panel_save_settings",
         vol.Required("entry_id"): str,
-        vol.Required("event_screenshot_options"): vol.In(("asap", "wait")),
-        vol.Required(PANEL_ENABLED): bool,
-        vol.Required(PANEL_ADMIN_ONLY): bool,
         vol.Required(CUSTOM_CAMERA_STREAM_ORIENTATIONS): bool,
         vol.Required(CAMERA_STREAM_ORIENTATIONS): dict,
         vol.Required(CUSTOM_ACTIVITY_IMAGE_ORIENTATIONS): bool,
@@ -490,6 +488,9 @@ async def websocket_panel_save_settings(
         connection.send_error(msg["id"], "not_found", "Akuvox account was not found")
         return
     options = dict(entry.options)
+    options.pop("panel_enabled", None)
+    options.pop("panel_admin_only", None)
+    options.pop("event_screenshot_options", None)
     # Per-camera activity orientations supersede this legacy global transform.
     options.pop("mirror_activity_images", None)
     valid_orientations = {
