@@ -7,20 +7,20 @@
 import { PANEL_TAG, TAB_HASHES, TAB_HASH_BY_ID, TABS } from "./utils/constants.js";
 import { escapeHtml } from "./utils/dom.js";
 import { copyText } from "./utils/clipboard.js";
-import { getPanelStyles } from "./styles/index.js?v=20260827-multi-table-filters-outside-click";
+import { getPanelStyles } from "./styles/index.js?v=20260829-activity-status-compact";
 import { showNotice, confirmModal, callWsWithBlocker } from "./components/dialogs.js";
 import { installCameraRelayActions } from "./components/camera-actions.js?v=20260821-pill-action";
 import { closeKeyActionsMenu } from "./components/key-menu.js";
 
 import { renderDevicesView, bindDevicesEvents } from "./views/devices-view.js";
-import { renderActivityView, bindActivityEvents } from "./views/activity-view.js?v=20260827-multi-table-filters-outside-click";
+import { renderActivityView, bindActivityEvents } from "./views/activity-view.js?v=20260829-updated-status-red";
 import { renderCallsView, bindCallsEvents } from "./views/calls-view.js?v=20260827-multi-table-filters-outside-click";
 import {
   renderKeysView,
   bindKeysEvents,
   deleteSelectedKeys,
 } from "./views/keys-view.js?v=20260827-multi-table-filters-outside-click";
-import { renderSettingsView, bindSettingsEvents, updateActivityStorageProgress } from "./views/settings-view.js?v=20260826-storage-limit-warning-row";
+import { renderSettingsView, bindSettingsEvents, updateActivityStorageProgress } from "./views/settings-view.js?v=20260829-settings-copy-cleanup";
 import { renderHelpView } from "./views/help-view.js";
 
 class AkuvoxSmartPlusPanel extends HTMLElement {
@@ -32,10 +32,7 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
     this._activeAccount = "";
     this._activeTab = "overview";
     this._settings = null;
-    this._countryOptions = [];
-    this._subdomainOptions = [];
     this._settingsEntryId = "";
-    this._revealedSecrets = new Set();
     this._settingsDirty = false;
     this._settingsSaving = false;
     this._blockingRequest = false;
@@ -135,7 +132,6 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
     window.clearInterval(this._timer);
     closeKeyActionsMenu(this);
     this._timer = undefined;
-    this._subdomainOutsideAbort?.abort();
     this._multiFilterOutsideAbort?.abort();
     this._copiedKeyCodes.forEach((timeout) => window.clearTimeout(timeout));
     this._copiedKeyCodes.clear();
@@ -144,6 +140,8 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
     this._unsubscribePanelDataUpdates = undefined;
     this._tabResizeObserver?.disconnect();
     this._activityPaginationObserver?.disconnect();
+    window.clearInterval(this._activityUpdatedTimer);
+    this._activityUpdatedTimer = undefined;
     this._clearCameraRelayCountdowns();
     this._tabResizeObserver = null;
     if (this._tabResizeListenerRegistered) {
@@ -227,7 +225,13 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
         }
         const activeAccountChanged = previousActiveAccount !== this._activeAccount;
         let settingsChanged = false;
-        if (this._activeAccount && this._settingsEntryId !== this._activeAccount) {
+        const shouldRefreshSettings =
+          this._activeAccount &&
+          (this._settingsEntryId !== this._activeAccount ||
+            (this._activeTab === "settings" &&
+              !this._settingsDirty &&
+              !this._settingsSaving));
+        if (shouldRefreshSettings) {
           settingsChanged = await this._loadSettings();
         }
         if (
@@ -313,14 +317,8 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
       });
       if (entryId !== this._activeAccount) return;
       this._settings = result.settings;
-      this._countryOptions = result.country_options || [];
-      this._subdomainOptions = result.subdomain_options || [];
       this._settingsEntryId = entryId;
-      const settingsSignature = JSON.stringify({
-        settings: this._settings,
-        countryOptions: this._countryOptions,
-        subdomainOptions: this._subdomainOptions,
-      });
+      const settingsSignature = JSON.stringify(this._settings);
       const changed = settingsSignature !== this._settingsSignature;
       this._settingsSignature = settingsSignature;
       return changed;
@@ -627,9 +625,9 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
     }
 
     const scrollPosition = this._captureScrollPosition();
+    window.clearInterval(this._activityUpdatedTimer);
+    this._activityUpdatedTimer = undefined;
     this._tabResizeObserver?.disconnect();
-    this._subdomainOutsideAbort?.abort();
-    this._subdomainOutsideAbort = undefined;
 
     const account = this._account();
     const requiresReauthentication = Boolean(account?.requires_reauthentication);

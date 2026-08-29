@@ -345,7 +345,10 @@ class AkuvoxApiClient:
             url=f"https://{REST_SERVER_ADDR}:{REST_SERVER_PORT}/{API_REST_SERVER_DATA}",
             data=None,
             headers={
-                'api-version': REST_SERVER_API_VERSION
+                "X-AUTH-TOKEN": "",
+                "api-version": REST_SERVER_API_VERSION,
+                "User-Agent": USER_AGENT,
+                "Accept-Language": "en-AU;q=1, he-AU;q=0.9, ru-RU;q=0.8",
             }
         )
         if json_data is not None:
@@ -388,7 +391,16 @@ class AkuvoxApiClient:
                 headers=headers,
                 data=data,
             )
-            if isinstance(response, dict) and response.get("result") == 0:
+            # The response processor unwraps a successful ``datas`` object.
+            # ``send_mobile_checkcode`` legitimately returns an empty object,
+            # so that becomes ``{}`` here rather than the original envelope.
+            if response == {} or (
+                isinstance(response, dict)
+                and (
+                    response.get("result") == 0
+                    or str(response.get("err_code", "")) == "0"
+                )
+            ):
                 LOGGER.debug("✅ SMS code request successful")
                 return True
 

@@ -8,6 +8,7 @@ import zipfile
 from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 from custom_components.akuvox.api import AkuvoxApiClient
+from custom_components.akuvox.const import USER_AGENT
 from custom_components.akuvox.data import AkuvoxData
 
 from test_session_refresh_e2e import _Entry, _Hass, _Response, _Session, _success
@@ -41,6 +42,22 @@ class TestSmartPlusApiE2E(unittest.IsolatedAsyncioTestCase):
         self.session = _Session(responses)
         self.hass = _WorkflowHass()
         return AkuvoxApiClient(self.session, self.hass, self.entry)
+
+    async def test_sms_request_matches_current_smartplus_client(self) -> None:
+        """The unauthenticated OTP request uses the current app fingerprint."""
+        client = self._client([_success({})])
+        client._async_ensure_rest_server = AsyncMock(return_value=True)
+
+        self.assertTrue(await client.async_send_sms(self.hass, "972", "525321806", "ecloud"))
+
+        request = self.session.requests[0]
+        self.assertEqual(request["method"], "post")
+        self.assertTrue(request["url"].endswith("/send_mobile_checkcode"))
+        self.assertEqual(request["headers"]["X-AUTH-TOKEN"], "")
+        self.assertEqual(request["headers"]["User-Agent"], USER_AGENT)
+        self.assertEqual(
+            request["data"], {"AreaCode": "972", "MobileNumber": "525321806", "Type": 0}
+        )
 
     async def test_local_activity_export_includes_data_and_preview_images(self) -> None:
         """The local export contains JSON, CSV, and safely named preview images."""
@@ -344,9 +361,15 @@ class TestSmartPlusApiE2E(unittest.IsolatedAsyncioTestCase):
 
         self.assertTrue(await client.async_retrieve_personal_door_log())
         self.hass.bus.async_fire.assert_any_call("akuvox_door_update", ANY)
-        self.hass.bus.async_fire.assert_any_call(
-            "akuvox_panel_data_updated", {"entry_id": self.entry.entry_id}
-        )
+        panel_updates = [
+            call
+            for call in self.hass.bus.async_fire.call_args_list
+            if call.args[0] == "akuvox_panel_data_updated"
+        ]
+        self.assertTrue(panel_updates)
+        self.assertEqual(panel_updates[-1].args[1]["entry_id"], self.entry.entry_id)
+        self.assertIn("activity_storage_usage_bytes", panel_updates[-1].args[1])
+        self.assertIsNotNone(client.get_panel_data()["activity_updated_at"])
         self.assertEqual(len(self.session.requests), 2)
         request = self.session.requests[0]
         self.assertEqual(request["method"], "get")
@@ -395,9 +418,11 @@ class TestSmartPlusApiE2E(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             client.get_panel_data()["activity"][0]["PicUrl"], "https://image"
         )
-        self.hass.bus.async_fire.assert_called_once_with(
-            "akuvox_panel_data_updated", {"entry_id": self.entry.entry_id}
-        )
+        self.hass.bus.async_fire.assert_called_once()
+        event, data = self.hass.bus.async_fire.call_args.args
+        self.assertEqual(event, "akuvox_panel_data_updated")
+        self.assertEqual(data["entry_id"], self.entry.entry_id)
+        self.assertIn("activity_storage_usage_bytes", data)
 
     async def test_call_history_parsed_and_persisted_for_panel(self) -> None:
         """The call-log page was retained without exposing credentials to the panel."""
