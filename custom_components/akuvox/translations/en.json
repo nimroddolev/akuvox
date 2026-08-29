@@ -63,17 +63,20 @@
             "description": "Local activity storage has reached its configured limit. The oldest activity will be deleted to free up space for new activity."
         }
     },
+    "device_automation": {
+        "trigger_type": {
+            "door_unlocked": "Door unlocked"
+        }
+    },
     "options": {
         "step": {
             "init": {
                 "title": "Akuvox SmartPlus Event Configuration",
-                "description": "Adjust the door event and polling settings for this integration.",
+                "description": "Adjust the door event settings for this integration.",
                 "data": {
                     "country": "The country registered in your Akuvox SmartPlus account",
                     "subdomain": "Manually set the regional API subdomain",
-                    "event_screenshot_options": "Screenshot URLS for `akuvox_door_update` events:",
-                    "door_log_poll_interval": "Door-log polling interval (seconds)",
-                    "door_log_max_backoff": "Maximum door-log retry backoff (seconds)"
+                    "event_screenshot_options": "Screenshot URLS for `akuvox_door_update` events:"
                 }
             }
         }
