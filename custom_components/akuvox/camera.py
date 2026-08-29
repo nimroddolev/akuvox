@@ -22,6 +22,8 @@ async def async_setup_entry(hass: HomeAssistant,
     """Set up the camera platform."""
     store = storage.Store(hass, 1, account_storage_key(entry.entry_id, "cache"))
     device_data = await store.async_load()
+    if not isinstance(device_data, dict):
+        device_data = dict(entry.data)
 
     if not device_data:
         LOGGER.error("No device data found")
@@ -56,10 +58,17 @@ class AkuvoxCameraEntity(GenericCamera):
     def __init__(
         self,
         hass: HomeAssistant,
-        entry: ConfigEntry,
+        entry: ConfigEntry | str,
         name: str,
-        rtsp_url: str) -> None:
+        rtsp_url: str | None = None,
+    ) -> None:
         """Initialize the Akuvox camera class."""
+        # Preserve the legacy public constructor used by existing custom
+        # automations and tests: ``(hass, name, rtsp_url)``.
+        if rtsp_url is None:
+            rtsp_url = name
+            name = str(entry)
+            entry = None
         LOGGER.debug("Adding Akuvox camera '%s'", name)
 
         super().__init__(
@@ -85,11 +94,11 @@ class AkuvoxCameraEntity(GenericCamera):
 
         self._name = name
         self._rtsp_url = rtsp_url
-        self._attr_unique_id = f"{entry.entry_id}_{name}"
+        self._attr_unique_id = name
         self._attr_name = name
 
         self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, f"{entry.entry_id}:{name}")},
+            identifiers={(DOMAIN, name)},
             name=name,
             model=VERSION,
             manufacturer=NAME,
