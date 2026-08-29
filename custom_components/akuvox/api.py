@@ -586,6 +586,10 @@ class AkuvoxApiClient:
         self._skip_next_entry_reload = False
         return True
 
+    def skip_next_entry_reload(self) -> None:
+        """Keep a panel-only options save from restarting the API client."""
+        self._skip_next_entry_reload = True
+
     def async_start_proactive_token_refresh(self) -> None:
         """Keep the SmartPlus session fresh before its undocumented expiry.
 
