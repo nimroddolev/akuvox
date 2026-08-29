@@ -524,67 +524,6 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
     }
   }
 
-  _clearCameraRelayCountdowns() {
-    this._cameraRelayCountdowns.forEach(({ timer, restore }) => {
-      window.clearInterval(timer);
-      restore();
-    });
-    this._cameraRelayCountdowns.clear();
-  }
-
-  async _cameraRelayCountdown(button, relay) {
-    const existing = this._cameraRelayCountdowns.get(button);
-    if (existing) {
-      window.clearInterval(existing.timer);
-      this._cameraRelayCountdowns.delete(button);
-      existing.restore();
-      try {
-        await callWsWithBlocker(this, {
-          type: "akuvox/panel_open_relay",
-          entry_id: this._activeAccount,
-          mac: relay.mac,
-          relay_id: relay.relay_id,
-          confirmed: true,
-        });
-      } catch (_) {
-        showNotice(this, "The relay could not be opened.", "Could not open door");
-      }
-      return;
-    }
-
-    const originalHtml = button.innerHTML;
-    const originalLabel = button.getAttribute("aria-label");
-    const originalBackground = button.style.background;
-    const originalWidth = button.style.width;
-    const buttonWidth = button.getBoundingClientRect().width;
-    const restore = () => {
-      button.innerHTML = originalHtml;
-      button.style.background = originalBackground;
-      button.style.width = originalWidth;
-      if (originalLabel) button.setAttribute("aria-label", originalLabel);
-      else button.removeAttribute("aria-label");
-    };
-    let remaining = 5;
-    const render = () => {
-      button.textContent = `Confirm (${remaining})`;
-      button.style.background = "#16a34a";
-      button.style.width = `${buttonWidth}px`;
-      button.setAttribute("aria-label", `Confirm opening door (${remaining} seconds remaining)`);
-    };
-    render();
-    const timer = window.setInterval(() => {
-      if (!button.isConnected || remaining <= 1) {
-        window.clearInterval(timer);
-        this._cameraRelayCountdowns.delete(button);
-        restore();
-        return;
-      }
-      remaining -= 1;
-      render();
-    }, 1000);
-    this._cameraRelayCountdowns.set(button, { timer, restore });
-  }
-
   _content(account) {
     if (this._activeTab === "help") return renderHelpView();
 
@@ -645,8 +584,10 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
         <header>
           <div class="logo-text-container">
             <div class="logo-text">
-              <img class="brand-mark" src="/api/akuvox_panel/akuvox.svg" alt="Akuvox SmartPlus">
-              <h1>Akuvox SmartPlus</h1>
+              <div class="logo-title-row">
+                <img class="brand-mark" src="/api/akuvox_panel/akuvox.svg" alt="Akuvox SmartPlus">
+                <h1>Akuvox SmartPlus</h1>
+              </div>
               <p>Access your SmartPlus account from Home Assistant</p>
             </div>
           </div>
