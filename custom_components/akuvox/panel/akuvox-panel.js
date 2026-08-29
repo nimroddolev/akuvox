@@ -7,12 +7,12 @@
 import { PANEL_TAG, TAB_HASHES, TAB_HASH_BY_ID, TABS } from "./utils/constants.js";
 import { escapeHtml } from "./utils/dom.js";
 import { copyText } from "./utils/clipboard.js";
-import { getPanelStyles } from "./styles/index.js?v=20260829-activity-status-compact";
+import { getPanelStyles } from "./styles/index.js?v=20260830-settings-section-dark-mode";
 import { showNotice, confirmModal, callWsWithBlocker } from "./components/dialogs.js";
-import { installCameraRelayActions } from "./components/camera-actions.js?v=20260821-pill-action";
+import { installCameraRelayActions } from "./components/camera-actions.js?v=20260830-camera-modal-unlock";
 import { closeKeyActionsMenu } from "./components/key-menu.js";
 
-import { renderDevicesView, bindDevicesEvents } from "./views/devices-view.js";
+import { renderDevicesView, bindDevicesEvents } from "./views/devices-view.js?v=20260830-device-action-gradients";
 import { renderActivityView, bindActivityEvents } from "./views/activity-view.js?v=20260829-updated-status-red";
 import { renderCallsView, bindCallsEvents } from "./views/calls-view.js?v=20260827-multi-table-filters-outside-click";
 import {
@@ -20,7 +20,7 @@ import {
   bindKeysEvents,
   deleteSelectedKeys,
 } from "./views/keys-view.js?v=20260827-multi-table-filters-outside-click";
-import { renderSettingsView, bindSettingsEvents, updateActivityStorageProgress } from "./views/settings-view.js?v=20260829-settings-copy-cleanup";
+import { renderSettingsView, bindSettingsEvents, updateActivityStorageProgress } from "./views/settings-view.js?v=20260830-debug-section";
 import { renderHelpView } from "./views/help-view.js";
 
 class AkuvoxSmartPlusPanel extends HTMLElement {
@@ -46,7 +46,6 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
     this._activitySort = { key: "CaptureTime", direction: "desc" };
     this._activityVisibleCount = 20;
     this._activityPaginationObserver = null;
-    this._cameraRelayCountdowns = new Map();
     this._activityImages = new Map();
     this._activityImageFailures = new Map();
 
@@ -142,7 +141,6 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
     this._activityPaginationObserver?.disconnect();
     window.clearInterval(this._activityUpdatedTimer);
     this._activityUpdatedTimer = undefined;
-    this._clearCameraRelayCountdowns();
     this._tabResizeObserver = null;
     if (this._tabResizeListenerRegistered) {
       window.removeEventListener("resize", this._onTabWindowResize);
@@ -236,7 +234,14 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
         }
         if (
           !this._shouldDeferRender() &&
-          (forceRender || panelDataChanged || activeAccountChanged || settingsChanged || hadError)
+          // Door-log updates change panel data frequently, but do not affect
+          // the Settings markup. Avoid rebuilding that form and closing a
+          // native select while the user is choosing an option.
+          (forceRender ||
+            (panelDataChanged && this._activeTab !== "settings") ||
+            activeAccountChanged ||
+            settingsChanged ||
+            hadError)
         ) {
           this._render();
         }
@@ -318,7 +323,10 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
       if (entryId !== this._activeAccount) return;
       this._settings = result.settings;
       this._settingsEntryId = entryId;
-      const settingsSignature = JSON.stringify(this._settings);
+      // Storage usage changes independently of saved options, so it must not
+      // rebuild the Settings form while a native select is open.
+      const { activity_history_storage_bytes: _usageBytes, ...savedSettings } = this._settings;
+      const settingsSignature = JSON.stringify(savedSettings);
       const changed = settingsSignature !== this._settingsSignature;
       this._settingsSignature = settingsSignature;
       return changed;
