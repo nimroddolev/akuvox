@@ -26,16 +26,9 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.util import dt as dt_util
 
 from .api import AkuvoxApiClient, AkuvoxApiClientError
-from .credentials import async_get_credentials, async_store_credentials
 from .const import (
-    DOOR_LOG_MAX_BACKOFF,
-    DOOR_LOG_MAX_CONFIGURED_BACKOFF,
-    DOOR_LOG_MIN_MAX_BACKOFF,
-    DOOR_LOG_MIN_POLL_INTERVAL,
-    DOOR_LOG_POLL_INTERVAL,
     DOMAIN,
     LOGGER,
-    LOCATIONS_DICT,
     NAME,
     PANEL_ADMIN_ONLY,
     PANEL_ENABLED,
@@ -50,10 +43,6 @@ from .const import (
     PANEL_RUNTIME_DOMAIN,
     PANEL_STATIC_URL,
     PANEL_URL_PATH,
-    SUBDOMAINS_LIST,
-    TOKEN_REFRESHED_AT,
-    TOKEN_UPDATE_CHANGED,
-    TOKEN_UPDATE_TYPE,
 )
 from .coordinator import AkuvoxDataUpdateCoordinator
 from .repairs import authentication_failed
@@ -398,32 +387,13 @@ async def websocket_panel_settings(
     if entry is None:
         connection.send_error(msg["id"], "not_found", "Akuvox account was not found")
         return
-    credentials = await async_get_credentials(hass, entry.entry_id)
     client = _client_for_entry(hass, entry.entry_id)
-    countries = [
-        {
-            "code": str(value.get("phone_number", "")),
-            "label": f"{value.get('country', code)} (+{value.get('phone_number', '')})",
-        }
-        for code, value in LOCATIONS_DICT.items()
-        if isinstance(value, dict) and value.get("country")
-    ]
     connection.send_result(
         msg["id"],
         {
-            "country_options": countries,
-            "subdomain_options": SUBDOMAINS_LIST,
-    "settings": {
-                "country_code": str(_entry_value(entry, "country_code", "")),
-                "subdomain": str(_entry_value(entry, "subdomain", "")),
+            "settings": {
                 "event_screenshot_options": str(
                     _entry_value(entry, "event_screenshot_options", "asap")
-                ),
-                "door_log_poll_interval": int(
-                    _entry_value(entry, "door_log_poll_interval", DOOR_LOG_POLL_INTERVAL)
-                ),
-                "door_log_max_backoff": int(
-                    _entry_value(entry, "door_log_max_backoff", DOOR_LOG_MAX_BACKOFF)
                 ),
                 PANEL_ENABLED: bool(_entry_value(entry, PANEL_ENABLED, True)),
                 PANEL_ADMIN_ONLY: bool(_entry_value(entry, PANEL_ADMIN_ONLY, True)),
@@ -446,13 +416,9 @@ async def websocket_panel_settings(
                 "activity_history_storage_bytes": (
                     client.get_activity_storage_usage_bytes() if client else 0
                 ),
-                DEBUG_LOGGING: bool(_entry_value(entry, DEBUG_LOGGING, False)),
-                "token_update": {
-                    "timestamp": _entry_value(entry, TOKEN_REFRESHED_AT),
-                    "type": _entry_value(entry, TOKEN_UPDATE_TYPE, TOKEN_UPDATE_CHANGED),
-                },
-                "auth_token": credentials.get("auth_token", ""),
-                "token": credentials.get("token", ""),
+                # The Home Assistant logger is the source of truth because it
+                # can be changed outside this panel.
+                DEBUG_LOGGING: LOGGER.isEnabledFor(logging.DEBUG),
                 "sip_accounts": client.get_sip_accounts() if client else {},
             },
         },
@@ -495,19 +461,7 @@ async def websocket_panel_export_sip_accounts_pdf(
     {
         vol.Required("type"): "akuvox/panel_save_settings",
         vol.Required("entry_id"): str,
-        vol.Required("country_code"): str,
-        vol.Required("subdomain"): str,
         vol.Required("event_screenshot_options"): vol.In(("asap", "wait")),
-        vol.Required("door_log_poll_interval"): vol.All(
-            vol.Coerce(int), vol.Range(min=DOOR_LOG_MIN_POLL_INTERVAL, max=3600)
-        ),
-        vol.Required("door_log_max_backoff"): vol.All(
-            vol.Coerce(int),
-            vol.Range(
-                min=DOOR_LOG_MIN_MAX_BACKOFF,
-                max=DOOR_LOG_MAX_CONFIGURED_BACKOFF,
-            ),
-        ),
         vol.Required(PANEL_ENABLED): bool,
         vol.Required(PANEL_ADMIN_ONLY): bool,
         vol.Required(CUSTOM_CAMERA_STREAM_ORIENTATIONS): bool,
@@ -517,8 +471,6 @@ async def websocket_panel_export_sip_accounts_pdf(
         vol.Required(STORE_ACTIVITY_HISTORY): bool,
         vol.Required(ACTIVITY_HISTORY_MAX_STORAGE_MB): vol.All(vol.Coerce(int), vol.Range(min=0)),
         vol.Required(DEBUG_LOGGING): bool,
-        vol.Required("auth_token"): str,
-        vol.Required("token"): str,
     }
 )
 @websocket_api.async_response
@@ -527,7 +479,7 @@ async def websocket_panel_save_settings(
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    """Persist panel-edited account options and private credentials."""
+    """Persist panel-edited integration options."""
     if not _require_admin(connection, msg):
         return
     entry = next(
@@ -537,30 +489,6 @@ async def websocket_panel_save_settings(
     if entry is None:
         connection.send_error(msg["id"], "not_found", "Akuvox account was not found")
         return
-    supported_country_codes = {
-        str(value.get("phone_number", ""))
-        for value in LOCATIONS_DICT.values()
-        if isinstance(value, dict)
-    }
-    if msg["country_code"] not in supported_country_codes:
-        connection.send_error(msg["id"], "invalid_format", "Select a supported country")
-        return
-    if msg["door_log_max_backoff"] < msg["door_log_poll_interval"]:
-        connection.send_error(
-            msg["id"], "invalid_format", "Maximum backoff must not be shorter than polling"
-        )
-        return
-    auth_token = msg["auth_token"].strip()
-    token = msg["token"].strip()
-    if bool(auth_token) != bool(token):
-        connection.send_error(msg["id"], "invalid_format", "Provide both SmartPlus tokens")
-        return
-
-    previous_credentials = await async_get_credentials(hass, entry.entry_id)
-    tokens_changed = bool(auth_token) and (
-        auth_token != previous_credentials.get("auth_token", "")
-        or token != previous_credentials.get("token", "")
-    )
     options = dict(entry.options)
     # Per-camera activity orientations supersede this legacy global transform.
     options.pop("mirror_activity_images", None)
@@ -585,10 +513,7 @@ async def websocket_panel_save_settings(
     options.update(
         {
             "override": True,
-            "subdomain": msg["subdomain"].strip(),
             "event_screenshot_options": msg["event_screenshot_options"],
-            "door_log_poll_interval": msg["door_log_poll_interval"],
-            "door_log_max_backoff": msg["door_log_max_backoff"],
             PANEL_ENABLED: msg[PANEL_ENABLED],
             PANEL_ADMIN_ONLY: msg[PANEL_ADMIN_ONLY],
             CUSTOM_CAMERA_STREAM_ORIENTATIONS: msg[CUSTOM_CAMERA_STREAM_ORIENTATIONS],
@@ -604,40 +529,29 @@ async def websocket_panel_save_settings(
             DEBUG_LOGGING: msg[DEBUG_LOGGING],
         }
     )
-    if tokens_changed:
-        options[TOKEN_REFRESHED_AT] = datetime.now().astimezone().isoformat()
-        options[TOKEN_UPDATE_TYPE] = TOKEN_UPDATE_CHANGED
-    data = dict(entry.data)
-    data["country_code"] = msg["country_code"]
-    hass.config_entries.async_update_entry(entry, data=data, options=options)
+    if client is not None:
+        client.skip_next_entry_reload()
+    hass.config_entries.async_update_entry(entry, options=options)
+    try:
+        await async_refresh_panel(hass)
+    except Exception:  # noqa: BLE001 - the settings have already persisted.
+        LOGGER.exception("Unable to refresh the SmartPlus panel after saving settings")
     # The logger UI maintains a persisted override separate from the config
     # entry option. Keep it in sync, otherwise an existing DEBUG override can
     # prevent this panel setting from changing the effective integration level.
-    await hass.data[DATA_LOGGER].settings.async_update(
-        hass,
-        DOMAIN,
-        LoggerSetting(
-            level="DEBUG" if msg[DEBUG_LOGGING] else "INFO",
-            persistence=LogPersistance.PERMANENT,
-            type=LogSettingsType.INTEGRATION,
-        ),
-    )
-    debug_enabled = any(
-        bool(item.options.get(DEBUG_LOGGING, False))
-        for item in _panel_entries(hass)
-    )
-    LOGGER.setLevel(logging.DEBUG if debug_enabled else logging.INFO)
-    if auth_token:
-        await async_store_credentials(hass, entry.entry_id, auth_token, token)
-    connection.send_result(
-        msg["id"],
-        {
-            "token_update": {
-                "timestamp": _entry_value(entry, TOKEN_REFRESHED_AT),
-                "type": _entry_value(entry, TOKEN_UPDATE_TYPE, TOKEN_UPDATE_CHANGED),
-            }
-        },
-    )
+    try:
+        await hass.data[DATA_LOGGER].settings.async_update(
+            hass,
+            DOMAIN,
+            LoggerSetting(
+                level="DEBUG" if msg[DEBUG_LOGGING] else "INFO",
+                persistence=LogPersistance.PERMANENT,
+                type=LogSettingsType.INTEGRATION,
+            ),
+        )
+    except Exception:  # noqa: BLE001 - logger preferences must not fail a save.
+        LOGGER.exception("Unable to update SmartPlus logger preferences")
+    connection.send_result(msg["id"], {})
 
 
 @websocket_api.websocket_command(
