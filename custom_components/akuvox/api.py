@@ -1913,6 +1913,26 @@ class AkuvoxApiClient:
 
             if isinstance(json_data, dict) and "result" in json_data:
                 message = str(json_data.get("message", "No message returned"))
+                # SmartPlus often reports an invalid or revoked token as an
+                # HTTP 200 response instead of using 401/403.  Treat its
+                # credential-rejection message exactly like an HTTP auth
+                # failure so the wrapper can refresh the session or start
+                # Home Assistant's reauthentication flow.
+                message_lower = message.lower()
+                if "username" in message_lower and (
+                    "passwd" in message_lower or "password" in message_lower
+                ):
+                    raise AkuvoxApiClientAuthenticationError(
+                        "SmartPlus rejected the session credentials: " + message
+                    )
+                if urlsplit(url).path.endswith(API_SERVERS_LIST):
+                    # ``servers_list`` is an authenticated account bootstrap
+                    # endpoint. A non-success envelope here means that the
+                    # saved session is no longer usable, even when SmartPlus
+                    # chooses HTTP 200 for the response.
+                    raise AkuvoxApiClientAuthenticationError(
+                        "SmartPlus rejected the account session: " + message
+                    )
                 LOGGER.warning("SmartPlus request was rejected: result=%s, message=%s", json_data["result"], message)
                 return None
 
@@ -1926,6 +1946,11 @@ class AkuvoxApiClient:
                 if API_REFRESH_TOKEN in url:
                     raise AkuvoxApiClientAuthenticationError(
                         "SmartPlus rejected the session refresh "
+                        f"({json_data['err_code']}): {message}"
+                    )
+                if urlsplit(url).path.endswith(API_SERVERS_LIST):
+                    raise AkuvoxApiClientAuthenticationError(
+                        "SmartPlus rejected the account session "
                         f"({json_data['err_code']}): {message}"
                     )
                 LOGGER.warning(

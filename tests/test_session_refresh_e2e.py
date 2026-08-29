@@ -151,6 +151,75 @@ class TestSmartPlusSessionRefreshE2E(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(len(self.session.requests), 2)
 
+    async def test_json_credential_rejection_started_reauthentication(self) -> None:
+        """SmartPlus may revoke a token in a successful HTTP response."""
+        client = self._client(
+            [
+                _Response(200, {"result": 2, "message": "username or passwd error"}),
+                _Response(200, {"result": 2, "message": "username or passwd error"}),
+            ]
+        )
+
+        with patch("custom_components.akuvox.api.async_report_authentication_failure"):
+            with self.assertRaises(AkuvoxApiClientAuthenticationError):
+                await client._async_api_wrapper(
+                    "get",
+                    "https://api.example/userconf?token=expired-token",
+                    None,
+                    {"x-auth-token": "expired-token"},
+                )
+
+        self.assertTrue(self.entry.reauth_started)
+        self.assertEqual(len(self.session.requests), 2)
+
+    async def test_rejected_server_list_started_reauthentication(self) -> None:
+        """A failed authenticated server-list response is not a normal update failure."""
+        client = self._client(
+            [
+                _Response(200, {"result": 2, "message": "session invalid"}),
+                _Response(200, {"err_code": 2, "message": "session invalid"}),
+            ]
+        )
+
+        with patch("custom_components.akuvox.api.async_report_authentication_failure"):
+            with self.assertRaises(AkuvoxApiClientAuthenticationError):
+                await client._async_api_wrapper(
+                    "post",
+                    "https://gate.ecloud.akuvox.com:8600/servers_list",
+                    {},
+                    {"x-auth-token": "expired-token"},
+                )
+
+        self.assertTrue(self.entry.reauth_started)
+        self.assertEqual(len(self.session.requests), 2)
+
+    async def test_token_error_from_server_list_started_reauthentication(self) -> None:
+        """The legacy server-list API can use ``err_code`` for a revoked token."""
+        client = self._client(
+            [
+                _Response(
+                    200,
+                    {"err_code": "1000100001", "message": "Token error."},
+                ),
+                _Response(
+                    200,
+                    {"err_code": "1000100001", "message": "Token error."},
+                ),
+            ]
+        )
+
+        with patch("custom_components.akuvox.api.async_report_authentication_failure"):
+            with self.assertRaises(AkuvoxApiClientAuthenticationError):
+                await client._async_api_wrapper(
+                    "post",
+                    "https://gate.ecloud.akuvox.com:8600/servers_list",
+                    {},
+                    {"x-auth-token": "expired-token"},
+                )
+
+        self.assertTrue(self.entry.reauth_started)
+        self.assertEqual(len(self.session.requests), 2)
+
     async def test_refresh_error_code_reported_an_authentication_failure(self) -> None:
         """The refresh endpoint's JSON error did not look like a malformed response."""
         client = self._client(
