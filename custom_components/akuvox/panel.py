@@ -509,9 +509,6 @@ async def websocket_panel_save_settings(
     options.update(
         {
             "override": True,
-            "event_screenshot_options": msg["event_screenshot_options"],
-            PANEL_ENABLED: msg[PANEL_ENABLED],
-            PANEL_ADMIN_ONLY: msg[PANEL_ADMIN_ONLY],
             CUSTOM_CAMERA_STREAM_ORIENTATIONS: msg[CUSTOM_CAMERA_STREAM_ORIENTATIONS],
             CAMERA_STREAM_ORIENTATIONS: _orientations(
                 msg[CAMERA_STREAM_ORIENTATIONS], msg[CUSTOM_CAMERA_STREAM_ORIENTATIONS]
