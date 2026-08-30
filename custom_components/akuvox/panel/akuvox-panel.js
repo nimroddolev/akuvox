@@ -13,7 +13,7 @@ import { installCameraRelayActions } from "./components/camera-actions.js?v=2026
 import { closeKeyActionsMenu } from "./components/key-menu.js";
 
 import { renderDevicesView, bindDevicesEvents } from "./views/devices-view.js?v=20260830-device-action-gradients";
-import { renderActivityView, bindActivityEvents } from "./views/activity-view.js?v=20260829-updated-status-red";
+import { renderActivityView, bindActivityEvents } from "./views/activity-view.js?v=20260830-event-type-labels";
 import { renderCallsView, bindCallsEvents } from "./views/calls-view.js?v=20260827-multi-table-filters-outside-click";
 import {
   renderKeysView,

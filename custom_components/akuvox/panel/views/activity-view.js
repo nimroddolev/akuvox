@@ -34,6 +34,15 @@ const formatStorageAmount = (bytes) => {
   return `${value.toFixed(value >= 100 || unit === 0 ? 0 : value >= 10 ? 1 : 2)} ${units[unit]}`;
 };
 
+/** Convert a SmartPlus camelCase or PascalCase event type into title-cased words. */
+export const formatActivityEventType = (value) => String(value || "")
+  .replace(/([A-Z])/g, " $1")
+  .trim()
+  .split(/\s+/)
+  .filter(Boolean)
+  .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+  .join(" ");
+
 const activityStorageWarning = (settings) => {
   const limitBytes = (Number(settings?.activity_history_max_storage_mb) || 0) * 1_000_000;
   const usageBytes = Math.max(0, Number(settings?.activity_history_storage_bytes) || 0);
@@ -164,7 +173,7 @@ export const renderActivityView = (host, account) => {
               <tr>
                 <td>${escapeHtml(formatTimestamp(item.CaptureTime))}</td>
                 <td>${escapeHtml(item.Location || "")}</td>
-                <td>${escapeHtml(item.CaptureType || "")}</td>
+                <td>${escapeHtml(formatActivityEventType(item.CaptureType))}</td>
                 <td>${escapeHtml(item.Initiator || "")}</td>
                 <td class="activity-image-cell">${renderThumbnail(host, item)}</td>
               </tr>
