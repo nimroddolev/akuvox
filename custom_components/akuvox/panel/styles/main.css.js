@@ -75,6 +75,8 @@ export const mainStyles = `
     border-radius: 8px;
   }
 
+  .mobile-menu-toggle { display: none; }
+
   nav {
     display: flex;
     gap: 5px;
@@ -398,22 +400,81 @@ export const mainStyles = `
     background: var(--secondary-background-color, #eef7fa);
   }
 
-  @media (max-width: 600px) {
+  /* Home Assistant collapses its sidebar in this tablet-width range. */
+  @media (max-width: 870px) {
     main {
-      padding: 12px;
+      padding: 0 12px 12px;
     }
     header {
-      padding: 16px;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      box-sizing: border-box;
       display: grid;
-      grid-template-columns: 1fr;
-      justify-items: center;
-      text-align: center;
+      grid-template-columns: 40px minmax(0, 1fr) auto;
+      gap: 8px;
+      min-height: 56px;
+      height: 56px;
+      margin: 0 -12px;
+      padding: 0 12px;
+      border-radius: 0;
+      text-align: initial;
     }
+    .mobile-menu-toggle {
+      display: grid;
+      grid-column: 1;
+      grid-row: 1;
+      place-content: center;
+      gap: 4px;
+      width: 40px;
+      height: 40px;
+      padding: 0;
+      border: 0;
+      border-radius: 8px;
+      color: white;
+      background: transparent;
+      cursor: pointer;
+    }
+    .mobile-menu-toggle:hover { background: #ffffff24; }
+    .mobile-menu-toggle span {
+      display: block;
+      width: 21px;
+      height: 2px;
+      border-radius: 1px;
+      background: currentColor;
+    }
+    .logo-text-container {
+      position: absolute;
+      top: 0;
+      left: 50%;
+      display: flex;
+      align-items: center;
+      height: 56px;
+      min-width: 0;
+      transform: translateX(-50%);
+    }
+    .logo-title-row {
+      justify-content: center;
+      gap: 8px;
+      white-space: nowrap;
+    }
+    .brand-mark {
+      width: 28px;
+      height: 28px;
+    }
+    h1 { font-size: 18px; }
+    header p { display: none; }
     header select {
-      grid-column: auto;
-      justify-self: center;
+      grid-column: 3;
+      grid-row: 1;
+      justify-self: end;
+      width: min(120px, 28vw);
       margin-left: 0;
+      padding: 6px;
+      font-size: 13px;
     }
-    .logo-title-row { justify-content: center; }
+    @media (max-width: 440px) {
+      header select { display: none; }
+    }
   }
 `;

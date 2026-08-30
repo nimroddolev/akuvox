@@ -7,7 +7,7 @@
 import { PANEL_TAG, TAB_HASHES, TAB_HASH_BY_ID, TABS } from "./utils/constants.js";
 import { escapeHtml } from "./utils/dom.js";
 import { copyText } from "./utils/clipboard.js";
-import { getPanelStyles } from "./styles/index.js?v=20260830-settings-section-dark-mode";
+import { getPanelStyles } from "./styles/index.js?v=20260830-mobile-topbar-breakpoint";
 import { showNotice, confirmModal, callWsWithBlocker } from "./components/dialogs.js";
 import { installCameraRelayActions } from "./components/camera-actions.js?v=20260830-camera-modal-unlock";
 import { closeKeyActionsMenu } from "./components/key-menu.js";
@@ -590,6 +590,9 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
       ${getPanelStyles()}
       <main class="${requiresReauthentication ? "reauthentication-required" : ""}">
         <header>
+          <button class="mobile-menu-toggle" type="button" data-mobile-menu aria-label="Open Home Assistant menu">
+            <span></span><span></span><span></span>
+          </button>
           <div class="logo-text-container">
             <div class="logo-text">
               <div class="logo-title-row">
@@ -636,6 +639,12 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
         if (hash) window.location.hash = hash;
       })
     );
+
+    this.shadowRoot.querySelector("[data-mobile-menu]")?.addEventListener("click", () => {
+      this.dispatchEvent(
+        new CustomEvent("hass-toggle-menu", { bubbles: true, composed: true })
+      );
+    });
     this._setupTabScrolling();
 
     // Account selector event listener
