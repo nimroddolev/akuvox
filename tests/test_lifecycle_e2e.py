@@ -161,7 +161,7 @@ class TestPanelRegistrationE2E(unittest.IsolatedAsyncioTestCase):
             register_panel.await_args.kwargs["config_panel_domain"],
             DOMAIN,
         )
-        self.assertFalse(register_panel.await_args.kwargs["require_admin"])
+        self.assertTrue(register_panel.await_args.kwargs["require_admin"])
 
 
 class TestIntegrationLifecycleE2E(unittest.IsolatedAsyncioTestCase):
