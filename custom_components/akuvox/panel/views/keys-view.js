@@ -23,6 +23,7 @@ import { showNotice, confirmModal, callWsWithBlocker } from "../components/dialo
 import { showDateRangePicker } from "../components/date-range-picker.js?v=20260823-normalise-past-validity-start";
 import { showTemporaryKeyQrDialog } from "../components/qr-dialog.js";
 import { showKeyActionsMenu, closeKeyActionsMenu } from "../components/key-menu.js";
+import { bindTileOrdering } from "../utils/tile-ordering.js?v=20260909-deferred-cancel";
 
 /**
  * Update visibility of validation error messages under vehicle registration and UHF card fields.
@@ -70,7 +71,7 @@ export const renderKeysView = (host, account) => {
     .join("");
 
   const keys = account.temporary_keys || [];
-  const filtered = keys
+  let filtered = keys
     .filter((key) => {
       const description = String(key.description || "").toLocaleLowerCase();
       const status = key.expired ? "expired" : "active";
@@ -94,6 +95,10 @@ export const renderKeysView = (host, account) => {
         (host._keySort.direction === "asc" ? 1 : -1)
       );
     });
+
+  if (host._rowViewMode === "tiles") {
+    filtered = host._orderTiles("keys", filtered, (key) => key.key_id);
+  }
 
   const heading = (label, key) =>
     `<button class="sort-button ${host._keySort.key === key ? "active" : ""}" data-key-sort="${key}" data-direction="${host._keySort.direction === "asc" ? "↑" : "↓"}">${label}</button>`;
@@ -136,6 +141,39 @@ export const renderKeysView = (host, account) => {
     .join("") ||
     `<tr><td colspan="${host._selectingKeys ? 8 : 7}">No matching temporary keys found.</td></tr>`;
 
+  const keyTiles = filtered
+    .map((key) => {
+      const selected = host._selectedKeyIds.has(String(key.key_id));
+      const copied = host._copiedKeyCodes.has(String(key.key_id));
+      const code = copied
+        ? `<span class="copied-code" role="status">${icons.check}Copied</span>`
+        : `<span class="key-code"><button class="copy-code" type="button" data-copy-key-id="${escapeHtml(key.key_id)}" data-copy-key-code="${escapeHtml(key.key_code)}" aria-label="Copy code to clipboard" title="Copy code to clipboard">${icons.copy}</button><code>${escapeHtml(key.key_code)}</code></span>`;
+      const menu = key.expired
+        ? `<button class="danger key-menu-button" type="button" data-delete-key="${escapeHtml(key.key_id)}" aria-label="Delete temporary key" title="Delete temporary key">${icons.trash}</button>`
+        : `<button class="action key-menu-button" type="button" data-key-menu="${escapeHtml(key.key_id)}" data-key-code="${escapeHtml(key.key_code)}" data-key-expired="false" data-key-has-qr="${Boolean(key.has_qr_code)}" aria-label="Key actions" aria-haspopup="menu">⋯</button>`;
+      return `
+        <article class="tile-card key-tile ${key.expired ? "key-tile-expired" : "key-tile-active"} ${selected ? "key-row-selected" : ""}" data-tile-order-id="${escapeHtml(key.key_id)}">
+          <div class="tile-card-heading">
+            <div>
+              <div class="tile-title"><button type="button" class="tile-grab" data-tile-grab aria-label="Reorder ${escapeHtml(key.description)}" title="Drag to reorder">⠿</button><h3>${escapeHtml(key.description)}</h3></div>
+              <span class="key-status ${key.expired ? "expired" : "active"}">${key.expired ? "Expired" : "Active"}</span>
+            </div>
+            <div class="key-actions">
+              ${host._selectingKeys ? `<input class="key-tile-select" type="checkbox" aria-label="Select ${escapeHtml(key.description)}" data-select-key="${escapeHtml(key.key_id)}" ${selected ? "checked" : ""}>` : ""}
+              ${menu}
+            </div>
+          </div>
+          <dl class="tile-details">
+            <div><dt>Code</dt><dd>${code}</dd></div>
+            <div><dt>Valid from</dt><dd>${escapeHtml(formatTimestamp(key.begin_time))}</dd></div>
+            <div><dt>Valid to</dt><dd>${escapeHtml(formatTimestamp(key.end_time))}</dd></div>
+            <div><dt>Uses</dt><dd>${escapeHtml(key.access_times)}/${escapeHtml(key.allowed_times)}</dd></div>
+          </dl>
+        </article>
+      `;
+    })
+    .join("") || '<p>No matching temporary keys found.</p>';
+
   return `
     <div class="card table-wrap">
       <div class="section-heading key-heading">
@@ -144,6 +182,10 @@ export const renderKeysView = (host, account) => {
           ${selectedCount ? `<button type="button" class="danger" data-delete-selected>Delete Selected (${selectedCount})</button>` : ""}
           <button type="button" class="action" data-toggle-key-selection>${host._selectingKeys ? "Cancel selection" : "Select"}</button>
           <button class="success add-key" data-create-key><span class="plus">+</span> Add Key</button>
+          <div class="view-mode-toggle" role="group" aria-label="Temporary keys layout">
+            <button type="button" class="action ${host._rowViewMode === "tiles" ? "" : "active"}" data-row-view-mode="table" aria-pressed="${host._rowViewMode !== "tiles"}">Table</button>
+            <button type="button" class="action ${host._rowViewMode === "tiles" ? "active" : ""}" data-row-view-mode="tiles" aria-pressed="${host._rowViewMode === "tiles"}">Tiles</button>
+          </div>
         </div>
       </div>
       <div class="activity-controls">
@@ -152,8 +194,9 @@ export const renderKeysView = (host, account) => {
           <input class="key-filter-input" type="search" placeholder="Filter by name" value="${escapeHtml(host._keyFilters.description)}" data-key-filter="description">
         </label>
         ${renderMultiSelectFilter({ scope: "key", key: "status", label: "Status", allLabel: "All keys", values: ["active", "expired"], selected: host._keyFilters.status, openMenu: host._openFilterMenu })}
+        ${host._rowViewMode === "tiles" ? `<label>Sort by<select data-key-tile-sort><option value="description" ${host._keySort.key === "description" ? "selected" : ""}>Name</option><option value="key_code" ${host._keySort.key === "key_code" ? "selected" : ""}>Code</option><option value="validity" ${host._keySort.key === "validity" ? "selected" : ""}>Valid from</option><option value="uses" ${host._keySort.key === "uses" ? "selected" : ""}>Uses</option><option value="status" ${host._keySort.key === "status" ? "selected" : ""}>Status</option></select></label>` : ""}
       </div>
-      <table>
+      ${host._rowViewMode === "tiles" ? `<div class="tile-grid key-tile-grid" data-tile-grid="keys">${keyTiles}</div>` : `<table>
         <thead>
           <tr>
             ${selectionColumn}
@@ -167,7 +210,7 @@ export const renderKeysView = (host, account) => {
           </tr>
         </thead>
         <tbody>${rows}</tbody>
-      </table>
+      </table>`}
 
       <dialog data-key-dialog>
         <h2>Create Temporary Key</h2>
@@ -626,6 +669,7 @@ export const deleteSelectedKeys = async (host) => {
  * @param {HTMLElement} host
  */
 export const bindKeysEvents = (host) => {
+  bindTileOrdering(host, "keys");
   // Key code copy buttons
   host.shadowRoot.querySelectorAll("[data-copy-key-code]").forEach((button) =>
     button.addEventListener("click", async () => {
@@ -682,6 +726,12 @@ export const bindKeysEvents = (host) => {
       host._render();
     })
   );
+
+  host.shadowRoot.querySelector("[data-key-tile-sort]")?.addEventListener("change", (event) => {
+    host._keySort = { key: event.target.value, direction: "asc" };
+    host._clearTileOrder("keys");
+    host._render();
+  });
 
   // Selection toggle
   host.shadowRoot

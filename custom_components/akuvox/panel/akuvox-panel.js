@@ -7,25 +7,28 @@
 import { PANEL_TAG, TAB_HASHES, TAB_HASH_BY_ID, TABS } from "./utils/constants.js";
 import { escapeHtml } from "./utils/dom.js";
 import { copyText } from "./utils/clipboard.js";
-import { getPanelStyles } from "./styles/index.js?v=20260830-mobile-topbar-breakpoint";
+import { getPanelStyles } from "./styles/index.js?v=20260909-deferred-tile-drop";
 import { showNotice, confirmModal, callWsWithBlocker } from "./components/dialogs.js";
 import { installCameraRelayActions } from "./components/camera-actions.js?v=20260830-camera-modal-unlock";
 import { closeKeyActionsMenu } from "./components/key-menu.js";
 
-import { renderDevicesView, bindDevicesEvents } from "./views/devices-view.js?v=20260830-device-action-gradients";
+import { renderDevicesView, bindDevicesEvents } from "./views/devices-view.js?v=20260909-deferred-cancel";
 import {
   renderActivityView,
   bindActivityEvents,
   visibleActivityEvents,
 } from "./views/activity-view.js?v=20260909-visible-thumbnail-preload";
-import { renderCallsView, bindCallsEvents } from "./views/calls-view.js?v=20260827-multi-table-filters-outside-click";
+import { renderCallsView, bindCallsEvents } from "./views/calls-view.js?v=20260908-call-history-dedupe";
 import {
   renderKeysView,
   bindKeysEvents,
   deleteSelectedKeys,
-} from "./views/keys-view.js?v=20260827-multi-table-filters-outside-click";
+} from "./views/keys-view.js?v=20260909-deferred-cancel";
 import { renderSettingsView, bindSettingsEvents, updateActivityStorageProgress } from "./views/settings-view.js?v=20260830-debug-section";
 import { renderHelpView } from "./views/help-view.js";
+
+const ROW_VIEW_MODE_STORAGE_KEY = "akuvox-panel-row-view-mode";
+const TILE_ORDER_STORAGE_PREFIX = "akuvox-panel-tile-order";
 
 class AkuvoxSmartPlusPanel extends HTMLElement {
   constructor() {
@@ -58,6 +61,16 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
 
     this._keyFilters = { description: "", status: [] };
     this._keySort = { key: "description", direction: "asc" };
+    // A presentation preference shared by the Devices and Temporary keys tabs.
+    // Local storage is best-effort because it can be unavailable in restricted
+    // browser contexts.
+    try {
+      this._rowViewMode = localStorage.getItem(ROW_VIEW_MODE_STORAGE_KEY) === "tiles"
+        ? "tiles"
+        : "table";
+    } catch (_) {
+      this._rowViewMode = "table";
+    }
     this._selectingKeys = false;
     this._selectedKeyIds = new Set();
     this._copiedKeyCodes = new Map();
@@ -93,6 +106,18 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
         event.stopPropagation();
         this._selectingKeys = !this._selectingKeys;
         this._selectedKeyIds.clear();
+        this._render();
+        return;
+      }
+
+      if (button.matches("[data-row-view-mode]")) {
+        event.stopPropagation();
+        this._rowViewMode = button.dataset.rowViewMode === "tiles" ? "tiles" : "table";
+        try {
+          localStorage.setItem(ROW_VIEW_MODE_STORAGE_KEY, this._rowViewMode);
+        } catch (_) {
+          // The selected layout remains available for this panel instance.
+        }
         this._render();
         return;
       }
@@ -566,7 +591,48 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
     if (this._activeTab === "calls") return renderCallsView(this, account);
     if (this._activeTab === "keys") return renderKeysView(this, account);
     if (this._activeTab === "settings") return renderSettingsView(this);
-    return renderDevicesView(account);
+    return renderDevicesView(this, account);
+  }
+
+  /** Return items in the saved local order, with new items appended. */
+  _orderTiles(scope, items, getId) {
+    let savedOrder = [];
+    try {
+      const value = localStorage.getItem(
+        `${TILE_ORDER_STORAGE_PREFIX}-${scope}-${this._activeAccount}`
+      );
+      const parsed = JSON.parse(value || "[]");
+      savedOrder = Array.isArray(parsed) ? parsed : [];
+    } catch (_) {
+      // The server order is a safe fallback when storage cannot be read.
+    }
+    const positions = new Map(savedOrder.map((id, index) => [id, index]));
+    return [...items].sort((left, right) => {
+      const leftPosition = positions.get(String(getId(left)));
+      const rightPosition = positions.get(String(getId(right)));
+      return (leftPosition ?? Number.MAX_SAFE_INTEGER) - (rightPosition ?? Number.MAX_SAFE_INTEGER);
+    });
+  }
+
+  /** Save a tile sequence for the active account. */
+  _saveTileOrder(scope, ids) {
+    try {
+      localStorage.setItem(
+        `${TILE_ORDER_STORAGE_PREFIX}-${scope}-${this._activeAccount}`,
+        JSON.stringify(ids)
+      );
+    } catch (_) {
+      // Reordering remains visible until the next render in restricted contexts.
+    }
+  }
+
+  /** Remove a saved tile sequence so an explicit sort can take effect. */
+  _clearTileOrder(scope) {
+    try {
+      localStorage.removeItem(`${TILE_ORDER_STORAGE_PREFIX}-${scope}-${this._activeAccount}`);
+    } catch (_) {
+      // The current render still uses the selected sort when storage is unavailable.
+    }
   }
 
   _render() {
