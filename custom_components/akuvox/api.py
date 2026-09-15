@@ -1132,10 +1132,40 @@ class AkuvoxApiClient:
         if self._call_history_loaded:
             return
         stored = await self._data.async_get_stored_data_for_key("panel_call_history")
-        self._call_history = [
+        calls = [
             dict(call) for call in stored if isinstance(call, dict)
         ] if isinstance(stored, list) else []
+        self._call_history = self._deduplicate_call_history(calls)
         self._call_history_loaded = True
+
+    @staticmethod
+    def _deduplicate_call_history(calls: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Return unique call records for the sidebar panel.
+
+        SmartPlus returns the newest calls first, so retain the first record.
+        Its call IDs are not reliable across every response, therefore records
+        with the same values shown in the table are also treated as duplicates.
+        """
+        seen_ids: set[str] = set()
+        seen_rows: set[tuple[str, str, str, str, str]] = set()
+        deduplicated: list[dict[str, Any]] = []
+        for call in calls:
+            call_id = str(call.get("id", ""))
+            row = (
+                str(call.get("startTime", "")),
+                str(call.get("callerName", "")),
+                str(call.get("calleeName", "")),
+                str(call.get("isAnswer", "")),
+                str(call.get("callDuration", "")),
+            )
+            if (call_id and call_id in seen_ids) or (row[0] and row in seen_rows):
+                continue
+            if call_id:
+                seen_ids.add(call_id)
+            if row[0]:
+                seen_rows.add(row)
+            deduplicated.append(call)
+        return deduplicated
 
     @staticmethod
     def _write_export_records(
@@ -1249,41 +1279,69 @@ class AkuvoxApiClient:
 
     async def _async_record_call_history(self, calls: list[dict[str, Any]]) -> None:
         """Restore and persist a bounded call history for the sidebar panel."""
+        history_deduplicated = False
         if not self._call_history_loaded:
             stored = await self._data.async_get_stored_data_for_key("panel_call_history")
             if isinstance(stored, list):
-                self._call_history = [dict(call) for call in stored if isinstance(call, dict)][
+                stored_calls = [dict(call) for call in stored if isinstance(call, dict)]
+                self._call_history = self._deduplicate_call_history(stored_calls)[
                     :ACTIVITY_HISTORY_LIMIT
                 ]
+                history_deduplicated = self._call_history != stored_calls
             self._call_history_loaded = True
-        existing = {
-            str(call.get("id", "")): index
-            for index, call in enumerate(self._call_history)
-        }
-        changed = False
+        else:
+            deduplicated = self._deduplicate_call_history(self._call_history)
+            history_deduplicated = deduplicated != self._call_history
+            self._call_history = deduplicated
+        existing = self._call_history_indexes()
+        changed = history_deduplicated
         for call in reversed(calls):
             if not isinstance(call, dict):
                 continue
             call_id = str(call.get("id", ""))
-            if not call_id:
-                continue
-            existing_index = existing.get(call_id)
+            row_key = self._call_history_row_key(call)
+            existing_index = existing.get(f"id:{call_id}") if call_id else None
+            if existing_index is None and row_key is not None:
+                existing_index = existing.get(f"row:{row_key}")
             if existing_index is None:
                 self._call_history.insert(0, dict(call))
-                existing = {
-                    str(item.get("id", "")): index
-                    for index, item in enumerate(self._call_history)
-                }
                 changed = True
             elif self._call_history[existing_index] != call:
                 self._call_history[existing_index] = dict(call)
                 changed = True
+            existing = self._call_history_indexes()
         del self._call_history[ACTIVITY_HISTORY_LIMIT:]
         if changed:
             await self._data.async_set_stored_data_for_key(
                 "panel_call_history", self._call_history
             )
             self._notify_panel_data_updated()
+
+    def _call_history_indexes(self) -> dict[str, int]:
+        """Return indexes for stable API and table-visible call identities."""
+        indexes: dict[str, int] = {}
+        for index, call in enumerate(self._call_history):
+            call_id = str(call.get("id", ""))
+            if call_id:
+                indexes[f"id:{call_id}"] = index
+            row_key = self._call_history_row_key(call)
+            if row_key is not None:
+                indexes[f"row:{row_key}"] = index
+        return indexes
+
+    @staticmethod
+    def _call_history_row_key(call: dict[str, Any]) -> tuple[str, str, str, str, str] | None:
+        """Return the fields that define one visible call-history row."""
+        start_time = str(call.get("startTime", ""))
+        if not start_time:
+            return None
+        return (
+            start_time,
+            str(call.get("callerName", "")),
+            str(call.get("calleeName", "")),
+            str(call.get("isAnswer", "")),
+            str(call.get("callDuration", "")),
+        )
 
     def _notify_panel_data_updated(self, **data: Any) -> None:
         """Tell connected sidebar panels to retrieve their latest data."""
@@ -1337,7 +1395,9 @@ class AkuvoxApiClient:
             self._activity_history_loaded = True
         calls = await self._data.async_get_stored_data_for_key("panel_call_history")
         if isinstance(calls, list):
-            self._call_history = [item for item in calls if isinstance(item, dict)]
+            self._call_history = self._deduplicate_call_history(
+                [dict(item) for item in calls if isinstance(item, dict)]
+            )
             self._call_history_loaded = True
 
     def get_sip_accounts(self) -> dict[str, Any]:

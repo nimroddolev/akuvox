@@ -25,6 +25,17 @@ const callFilterValues = (calls, key) => [
     ),
   ].sort();
 
+const visibleCallKey = (call) =>
+  call.startTime
+    ? JSON.stringify([
+        call.startTime,
+        call.callerName || "",
+        call.calleeName || "",
+        Boolean(call.isAnswer),
+        call.callDuration || "",
+      ])
+    : "id:" + (call.id || "");
+
 /**
  * Render HTML content for the Call history tab.
  * @param {HTMLElement} host
@@ -32,7 +43,9 @@ const callFilterValues = (calls, key) => [
  * @returns {string}
  */
 export const renderCallsView = (host, account) => {
-  const calls = account.calls || [];
+  const calls = (account.calls || []).filter((call, index, all) =>
+    all.findIndex((candidate) => visibleCallKey(candidate) === visibleCallKey(call)) === index
+  );
 
   const filtered = calls
     .filter(

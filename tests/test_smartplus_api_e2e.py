@@ -460,6 +460,41 @@ class TestSmartPlusApiE2E(unittest.IsolatedAsyncioTestCase):
         self.assertIn("getCallLog", self.session.requests[0]["url"])
         self.assertEqual(self.session.requests[0]["headers"]["x-auth-token"], "expired-token")
 
+    async def test_call_history_removes_duplicate_persisted_call_ids(self) -> None:
+        """Duplicate IDs in older stored history are shown only once."""
+        client = self._client([])
+        client._data.async_get_stored_data_for_key = AsyncMock(
+            return_value=[
+                {"id": "call-1", "callerName": "Latest"},
+                {"id": "call-1", "callerName": "Older duplicate"},
+                {"id": "call-2", "callerName": "Another call"},
+            ]
+        )
+
+        await client.async_load_panel_history()
+
+        self.assertEqual(
+            client.get_panel_data()["calls"],
+            [
+                {"id": "call-1", "callerName": "Latest"},
+                {"id": "call-2", "callerName": "Another call"},
+            ],
+        )
+
+    async def test_call_history_removes_duplicate_rows_with_different_ids(self) -> None:
+        """SmartPlus duplicate rows can have different transient IDs."""
+        client = self._client([])
+        client._data.async_get_stored_data_for_key = AsyncMock(
+            return_value=[
+                {"id": "call-a", "startTime": "2026-08-29 01:37:28", "callerName": "Liv", "calleeName": "Parking", "isAnswer": True, "callDuration": "00:05:01"},
+                {"id": "call-b", "startTime": "2026-08-29 01:37:28", "callerName": "Liv", "calleeName": "Parking", "isAnswer": True, "callDuration": "00:05:01"},
+            ]
+        )
+
+        await client.async_load_panel_history()
+
+        self.assertEqual(len(client.get_panel_data()["calls"]), 1)
+
     async def test_empty_activity_response_was_a_healthy_poll(self) -> None:
         """An empty activity list did not trigger a fallback request or warning."""
         client = self._client([
