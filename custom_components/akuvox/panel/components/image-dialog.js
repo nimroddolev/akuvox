@@ -9,19 +9,19 @@ import { showNotice } from "./dialogs.js";
  * Open the activity image carousel / lightbox dialog with previous/next navigation.
  * @param {HTMLElement} host
  * @param {string} captureTime
- * @param {Array<object>} filteredEvents
+ * @param {() => Array<object>} getFilteredEvents
  * @param {(captureTime: string) => Promise<object|null>} getActivityImageFn
  * @param {(event: object) => string} getOrientation
  */
-export const showActivityImageDialog = async (
+export const showActivityImageDialog = (
   host,
   captureTime,
-  filteredEvents,
+  getFilteredEvents,
   getActivityImageFn,
   getOrientation = () => "none"
 ) => {
-  let index = filteredEvents.findIndex((item) => item.CaptureTime === captureTime);
-  if (index < 0) return;
+  let filteredEvents = [];
+  let index = -1;
 
   const documentRef = host.shadowRoot.ownerDocument;
   const dialog = documentRef.createElement("dialog");
@@ -49,6 +49,7 @@ export const showActivityImageDialog = async (
   closeButton.textContent = "Close";
 
   const renderEvent = async () => {
+    if (index < 0) return;
     const event = filteredEvents[index];
     const image = await getActivityImageFn(event.CaptureTime);
     if (!image || !dialog.open) return;
@@ -93,8 +94,23 @@ export const showActivityImageDialog = async (
 
   host.shadowRoot.append(dialog);
   dialog.showModal();
-  await renderEvent();
   closeButton.focus();
+
+  // Opening the dialog must not wait for filtering and sorting a potentially
+  // large activity history. Yield once so the browser paints the modal before
+  // that work and the image retrieval begin.
+  requestAnimationFrame(() => {
+    window.setTimeout(() => {
+      if (!dialog.open) return;
+      filteredEvents = getFilteredEvents();
+      index = filteredEvents.findIndex((item) => item.CaptureTime === captureTime);
+      if (index < 0) {
+        dialog.close();
+        return;
+      }
+      void renderEvent();
+    }, 0);
+  });
 };
 
 /**

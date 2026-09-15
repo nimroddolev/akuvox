@@ -10,7 +10,7 @@ import {
 } from "../utils/multi-select-filter.js?v=20260827-multi-table-filters";
 import { tableTimestampFormatter } from "../utils/formatters.js?v=20260820-table-timestamps";
 import { icons } from "../utils/icons.js";
-import { showActivityImageDialog } from "../components/image-dialog.js?v=20260821-viewport-lightbox";
+import { showActivityImageDialog } from "../components/image-dialog.js?v=20260909-instant-open";
 import {
   ACTIVITY_INITIAL_PAGE_SIZE,
   nextActivityVisibleCount,
@@ -81,6 +81,27 @@ const updateActivityUpdatedLabel = (host) => {
   if (label) label.textContent = formatUpdatedAgo(label.dataset.activityUpdatedAt);
 };
 
+/** Return the events currently represented by rows in the activity table. */
+export const visibleActivityEvents = (host, activity) => {
+  const filtered = activity
+    .filter((item) =>
+      Object.entries(host._activityFilters).every(
+        ([key, values]) => matchesSelectedFilter(values, item[key])
+      )
+    )
+    .sort(
+      (a, b) =>
+        String(a[host._activitySort.key] || "").localeCompare(
+          String(b[host._activitySort.key] || "")
+        ) * (host._activitySort.direction === "asc" ? 1 : -1)
+    );
+
+  return {
+    filtered,
+    visible: visibleActivityItems(filtered, host._activityVisibleCount),
+  };
+};
+
 /**
  * Render the activity thumbnail preview or placeholder.
  * @param {HTMLElement} host
@@ -121,24 +142,11 @@ const renderThumbnail = (host, item) => {
  */
 export const renderActivityView = (host, account) => {
   const activity = account.activity || [];
-
-  const filtered = activity
-    .filter((item) =>
-      Object.entries(host._activityFilters).every(
-        ([key, values]) => matchesSelectedFilter(values, item[key])
-      )
-    )
-    .sort(
-      (a, b) =>
-        String(a[host._activitySort.key] || "").localeCompare(
-          String(b[host._activitySort.key] || "")
-        ) * (host._activitySort.direction === "asc" ? 1 : -1)
-    );
+  const { filtered, visible } = visibleActivityEvents(host, activity);
 
   const heading = (label, key) =>
     `<button class="sort-button ${host._activitySort.key === key ? "active" : ""}" data-activity-sort="${key}" data-direction="${host._activitySort.direction === "asc" ? "↑" : "↓"}">${label}</button>`;
 
-  const visible = visibleActivityItems(filtered, host._activityVisibleCount);
   const formatTimestamp = tableTimestampFormatter(filtered.map((item) => item.CaptureTime));
   const hasMore = visible.length < filtered.length;
 
@@ -210,25 +218,13 @@ export const bindActivityEvents = (host) => {
     .querySelectorAll("[data-activity-image]")
     .forEach((button) =>
       button.addEventListener("click", () => {
-        const matchesFilters = (item) =>
-          Object.entries(host._activityFilters).every(
-            ([key, values]) => matchesSelectedFilter(values, item[key])
-          );
-        const events = (host._account()?.activity || [])
-          .filter((item) => item.has_image && matchesFilters(item))
-          .sort(
-            (left, right) =>
-              String(left[host._activitySort.key] || "").localeCompare(
-                String(right[host._activitySort.key] || "")
-              ) * (host._activitySort.direction === "asc" ? 1 : -1)
-          );
-
-        showActivityImageDialog(
+        void showActivityImageDialog(
           host,
           button.dataset.activityImage,
-          events,
-          (captureTime) => host._getActivityImage(captureTime)
-          , (item) => activityOrientation(host, item)
+          () => visibleActivityEvents(host, host._account()?.activity || []).filtered
+            .filter((item) => item.has_image),
+          (captureTime) => host._getActivityImage(captureTime),
+          (item) => activityOrientation(host, item)
         );
       })
     );

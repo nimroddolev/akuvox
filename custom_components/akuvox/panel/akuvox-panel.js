@@ -13,7 +13,11 @@ import { installCameraRelayActions } from "./components/camera-actions.js?v=2026
 import { closeKeyActionsMenu } from "./components/key-menu.js";
 
 import { renderDevicesView, bindDevicesEvents } from "./views/devices-view.js?v=20260830-device-action-gradients";
-import { renderActivityView, bindActivityEvents } from "./views/activity-view.js?v=20260830-event-type-labels";
+import {
+  renderActivityView,
+  bindActivityEvents,
+  visibleActivityEvents,
+} from "./views/activity-view.js?v=20260909-visible-thumbnail-preload";
 import { renderCallsView, bindCallsEvents } from "./views/calls-view.js?v=20260827-multi-table-filters-outside-click";
 import {
   renderKeysView,
@@ -422,7 +426,11 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
     const account = this._account();
     const now = Date.now();
     const retryDelay = 30000;
-    const missing = (account?.activity || []).filter((item) => {
+    // Fetch only the rows currently rendered. Fetching every historical image and
+    // rebuilding the table after each response can keep the UI thread busy long
+    // enough for a thumbnail click to appear unresponsive.
+    const { visible } = visibleActivityEvents(this, account?.activity || []);
+    const missing = visible.filter((item) => {
       if (!item.has_image || this._activityImages.has(this._activityImageKey(item.CaptureTime))) {
         return false;
       }
