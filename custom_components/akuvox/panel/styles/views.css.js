@@ -759,4 +759,65 @@ export const viewStyles = `
     font-size: 21px;
     line-height: 1;
   }
+
+  form .credential-share-link-row {
+    display: flex !important;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 8px;
+    margin-top: 6px;
+    min-width: 0;
+  }
+
+  form .credential-share-link-heading {
+    display: block;
+    grid-column: 1 / -1;
+    white-space: nowrap;
+  }
+
+  .credential-share-link-name {
+    flex: 0 0 110px;
+    overflow: hidden;
+    font-weight: 700;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  form .credential-share-link-row input {
+    box-sizing: border-box;
+    min-width: 0;
+    flex: 1 1 auto;
+    width: auto;
+  }
+
+  form .credential-share-link-row .action {
+    flex: 0 0 auto;
+  }
+
+  .credential-share-receivers {
+    margin-top: 16px;
+  }
+
+  .credential-share-receivers h3 {
+    margin: 0 0 8px;
+    font-size: 1rem;
+  }
+
+  .credential-share-receiver-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 0;
+    border-top: 1px solid var(--divider-color, #ddd);
+  }
+
+  .credential-share-receiver-row span {
+    min-width: 0;
+  }
+
+  .credential-share-receiver-row small {
+    display: block;
+    color: var(--secondary-text-color, #666);
+  }
 `;

@@ -7,7 +7,8 @@
 import { PANEL_TAG, TAB_HASHES, TAB_HASH_BY_ID, TABS } from "./utils/constants.js";
 import { escapeHtml } from "./utils/dom.js";
 import { copyText } from "./utils/clipboard.js";
-import { getPanelStyles } from "./styles/index.js?v=20260909-deferred-tile-drop";
+import { settingsRenderSignature } from "./utils/settings-signature.js";
+import { getPanelStyles } from "./styles/index.js?v=20260916-paired-receivers";
 import { showNotice, confirmModal, callWsWithBlocker } from "./components/dialogs.js";
 import { installCameraRelayActions } from "./components/camera-actions.js?v=20260830-camera-modal-unlock";
 import { closeKeyActionsMenu } from "./components/key-menu.js";
@@ -24,7 +25,7 @@ import {
   bindKeysEvents,
   deleteSelectedKeys,
 } from "./views/keys-view.js?v=20260915-key-sort-direction";
-import { renderSettingsView, bindSettingsEvents, updateActivityStorageProgress } from "./views/settings-view.js?v=20260830-debug-section";
+import { renderSettingsView, bindSettingsEvents, updateActivityStorageProgress } from "./views/settings-view.js?v=20260916-quiet-receiver-actions";
 import { renderHelpView } from "./views/help-view.js";
 
 const ROW_VIEW_MODE_STORAGE_KEY = "akuvox-panel-row-view-mode";
@@ -356,8 +357,10 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
       this._settingsEntryId = entryId;
       // Storage usage changes independently of saved options, so it must not
       // rebuild the Settings form while a native select is open.
-      const { activity_history_storage_bytes: _usageBytes, ...savedSettings } = this._settings;
-      const settingsSignature = JSON.stringify(savedSettings);
+      // Receiver sync timestamps are runtime status, not editable settings.
+      // Including them here rebuilds the form every 15 seconds and closes
+      // an open native dropdown.
+      const settingsSignature = settingsRenderSignature(this._settings);
       const changed = settingsSignature !== this._settingsSignature;
       this._settingsSignature = settingsSignature;
       return changed;

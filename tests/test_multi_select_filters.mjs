@@ -6,6 +6,7 @@ import {
   renderMultiSelectFilter,
   selectedFilterValues,
 } from "../custom_components/akuvox/panel/utils/multi-select-filter.js";
+import { settingsRenderSignature } from "../custom_components/akuvox/panel/utils/settings-signature.js";
 
 test("an empty selection includes every value", () => {
   assert.deepEqual(selectedFilterValues([]), []);
@@ -44,4 +45,28 @@ test("the All row is checked only when no individual values are selected", () =>
   assert.match(selected, /<details[^>]+open>/);
   assert.doesNotMatch(selected, /data-filter-all checked/);
   assert.match(selected, /value="Answered" checked/);
+});
+
+test("receiver sync timestamps do not trigger a Settings form rebuild", () => {
+  const initial = {
+    camera_stream_orientations: { Front: "normal" },
+    activity_history_storage_bytes: 100,
+    credential_shares: [{
+      share_id: "receiver-1",
+      receiver_name: "Holiday home",
+      activated: true,
+      revoked: false,
+      last_sync: "2026-09-16T10:00:00+00:00",
+    }],
+  };
+  const refreshed = {
+    ...initial,
+    activity_history_storage_bytes: 125,
+    credential_shares: [{
+      ...initial.credential_shares[0],
+      last_sync: "2026-09-16T10:00:15+00:00",
+    }],
+  };
+
+  assert.equal(settingsRenderSignature(refreshed), settingsRenderSignature(initial));
 });

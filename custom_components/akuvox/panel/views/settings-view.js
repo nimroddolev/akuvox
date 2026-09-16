@@ -4,7 +4,7 @@
 
 import { escapeHtml } from "../utils/dom.js";
 import { icons } from "../utils/icons.js?v=20260829-camera-copy-visible";
-import { callWsWithBlocker, confirmModal, showNotice } from "../components/dialogs.js";
+import { callWsWithBlocker, confirmModal, showNotice, showPairingLinkNotice } from "../components/dialogs.js?v=20260916-pairing-one-time-warning";
 import { CAMERA_ORIENTATION_OPTIONS } from "../utils/orientation.js?v=20260830-combined-directional-labels";
 
 const cameraOptionsTable = (host) => {
@@ -41,6 +41,30 @@ const formatStorageAmount = (bytes) => {
 };
 
 const formSignature = (form) => JSON.stringify([...new FormData(form).entries()]);
+
+const formatPairingTimeRemaining = (milliseconds) => {
+  const seconds = Math.max(0, Math.ceil(milliseconds / 1000));
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+};
+
+const pairedReceiversSection = (shares = []) => {
+  if (!shares.length) return "";
+  return `<div class="credential-share-receivers">
+    <h3>Paired Home Assistants</h3>
+    ${shares.map((share) => {
+      const status = share.revoked ? "Revoked" : share.activated ? "Connected" : "Waiting to pair";
+      const lastSync = share.revoked
+        ? ""
+        : share.last_sync ? ` · ${new Date(share.last_sync).toLocaleString()}` : " · Not yet synced";
+      return `<div class="credential-share-receiver-row">
+        <span><strong>${escapeHtml(share.receiver_name)}</strong><small>${escapeHtml(status + lastSync)}</small></span>
+        ${share.revoked
+          ? `<button class="danger key-menu-button" type="button" data-delete-credential-share="${escapeHtml(share.share_id)}" aria-label="Delete paired Home Assistant" title="Delete paired Home Assistant">${icons.trash}</button>`
+          : `<button class="action" type="button" data-revoke-credential-share="${escapeHtml(share.share_id)}">Revoke</button>`}
+      </div>`;
+    }).join("")}
+  </div>`;
+};
 
 const activityStorageLimitWarning = (settings) => {
   const limitMb = Number(settings.activity_history_max_storage_mb) || 0;
@@ -208,6 +232,20 @@ export const renderSettingsView = (host) => {
             <input name="debug_logging" type="checkbox" ${settings.debug_logging ? "checked" : ""}> Enable debug logging
           </label>
         </fieldset>
+
+        ${settings.credential_mode === "remote" ? `
+        <fieldset>
+          <legend>Credential Sharing</legend>
+          <p class="muted">This Home Assistant receives credentials from another instance. Manage pairing on the source instance.</p>
+        </fieldset>` : `
+        <fieldset>
+          <legend>Credential Sharing</legend>
+          <p class="muted">Create a one-time pairing link for another Home Assistant. The link expires after 10 minutes.</p>
+          <label>Receiver name<input data-share-receiver-name maxlength="100" placeholder="e.g. Holiday home"></label>
+          <button class="action" type="button" data-create-credential-share>Create pairing link</button>
+          <div data-credential-share-result></div>
+          ${pairedReceiversSection(settings.credential_shares)}
+        </fieldset>`}
 
         ${sipAccountsSection(settings.sip_accounts)}
 
@@ -428,6 +466,107 @@ export const bindSettingsEvents = (host) => {
     } finally {
       importInput.value = "";
     }
+  });
+
+  settingsForm.querySelector("[data-create-credential-share]")?.addEventListener("click", async () => {
+    const receiver = settingsForm.querySelector("[data-share-receiver-name]");
+    const result = settingsForm.querySelector("[data-credential-share-result]");
+    const receiverName = receiver?.value?.trim();
+    if (!receiverName) {
+      showNotice(host, "Enter a name for the receiving Home Assistant.", "Receiver name required");
+      receiver?.focus();
+      return;
+    }
+    try {
+      const response = await callWsWithBlocker(host, {
+        type: "akuvox/panel_create_credential_share",
+        entry_id: host._activeAccount,
+        receiver_name: receiverName,
+      });
+      if (result) {
+        const expiresAt = Date.now() + 10 * 60 * 1000;
+        result.innerHTML = `<label>
+          <span class="credential-share-link-heading">Pairing link (<span data-credential-share-expiry>expires in 10:00</span>)</span>
+          <span class="credential-share-link-row">
+            <span class="credential-share-link-name">${escapeHtml(receiverName)}</span>
+            <input readonly aria-label="Pairing link for ${escapeHtml(receiverName)}" value="${escapeHtml(response.pairing_link)}">
+            <button class="action" type="button" data-copy-credential-share>Copy</button>
+          </span>
+        </label>`;
+        result.querySelector("input")?.select();
+        const expiry = result.querySelector("[data-credential-share-expiry]");
+        const updateExpiry = () => {
+          if (!result.isConnected || !expiry?.isConnected) {
+            window.clearInterval(expiryTimer);
+            return;
+          }
+          const remaining = expiresAt - Date.now();
+          expiry.textContent = remaining > 0
+            ? `expires in ${formatPairingTimeRemaining(remaining)}`
+            : "expired";
+          if (remaining <= 0) window.clearInterval(expiryTimer);
+        };
+        const expiryTimer = window.setInterval(updateExpiry, 1000);
+        updateExpiry();
+        result.querySelector("[data-copy-credential-share]")?.addEventListener("click", async (event) => {
+          const copyButton = event.currentTarget;
+          try {
+            await host.shadowRoot.ownerDocument.defaultView.navigator.clipboard.writeText(response.pairing_link);
+            copyButton.textContent = "Copied";
+            copyButton.disabled = true;
+          } catch (_) {
+            showNotice(host, "Could not copy automatically. Select the link and copy it manually.", "Copy failed");
+          }
+        });
+      }
+      showPairingLinkNotice(host, response.pairing_link);
+    } catch (error) {
+      showNotice(host, error?.message || "Could not create a pairing link.", "Pairing failed");
+    }
+  });
+
+  settingsForm.querySelectorAll("[data-revoke-credential-share]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const confirmed = await confirmModal(
+        host,
+        "This immediately prevents this Home Assistant from receiving future Akuvox credentials.",
+        "Revoke paired Home Assistant?",
+        "Revoke"
+      );
+      if (!confirmed) return;
+      try {
+        await callWsWithBlocker(host, {
+          type: "akuvox/panel_revoke_credential_share",
+          entry_id: host._activeAccount,
+          share_id: button.dataset.revokeCredentialShare,
+        });
+        await host._load();
+      } catch (error) {
+        showNotice(host, error?.message || "Could not revoke the paired Home Assistant.", "Revoke failed");
+      }
+    });
+  });
+
+  settingsForm.querySelectorAll("[data-delete-credential-share]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const confirmed = await confirmModal(
+        host,
+        "This permanently removes the revoked receiver record from this Home Assistant.",
+        "Delete revoked receiver?",
+        "Delete"
+      );
+      if (!confirmed) return;
+      try {
+        await callWsWithBlocker(host, {
+          type: "akuvox/panel_delete_credential_share",
+          entry_id: host._activeAccount,
+          share_id: button.dataset.deleteCredentialShare,
+        });
+        await host._load();
+      } catch (error) {
+        showNotice(host, error?.message || "Could not delete the revoked receiver.", "Delete failed");
+      }
+    });
   });
 
   settingsForm.querySelectorAll("[data-stream]").forEach((button) =>

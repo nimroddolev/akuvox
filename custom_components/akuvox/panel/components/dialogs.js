@@ -46,6 +46,50 @@ export const showNotice = (host, message, title = "Akuvox SmartPlus") => {
   closeButton.focus();
 };
 
+/** Show a pairing confirmation with an explicit local clipboard action. */
+export const showPairingLinkNotice = (host, pairingLink) => {
+  const documentRef = host.shadowRoot.ownerDocument;
+  const dialog = documentRef.createElement("dialog");
+  const heading = documentRef.createElement("h2");
+  const text = documentRef.createElement("p");
+  const actions = documentRef.createElement("div");
+  const copyButton = documentRef.createElement("button");
+  const closeButton = documentRef.createElement("button");
+
+  heading.textContent = "Pairing Link Created";
+  text.textContent = "Copy it now to the receiving Home Assistant. For security, this pairing link will not be shown again.";
+  actions.className = "modal-actions";
+  copyButton.type = "button";
+  copyButton.className = "modal-cancel";
+  copyButton.textContent = "Copy";
+  closeButton.type = "button";
+  closeButton.className = "modal-action";
+  closeButton.textContent = "OK";
+  copyButton.addEventListener("click", async () => {
+    try {
+      await documentRef.defaultView.navigator.clipboard.writeText(pairingLink);
+      copyButton.textContent = "Copied";
+      copyButton.disabled = true;
+    } catch (_) {
+      text.textContent = "Could not copy automatically. Select the pairing link below and copy it manually.";
+    }
+  });
+  closeButton.addEventListener("click", () => dialog.close());
+  actions.append(copyButton, closeButton);
+  dialog.append(heading, text, actions);
+  closeOnBackdrop(dialog);
+
+  host._modalCount = (host._modalCount || 0) + 1;
+  dialog.addEventListener("close", () => {
+    host._modalCount -= 1;
+    dialog.remove();
+    host._requestLoad?.();
+  }, { once: true });
+  host.shadowRoot.append(dialog);
+  dialog.showModal();
+  copyButton.focus();
+};
+
 /**
  * Show a confirmation modal dialog with Cancel / Action buttons.
  * @param {HTMLElement} host
