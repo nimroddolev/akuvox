@@ -10,6 +10,7 @@ from .const import DOMAIN, PANEL_RUNTIME_DOMAIN
 _AUTH_FAILURES = "authentication_failures"
 _ACTIVITY_STORAGE_ISSUE_PREFIX = "activity_storage_limit_"
 _ACTIVITY_STORAGE_SETTINGS_URL = "/akuvox-smartplus#Settings"
+_CREDENTIAL_SOURCE_ISSUE_PREFIX = "credential_source_"
 
 
 def async_update_activity_storage_warning(
@@ -74,3 +75,18 @@ def async_clear_authentication_failure(hass: HomeAssistant, entry: ConfigEntry) 
 def authentication_failed(hass: HomeAssistant, entry_id: str) -> bool:
     """Return whether the entry needs SmartPlus reauthentication."""
     return entry_id in hass.data.get(PANEL_RUNTIME_DOMAIN, {}).get(_AUTH_FAILURES, set())
+
+
+def async_update_credential_source_issue(
+    hass: HomeAssistant, entry: ConfigEntry, problem: str | None
+) -> None:
+    """Expose source connectivity/revocation without asking a receiver for SMS."""
+    issue_id = f"{_CREDENTIAL_SOURCE_ISSUE_PREFIX}{entry.entry_id}"
+    if problem is None:
+        ir.async_delete_issue(hass, DOMAIN, issue_id)
+        return
+    ir.async_create_issue(
+        hass, DOMAIN, issue_id, is_fixable=False, severity=ir.IssueSeverity.WARNING,
+        translation_key=f"credential_source_{problem}",
+        translation_placeholders={"entry_title": entry.title},
+    )

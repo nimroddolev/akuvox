@@ -1,6 +1,12 @@
 {
     "config": {
         "step": {
+            "user": {
+                "menu_options": {
+                    "sms_sign_in": "Sign in with SMS",
+                    "shared_credentials": "Use credentials from another Home Assistant"
+                }
+            },
             "sms_sign_in": {
                 "title": "SMS Verification",
                 "description": "Please enter your mobile phone number to receive your verification SMS:",
@@ -30,11 +36,23 @@
             "reauth_sms": {
                 "title": "Reauthenticate with SMS",
                 "description": "Request a verification code for the phone number registered with SmartPlus."
+            },
+            "shared_credentials": {
+                "title": "Use credentials from another Home Assistant",
+                "description": "Paste the 10-minute pairing link created by the Akuvox integration on the source Home Assistant.",
+                "data": {"pairing_link": "Pairing link"}
+            },
+            "share_created": {
+                "title": "Pair another Home Assistant",
+                "description": "Copy this one-time pairing link for {receiver_name}. It expires in 10 minutes.",
+                "data": {"pairing_link": "Pairing link"}
             }
         },
         "error": {
             "cannot_connect": "Unable to request a SmartPlus SMS code. Try again shortly.",
-            "invalid_auth": "The SMS code was invalid or expired."
+            "invalid_auth": "The SMS code was invalid or expired.",
+            "invalid_share": "This pairing link is invalid, expired, or has been revoked.",
+            "external_url_required": "Set a valid HTTPS external URL in Home Assistant before creating a pairing link."
         },
         "abort": {
             "reauth_missing_account_data": "The saved account does not include a phone number and country code. Reconfigure the integration.",
@@ -61,6 +79,18 @@
         "activity_storage_full": {
             "title": "Activity storage is full for {entry_title}",
             "description": "Local activity storage has reached its configured limit. The oldest activity will be deleted to free up space for new activity."
+        },
+        "credential_source_unreachable": {
+            "title": "Credential source unreachable for {entry_title}",
+            "description": "This instance cannot reach the Home Assistant instance that shares its Akuvox credentials. Cached credentials will continue to be used until SmartPlus rejects them."
+        },
+        "credential_source_revoked": {
+            "title": "Credential sharing revoked for {entry_title}",
+            "description": "The source Home Assistant revoked this receiver. Re-pair the integration to restore access."
+        },
+        "credential_source_source_needs_reauth": {
+            "title": "Credential source needs reauthentication for {entry_title}",
+            "description": "Reauthenticate Akuvox SmartPlus on the source Home Assistant. This receiving instance cannot reauthenticate the shared account."
         }
     },
     "device_automation": {
@@ -76,6 +106,8 @@
                 "data": {
                     "country": "The country registered in your Akuvox SmartPlus account",
                     "subdomain": "Manually set the regional API subdomain"
+                    ,"create_share_for": "Create a 10-minute pairing link for this receiver",
+                    "revoke_pairing_link": "Revoke a pairing link created by this Home Assistant"
                 }
             }
         }

@@ -34,7 +34,9 @@ from .credentials import async_store_credentials, async_store_sip_credentials
 from .repairs import (
     async_report_authentication_failure,
     async_update_activity_storage_warning,
+    async_update_credential_source_issue,
 )
+from .sharing import async_sync_remote_entry, is_remote_entry
 
 from .const import (
     DOMAIN,
@@ -532,6 +534,10 @@ class AkuvoxApiClient:
         and returns a new short-lived ``token``.  Only one request may refresh at
         a time so concurrent API calls cannot overwrite a newer session.
         """
+        if self._entry is not None and is_remote_entry(self._entry):
+            # A receiver must never race its source by refreshing SmartPlus.
+            await async_sync_remote_entry(self.hass, self._entry.entry_id)
+            return bool(self._data and self._data.token and self._data.token != failed_token)
         if self._data is None or not self._data.auth_token:
             raise AkuvoxApiClientAuthenticationError("No SmartPlus refresh credential is available")
 
@@ -635,7 +641,12 @@ class AkuvoxApiClient:
         conservatively.  The timestamp is persisted to avoid resetting the
         interval whenever Home Assistant restarts.
         """
-        if self._entry is None or self._data is None or self._token_refresh_unsub:
+        if (
+            self._entry is None
+            or self._data is None
+            or self._token_refresh_unsub
+            or is_remote_entry(self._entry)
+        ):
             return
 
         self._token_refresh_unsub = async_track_time_interval(
@@ -679,6 +690,20 @@ class AkuvoxApiClient:
             self._report_authentication_failure()
         except AkuvoxApiClientError as error:
             LOGGER.warning("Scheduled SmartPlus token refresh failed: %s", error)
+
+    def async_apply_shared_credentials(self, auth_token: str, token: str) -> None:
+        """Apply a source-owned credential snapshot without an entry reload."""
+        if self._data is None:
+            return
+        self._data.auth_token = auth_token
+        self._data.token = token
+
+    def async_disable_shared_credentials(self) -> None:
+        """Immediately prevent requests after the source revokes this receiver."""
+        if self._data is None:
+            return
+        self._data.auth_token = ""
+        self._data.token = ""
 
     async def async_sms_sign_in(
         self, phone_number, country_code, sms_code, start_polling: bool = True
@@ -1667,6 +1692,8 @@ class AkuvoxApiClient:
                     host=self._data.host,
                     token=self._data.token,
                     data=f"mac={mac}&relay={relay_id}",
+                    door_name=str(relay.get("name", "")),
+                    relay_name=relay_id,
                 )
                 return
         raise AkuvoxApiClientError("Requested relay was not found")
@@ -1989,6 +2016,9 @@ class AkuvoxApiClient:
     def _report_authentication_failure(self) -> None:
         """Start reauthentication and surface the failure to the user."""
         if self._entry is None:
+            return
+        if is_remote_entry(self._entry):
+            async_update_credential_source_issue(self.hass, self._entry, "source_needs_reauth")
             return
         async_report_authentication_failure(self.hass, self._entry)
         self._entry.async_start_reauth_if_available(self.hass)

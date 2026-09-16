@@ -24,6 +24,12 @@ from .coordinator import AkuvoxDataUpdateCoordinator
 from .credentials import async_load_and_migrate_credentials
 from .panel import async_refresh_panel, async_register_websocket_api
 from .repairs import async_clear_authentication_failure
+from .sharing import (
+    async_register_remote_synchronizer,
+    async_register_share_view,
+    async_remove_remote_synchronizer,
+    is_remote_entry,
+)
 
 PLATFORMS: list[Platform] = [
     Platform.CAMERA,
@@ -36,6 +42,7 @@ PLATFORMS: list[Platform] = [
 async def async_setup(hass: HomeAssistant, _config: dict) -> bool:
     """Set up shared Akuvox resources before any account is configured."""
     async_register_websocket_api(hass)
+    async_register_share_view(hass)
     # Register the panel from persisted entry options, independently of cloud
     # connectivity. A failed account refresh must not make it disappear.
     await async_refresh_panel(hass)
@@ -71,6 +78,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
     entry.async_on_unload(coordinator.client.async_stop_proactive_token_refresh)
+    if is_remote_entry(entry):
+        remote_sync = async_register_remote_synchronizer(hass, entry, coordinator.client)
+        entry.async_on_unload(remote_sync.async_stop)
 
     return True
 
@@ -101,6 +111,10 @@ async def _async_start_runtime(hass: HomeAssistant, entry: ConfigEntry) -> None:
     coordinator: AkuvoxDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
     async_clear_authentication_failure(hass, entry)
     coordinator.client.async_start_proactive_token_refresh()
+    if is_remote_entry(entry):
+        remote_sync = hass.data.get("akuvox_credential_sharing", {}).get(entry.entry_id)
+        if remote_sync is not None:
+            remote_sync.async_start()
     await coordinator.client.async_start_polling()
     hass.async_create_task(coordinator.client.async_load_panel_history())
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -118,6 +132,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if client is not None:
         await client.async_stop_polling()
         client.async_stop_proactive_token_refresh()
+    await async_remove_remote_synchronizer(hass, entry.entry_id)
     if unloaded := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
         hass.data[DOMAIN].pop(entry.entry_id)
         await async_refresh_panel(hass)

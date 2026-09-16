@@ -12,7 +12,7 @@ from homeassistant.helpers.storage import Store
 
 from .const import CREDENTIAL_STORAGE_KEY, CREDENTIAL_STORAGE_VERSION
 
-_SECRET_KEYS = ("auth_token", "token")
+_SECRET_KEYS = ("auth_token", "token", "remote_share_secret")
 
 
 def _store(hass: HomeAssistant) -> Store[dict[str, dict[str, str]]]:
@@ -53,6 +53,11 @@ async def async_get_credentials(hass: HomeAssistant, entry_id: str) -> dict[str,
     """Return credentials from private storage for an authenticated UI flow."""
     credentials = await _store(hass).async_load() or {}
     return dict(credentials.get(entry_id, {}))
+
+
+async def async_get_remote_share_secret(hass: HomeAssistant, entry_id: str) -> str:
+    """Return the private bearer secret used by a remote credential source."""
+    return (await async_get_credentials(hass, entry_id)).get("remote_share_secret", "")
 
 
 async def async_load_and_migrate_credentials(

@@ -45,6 +45,10 @@ from .const import (
 )
 from .coordinator import AkuvoxDataUpdateCoordinator
 from .repairs import authentication_failed
+from .sharing import (
+    SHARED_MODE, SHARED_MODE_REMOTE, async_create_share, async_list_shares,
+    async_delete_share, async_revoke_share,
+)
 
 _PANEL_MODULE = "akuvox-panel.js"
 _PANEL_ICONSET = "akuvox-iconset.js"
@@ -118,6 +122,9 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, websocket_panel_data)
     websocket_api.async_register_command(hass, websocket_panel_settings)
     websocket_api.async_register_command(hass, websocket_panel_save_settings)
+    websocket_api.async_register_command(hass, websocket_panel_create_credential_share)
+    websocket_api.async_register_command(hass, websocket_panel_revoke_credential_share)
+    websocket_api.async_register_command(hass, websocket_panel_delete_credential_share)
     websocket_api.async_register_command(hass, websocket_panel_stream)
     websocket_api.async_register_command(hass, websocket_panel_activity_image)
     websocket_api.async_register_command(hass, websocket_panel_clear_activity_storage)
@@ -416,6 +423,8 @@ async def websocket_panel_settings(
                 # can be changed outside this panel.
                 DEBUG_LOGGING: LOGGER.isEnabledFor(logging.DEBUG),
                 "sip_accounts": client.get_sip_accounts() if client else {},
+                "credential_mode": entry.data.get(SHARED_MODE, "local"),
+                "credential_shares": await async_list_shares(hass, entry.entry_id),
             },
         },
     )
@@ -544,6 +553,91 @@ async def websocket_panel_save_settings(
         )
     except Exception:  # noqa: BLE001 - logger preferences must not fail a save.
         LOGGER.exception("Unable to update SmartPlus logger preferences")
+    connection.send_result(msg["id"], {})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "akuvox/panel_create_credential_share",
+        vol.Required("entry_id"): str,
+        vol.Required("receiver_name"): vol.All(str, vol.Length(min=1, max=100)),
+    }
+)
+@websocket_api.async_response
+async def websocket_panel_create_credential_share(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Create a short-lived pairing link from the panel settings page."""
+    if not _require_admin(connection, msg):
+        return
+    entry = next((item for item in _panel_entries(hass) if item.entry_id == msg["entry_id"]), None)
+    if entry is None:
+        connection.send_error(msg["id"], "not_found", "Akuvox account was not found")
+        return
+    if entry.data.get(SHARED_MODE) == SHARED_MODE_REMOTE:
+        connection.send_error(msg["id"], "not_owner", "Only the credential owner can create pairing links")
+        return
+    try:
+        pairing_link = await async_create_share(
+            hass, entry, hass.config.external_url, msg["receiver_name"]
+        )
+    except (AttributeError, ValueError) as error:
+        connection.send_error(msg["id"], "external_url_required", str(error))
+        return
+    connection.send_result(msg["id"], {"pairing_link": pairing_link})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "akuvox/panel_revoke_credential_share",
+        vol.Required("entry_id"): str,
+        vol.Required("share_id"): str,
+    }
+)
+@websocket_api.async_response
+async def websocket_panel_revoke_credential_share(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Revoke one receiver's access from the panel."""
+    if not _require_admin(connection, msg):
+        return
+    entry = next((item for item in _panel_entries(hass) if item.entry_id == msg["entry_id"]), None)
+    if entry is None or entry.data.get(SHARED_MODE) == SHARED_MODE_REMOTE:
+        connection.send_error(msg["id"], "not_found", "Credential source account was not found")
+        return
+    if not await async_revoke_share(hass, msg["share_id"]):
+        connection.send_error(msg["id"], "not_found", "Paired Home Assistant was not found")
+        return
+    connection.send_result(msg["id"], {})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "akuvox/panel_delete_credential_share",
+        vol.Required("entry_id"): str,
+        vol.Required("share_id"): str,
+    }
+)
+@websocket_api.async_response
+async def websocket_panel_delete_credential_share(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Permanently remove an already-revoked receiver record."""
+    if not _require_admin(connection, msg):
+        return
+    entry = next((item for item in _panel_entries(hass) if item.entry_id == msg["entry_id"]), None)
+    if entry is None or entry.data.get(SHARED_MODE) == SHARED_MODE_REMOTE:
+        connection.send_error(msg["id"], "not_found", "Credential source account was not found")
+        return
+    if not await async_delete_share(hass, msg["share_id"]):
+        connection.send_error(msg["id"], "not_found", "Revoked receiver was not found")
+        return
     connection.send_result(msg["id"], {})
 
 

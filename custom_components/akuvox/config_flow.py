@@ -10,7 +10,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 import voluptuous as vol
 from .api import AkuvoxApiClient
 from .coordinator import AkuvoxDataUpdateCoordinator
-from .credentials import async_get_credentials, async_store_credentials
+from .credentials import async_store_credentials
 from .repairs import async_clear_authentication_failure
 
 from .const import (
@@ -24,6 +24,15 @@ from .const import (
     TOKEN_UPDATE_TYPE,
 )
 from .helpers import AkuvoxHelpers
+from .sharing import (
+    SHARED_MODE,
+    SHARED_MODE_REMOTE,
+    SHARED_SECRET,
+    async_fetch_shared_snapshot,
+    async_create_share,
+    async_revoke_share,
+    parse_pairing_uri,
+)
 
 helpers = AkuvoxHelpers()
 
@@ -79,7 +88,56 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         return AkuvoxOptionsFlowHandler()
 
     async def async_step_user(self, user_input=None):
-        """Step 0: Initialise the API client and proceed directly to SMS sign-in."""
+        """Choose direct SMS login or credentials shared by another HA."""
+        return self.async_show_menu(
+            step_id="user", menu_options=["sms_sign_in", "shared_credentials"]
+        )
+
+    async def async_step_shared_credentials(self, user_input=None):
+        """Pair this entry with an existing Akuvox integration on another HA."""
+        schema = vol.Schema({vol.Required("pairing_link"): str})
+        if user_input is None:
+            return self.async_show_form(step_id="shared_credentials", data_schema=schema)
+        try:
+            source_url, share_id, secret = parse_pairing_uri(user_input["pairing_link"])
+            snapshot, _etag = await async_fetch_shared_snapshot(
+                self.hass, source_url, share_id, secret
+            )
+            if snapshot is None:
+                raise ValueError("The new pairing unexpectedly had no credential snapshot")
+            credentials = snapshot["credentials"]
+            connection = snapshot.get("connection", {})
+            device_data = snapshot.get("device_data", {})
+            if not credentials.get("auth_token") or not credentials.get("token"):
+                raise ValueError("The credential source returned no usable tokens")
+        except (ValueError, PermissionError):
+            return self.async_show_form(
+                step_id="shared_credentials", data_schema=schema, errors={"base": "invalid_share"}
+            )
+        except Exception as error:  # Network and TLS failures should be user-actionable.
+            LOGGER.warning("Unable to reach Akuvox credential source: %s", error)
+            return self.async_show_form(
+                step_id="shared_credentials", data_schema=schema, errors={"base": "cannot_connect"}
+            )
+        self.data = {
+            SHARED_MODE: SHARED_MODE_REMOTE,
+            "remote_source_url": source_url,
+            "remote_share_id": share_id,
+            SHARED_SECRET: secret,  # Moved to private storage during first setup.
+            **{key: connection.get(key, "") for key in ("host", "subdomain", "country_code", "phone_number")},
+            **{
+                key: device_data.get(key, [])
+                for key in ("camera_data", "door_relay_data", "door_keys_data")
+            },
+            "auth_token": credentials["auth_token"],
+            "token": credentials["token"],
+        }
+        return self.async_create_entry(
+            title=str(snapshot.get("account_label") or "Akuvox SmartPlus"), data=self.data
+        )
+
+    async def async_step_sms_sign_in(self, user_input=None):
+        """Initialise direct SMS sign-in."""
 
         # Initialize the API client
         if self.akuvox_api_client is None:
@@ -89,12 +147,7 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                 entry=None,
             )
 
-        return self.async_show_form(
-            step_id="sms_sign_in",
-            data_schema=vol.Schema(self.get_sms_sign_in_schema(user_input)),
-            description_placeholders=user_input,
-            last_step=False,
-        )
+        return await self._async_step_sms_sign_in_legacy(user_input)
 
     async def async_step_reauth(self, _entry_data):
         """Begin reauthentication after SmartPlus can no longer refresh a session."""
@@ -217,7 +270,7 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             reason="reauth_successful",
         )
 
-    async def async_step_sms_sign_in(self, user_input=None):
+    async def _async_step_sms_sign_in_legacy(self, user_input=None):
         """Step 1: User enters their mobile phone country code and number.
 
         Args:
@@ -416,6 +469,8 @@ class AkuvoxOptionsFlowHandler(config_entries.OptionsFlow):
                         mode=selector.SelectSelectorMode.DROPDOWN,
                         custom_value=True),
                         ),
+            vol.Optional("create_share_for", default="", description="Create a 10-minute pairing link for this receiver"): str,
+            vol.Optional("revoke_pairing_link", default="", description="Revoke a pairing link created by this Home Assistant"): str,
         })
 
         # Show the form with the current options
@@ -425,6 +480,38 @@ class AkuvoxOptionsFlowHandler(config_entries.OptionsFlow):
                 data_schema=options_schema,
                 description_placeholders=user_input,
                 last_step=True
+            )
+
+        receiver_name = str(user_input.pop("create_share_for", "")).strip()
+        revoke_link = str(user_input.pop("revoke_pairing_link", "")).strip()
+        if revoke_link:
+            try:
+                _source_url, share_id, _secret = parse_pairing_uri(revoke_link)
+                if not await async_revoke_share(self.hass, share_id):
+                    raise ValueError("Unknown share")
+            except ValueError:
+                return self.async_show_form(
+                    step_id="init", data_schema=options_schema,
+                    errors={"base": "invalid_share"},
+                )
+        if receiver_name:
+            try:
+                pairing_link = await async_create_share(
+                    self.hass,
+                    self.config_entry,
+                    self.hass.config.external_url,
+                    receiver_name,
+                )
+            except (AttributeError, ValueError):
+                return self.async_show_form(
+                    step_id="init", data_schema=options_schema,
+                    errors={"base": "external_url_required"},
+                )
+            self._options_after_share = user_input
+            return self.async_show_form(
+                step_id="share_created",
+                data_schema=vol.Schema({vol.Required("pairing_link", default=pairing_link): str}),
+                description_placeholders={"receiver_name": receiver_name},
             )
 
         # API client
@@ -442,6 +529,10 @@ class AkuvoxOptionsFlowHandler(config_entries.OptionsFlow):
             data=user_input, # type: ignore
             title="",
         )
+
+    async def async_step_share_created(self, _user_input=None):
+        """Finish after the user copies the one-time pairing link."""
+        return self.async_create_entry(data=getattr(self, "_options_after_share", {}), title="")
 
     def get_data_key_value(self, key, placeholder=None):
         """Get the value for a given key. Options flow 1st, Config flow 2nd."""
