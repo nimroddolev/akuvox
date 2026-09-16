@@ -23,7 +23,7 @@ import { showNotice, confirmModal, callWsWithBlocker } from "../components/dialo
 import { showDateRangePicker } from "../components/date-range-picker.js?v=20260823-normalise-past-validity-start";
 import { showTemporaryKeyQrDialog } from "../components/qr-dialog.js";
 import { showKeyActionsMenu, closeKeyActionsMenu } from "../components/key-menu.js";
-import { bindTileOrdering } from "../utils/tile-ordering.js?v=20260909-deferred-cancel";
+import { bindTileOrdering } from "../utils/tile-ordering.js?v=20260915-manual-key-sort";
 
 /**
  * Update visibility of validation error messages under vehicle registration and UHF card fields.
@@ -71,6 +71,10 @@ export const renderKeysView = (host, account) => {
     .join("");
 
   const keys = account.temporary_keys || [];
+  const isManualTileOrder =
+    host._rowViewMode === "tiles" &&
+    (host._keySort.key === "manual" ||
+      (host._keyTileSortMode !== "sorted" && host._hasTileOrder("keys")));
   let filtered = keys
     .filter((key) => {
       const description = String(key.description || "").toLocaleLowerCase();
@@ -82,7 +86,9 @@ export const renderKeysView = (host, account) => {
       );
     })
     .sort((left, right) => {
+      if (isManualTileOrder) return 0;
       const getValue = (key) => {
+        if (host._keySort.key === "manual") return String(key.description || "");
         if (host._keySort.key === "validity") return String(key.begin_time || "");
         if (host._keySort.key === "uses") {
           return `${Number(key.access_times || 0)}/${Number(key.allowed_times || 0)}`;
@@ -96,7 +102,7 @@ export const renderKeysView = (host, account) => {
       );
     });
 
-  if (host._rowViewMode === "tiles") {
+  if (isManualTileOrder) {
     filtered = host._orderTiles("keys", filtered, (key) => key.key_id);
   }
 
@@ -194,7 +200,7 @@ export const renderKeysView = (host, account) => {
           <input class="key-filter-input" type="search" placeholder="Filter by name" value="${escapeHtml(host._keyFilters.description)}" data-key-filter="description">
         </label>
         ${renderMultiSelectFilter({ scope: "key", key: "status", label: "Status", allLabel: "All keys", values: ["active", "expired"], selected: host._keyFilters.status, openMenu: host._openFilterMenu })}
-        ${host._rowViewMode === "tiles" ? `<label>Sort by<select data-key-tile-sort><option value="description" ${host._keySort.key === "description" ? "selected" : ""}>Name</option><option value="key_code" ${host._keySort.key === "key_code" ? "selected" : ""}>Code</option><option value="validity" ${host._keySort.key === "validity" ? "selected" : ""}>Valid from</option><option value="uses" ${host._keySort.key === "uses" ? "selected" : ""}>Uses</option><option value="status" ${host._keySort.key === "status" ? "selected" : ""}>Status</option></select></label>` : ""}
+        ${host._rowViewMode === "tiles" ? `<div class="tile-sort-control"><label>Sort by<select data-key-tile-sort><option value="manual" ${isManualTileOrder ? "selected" : ""}>Manual</option><option value="description" ${!isManualTileOrder && host._keySort.key === "description" ? "selected" : ""}>Name</option><option value="key_code" ${!isManualTileOrder && host._keySort.key === "key_code" ? "selected" : ""}>Code</option><option value="validity" ${!isManualTileOrder && host._keySort.key === "validity" ? "selected" : ""}>Valid from</option><option value="uses" ${!isManualTileOrder && host._keySort.key === "uses" ? "selected" : ""}>Uses</option><option value="status" ${!isManualTileOrder && host._keySort.key === "status" ? "selected" : ""}>Status</option></select></label><button type="button" class="tile-sort-direction" data-key-tile-sort-direction aria-label="Sort ${host._keySort.direction === "asc" ? "ascending" : "descending"}" title="Sort ${host._keySort.direction === "asc" ? "ascending" : "descending"}" ${isManualTileOrder ? "disabled" : ""}>${host._keySort.direction === "asc" ? "↑" : "↓"}</button></div>` : ""}
       </div>
       ${host._rowViewMode === "tiles" ? `<div class="tile-grid key-tile-grid" data-tile-grid="keys">${keyTiles}</div>` : `<table>
         <thead>
@@ -669,7 +675,10 @@ export const deleteSelectedKeys = async (host) => {
  * @param {HTMLElement} host
  */
 export const bindKeysEvents = (host) => {
-  bindTileOrdering(host, "keys");
+  bindTileOrdering(host, "keys", () => {
+    host._keySort = { key: "manual", direction: "asc" };
+    host._keyTileSortMode = "manual";
+  });
   // Key code copy buttons
   host.shadowRoot.querySelectorAll("[data-copy-key-code]").forEach((button) =>
     button.addEventListener("click", async () => {
@@ -723,13 +732,23 @@ export const bindKeysEvents = (host) => {
             ? "desc"
             : "asc",
       };
+      host._keyTileSortMode = "sorted";
       host._render();
     })
   );
 
   host.shadowRoot.querySelector("[data-key-tile-sort]")?.addEventListener("change", (event) => {
     host._keySort = { key: event.target.value, direction: "asc" };
-    host._clearTileOrder("keys");
+    host._keyTileSortMode = event.target.value === "manual" ? "manual" : "sorted";
+    host._render();
+  });
+
+  host.shadowRoot.querySelector("[data-key-tile-sort-direction]")?.addEventListener("click", () => {
+    host._keySort = {
+      ...host._keySort,
+      direction: host._keySort.direction === "asc" ? "desc" : "asc",
+    };
+    host._keyTileSortMode = "sorted";
     host._render();
   });
 

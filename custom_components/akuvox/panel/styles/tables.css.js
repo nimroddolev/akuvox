@@ -349,6 +349,36 @@ export const tableStyles = `
     font-weight: 600;
   }
 
+  .tile-sort-control {
+    display: flex;
+    align-items: end;
+    gap: 6px;
+  }
+
+  .tile-sort-direction {
+    width: 36px;
+    min-width: 36px;
+    min-height: 36px;
+    padding: 0;
+    border: 1px solid var(--divider-color, #8c99a3);
+    border-radius: 8px;
+    color: var(--primary-text-color);
+    background: var(--card-background-color, #fff);
+    cursor: pointer;
+    font-size: 18px;
+    line-height: 1;
+  }
+
+  .tile-sort-direction:focus-visible {
+    outline: 2px solid var(--aqua);
+    outline-offset: 2px;
+  }
+
+  .tile-sort-direction:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+
   .activity-controls select {
     min-width: 130px;
     min-height: 36px;

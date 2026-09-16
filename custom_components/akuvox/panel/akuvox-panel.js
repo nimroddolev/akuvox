@@ -23,7 +23,7 @@ import {
   renderKeysView,
   bindKeysEvents,
   deleteSelectedKeys,
-} from "./views/keys-view.js?v=20260909-deferred-cancel";
+} from "./views/keys-view.js?v=20260915-key-sort-direction";
 import { renderSettingsView, bindSettingsEvents, updateActivityStorageProgress } from "./views/settings-view.js?v=20260830-debug-section";
 import { renderHelpView } from "./views/help-view.js";
 
@@ -61,6 +61,7 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
 
     this._keyFilters = { description: "", status: [] };
     this._keySort = { key: "description", direction: "asc" };
+    this._keyTileSortMode = null;
     // A presentation preference shared by the Devices and Temporary keys tabs.
     // Local storage is best-effort because it can be unavailable in restricted
     // browser contexts.
@@ -251,6 +252,7 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
           this._settingsDirty = false;
         }
         const activeAccountChanged = previousActiveAccount !== this._activeAccount;
+        if (activeAccountChanged) this._keyTileSortMode = null;
         let settingsChanged = false;
         const shouldRefreshSettings =
           this._activeAccount &&
@@ -614,6 +616,19 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
     });
   }
 
+  /** Whether a saved manual tile sequence exists for the active account. */
+  _hasTileOrder(scope) {
+    try {
+      const value = localStorage.getItem(
+        `${TILE_ORDER_STORAGE_PREFIX}-${scope}-${this._activeAccount}`
+      );
+      const savedOrder = JSON.parse(value || "[]");
+      return Array.isArray(savedOrder) && savedOrder.length > 0;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /** Save a tile sequence for the active account. */
   _saveTileOrder(scope, ids) {
     try {
@@ -724,6 +739,7 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
     // Account selector event listener
     this.shadowRoot.querySelector("[data-account]")?.addEventListener("change", async (event) => {
       this._activeAccount = event.target.value;
+      this._keyTileSortMode = null;
       this._settings = null;
       this._settingsEntryId = "";
       this._settingsSignature = null;

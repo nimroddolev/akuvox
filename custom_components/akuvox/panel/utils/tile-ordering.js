@@ -31,8 +31,9 @@ const getDropPlacement = (grid, dragged, target, clientX, clientY, direction) =>
  * Bind mouse and touch reordering to a tile grid.
  * @param {HTMLElement} host
  * @param {string} scope
+ * @param {() => void} [onOrdered]
  */
-export const bindTileOrdering = (host, scope) => {
+export const bindTileOrdering = (host, scope, onOrdered) => {
   const grid = host.shadowRoot.querySelector(`[data-tile-grid="${scope}"]`);
   if (!grid) return;
 
@@ -64,6 +65,7 @@ export const bindTileOrdering = (host, scope) => {
     );
     clearDrag();
     host._saveTileOrder(scope, ids);
+    onOrdered?.();
     host._render();
   };
 
