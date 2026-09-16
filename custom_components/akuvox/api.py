@@ -151,6 +151,43 @@ class AkuvoxApiClient:
 
         return _unsubscribe
 
+    def async_publish_door_unlock(
+        self,
+        door_name: str,
+        *,
+        initiator: str,
+        capture_type: str,
+        relay_name: str = "",
+        source_data: dict[str, Any] | None = None,
+    ) -> None:
+        """Publish a door unlock to legacy and device-event consumers."""
+        event_data = dict(source_data or {})
+        event_data.update(
+            {
+                "Location": door_name,
+                "Initiator": initiator,
+                "CaptureType": capture_type,
+                "RelayName": relay_name,
+                "door_name": door_name,
+                "opened_by": initiator,
+                "unlock_method": capture_type,
+            }
+        )
+        if self._entry is not None and hasattr(self.hass, "data"):
+            device_registry = dr.async_get(self.hass)
+            device = device_registry.async_get_device(
+                identifiers={(DOMAIN, f"{self._entry.entry_id}:{door_name}")}
+            )
+            if device is None:
+                device = device_registry.async_get_device(
+                    identifiers={(DOMAIN, door_name)}
+                )
+            if device is not None:
+                event_data[ATTR_DEVICE_ID] = device.id
+        self.hass.bus.async_fire("akuvox_door_update", event_data)
+        for listener in self._door_unlock_listeners.get(door_name, set()):
+            listener(event_data)
+
     async def async_init_api(self) -> bool:
         """Initialize API configuration data."""
         if not await self._async_ensure_rest_server():
@@ -759,7 +796,14 @@ class AkuvoxApiClient:
         return None
 
     async def async_make_opendoor_request(
-        self, name: str, host: str, token: str, data: str
+        self,
+        name: str,
+        host: str,
+        token: str,
+        data: str,
+        *,
+        door_name: str | None = None,
+        relay_name: str = "",
     ) -> dict | list | None:
         """Send an asynchronous request to open a door relay."""
         LOGGER.debug("📡 Sending request to open door '%s'...", name)
@@ -782,6 +826,13 @@ class AkuvoxApiClient:
         )
         if json_data is not None:
             LOGGER.debug("✅ Door open request sent successfully.")
+            if door_name:
+                self.async_publish_door_unlock(
+                    door_name,
+                    initiator="Home Assistant",
+                    capture_type="Unlock on Home Assistant",
+                    relay_name=relay_name,
+                )
             return json_data
         LOGGER.error("❌ Request to open door failed.")
         return None
@@ -859,31 +910,14 @@ class AkuvoxApiClient:
         new_door_log = await self._data.async_parse_personal_door_log(json_data)
         if new_door_log is not None:
             LOGGER.debug("🚪 New door open event occurred. Firing akuvox_door_update event")
-            event_data = dict(new_door_log)
             door_name = str(new_door_log.get("Location", ""))
-            # Keep SmartPlus' original field names while also exposing stable,
-            # descriptive attributes for Home Assistant automations.
-            event_data.update(
-                {
-                    "door_name": door_name,
-                    "opened_by": str(new_door_log.get("Initiator", "")),
-                    "unlock_method": str(new_door_log.get("CaptureType", "")),
-                }
+            self.async_publish_door_unlock(
+                door_name,
+                initiator=str(new_door_log.get("Initiator", "")),
+                capture_type=str(new_door_log.get("CaptureType", "")),
+                relay_name=str(new_door_log.get("RelayName", "")),
+                source_data=new_door_log,
             )
-            if self._entry is not None and hasattr(self.hass, "data"):
-                device_registry = dr.async_get(self.hass)
-                device = device_registry.async_get_device(
-                    identifiers={(DOMAIN, f"{self._entry.entry_id}:{door_name}")}
-                )
-                if device is None:
-                    device = device_registry.async_get_device(
-                        identifiers={(DOMAIN, door_name)}
-                    )
-                if device is not None:
-                    event_data[ATTR_DEVICE_ID] = device.id
-            self.hass.bus.async_fire("akuvox_door_update", event_data)
-            for listener in self._door_unlock_listeners.get(door_name, set()):
-                listener(event_data)
         # Publish this only after all work for the poll has completed.  The
         # persistence and call-history steps can take several seconds, so
         # timestamping earlier makes the panel look stale immediately.

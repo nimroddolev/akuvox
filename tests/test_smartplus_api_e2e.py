@@ -524,6 +524,35 @@ class TestSmartPlusApiE2E(unittest.IsolatedAsyncioTestCase):
         self.assertIn("opendoor?token=expired-token", request["url"])
         self.assertEqual(request["headers"]["X-AUTH-TOKEN"], "expired-token")
 
+    async def test_manual_relay_unlock_publishes_the_door_event(self) -> None:
+        """A successful HA relay action immediately triggers its door event."""
+        client = self._client([_success({"ok": True})])
+        received_events = []
+        client.async_subscribe_to_door_unlocks("Lobby", received_events.append)
+
+        await client.async_make_opendoor_request(
+            "Lobby, 1",
+            "api.example",
+            "session-token",
+            "mac=AABBCC&relay=1",
+            door_name="Lobby",
+            relay_name="1",
+        )
+
+        self.hass.bus.async_fire.assert_called_once_with(
+            "akuvox_door_update",
+            {
+                "Location": "Lobby",
+                "Initiator": "Home Assistant",
+                "CaptureType": "Unlock on Home Assistant",
+                "RelayName": "1",
+                "door_name": "Lobby",
+                "opened_by": "Home Assistant",
+                "unlock_method": "Unlock on Home Assistant",
+            },
+        )
+        self.assertEqual(len(received_events), 1)
+
     async def test_temporary_key_mutations_used_documented_endpoints(self) -> None:
         """Akuvox temporary-key mutations used their documented response shapes."""
         client = self._client([
