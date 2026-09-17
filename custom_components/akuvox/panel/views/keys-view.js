@@ -23,7 +23,7 @@ import { showNotice, confirmModal, callWsWithBlocker } from "../components/dialo
 import { showDateRangePicker } from "../components/date-range-picker.js?v=20260823-normalise-past-validity-start";
 import { showTemporaryKeyQrDialog } from "../components/qr-dialog.js";
 import { showKeyActionsMenu, closeKeyActionsMenu } from "../components/key-menu.js";
-import { bindTileOrdering } from "../utils/tile-ordering.js?v=20260915-manual-key-sort";
+import { bindListOrdering, bindTileOrdering } from "../utils/tile-ordering.js?v=20260917-list-drop-position";
 
 /**
  * Update visibility of validation error messages under vehicle registration and UHF card fields.
@@ -72,9 +72,8 @@ export const renderKeysView = (host, account) => {
 
   const keys = account.temporary_keys || [];
   const isManualTileOrder =
-    host._rowViewMode === "tiles" &&
-    (host._keySort.key === "manual" ||
-      (host._keyTileSortMode !== "sorted" && host._hasTileOrder("keys")));
+    host._keySort.key === "manual" ||
+    (host._keyTileSortMode !== "sorted" && host._hasTileOrder("keys"));
   let filtered = keys
     .filter((key) => {
       const description = String(key.description || "").toLocaleLowerCase();
@@ -132,9 +131,9 @@ export const renderKeysView = (host, account) => {
         : `<button class="action key-menu-button" type="button" data-key-menu="${escapeHtml(key.key_id)}" data-key-code="${escapeHtml(key.key_code)}" data-key-expired="false" data-key-has-qr="${Boolean(key.has_qr_code)}" aria-label="Key actions" aria-haspopup="menu">⋯</button>`;
 
       return `
-        <tr class="${selected ? "key-row-selected" : ""}">
+        <tr class="${selected ? "key-row-selected" : ""}" data-list-order-id="${escapeHtml(key.key_id)}">
           ${selector}
-          <td>${escapeHtml(key.description)}</td>
+          <td><div class="list-title"><button type="button" class="list-grab" data-list-grab aria-label="Reorder ${escapeHtml(key.description)}" title="Drag to reorder">⠿</button>${escapeHtml(key.description)}</div></td>
           <td>${code}</td>
           <td>${escapeHtml(formatTimestamp(key.begin_time))}</td>
           <td>${escapeHtml(formatTimestamp(key.end_time))}</td>
@@ -215,7 +214,7 @@ export const renderKeysView = (host, account) => {
             <th></th>
           </tr>
         </thead>
-        <tbody>${rows}</tbody>
+        <tbody data-list-order="keys">${rows}</tbody>
       </table>`}
 
       <dialog data-key-dialog>
@@ -676,6 +675,10 @@ export const deleteSelectedKeys = async (host) => {
  */
 export const bindKeysEvents = (host) => {
   bindTileOrdering(host, "keys", () => {
+    host._keySort = { key: "manual", direction: "asc" };
+    host._keyTileSortMode = "manual";
+  });
+  bindListOrdering(host, "keys", () => {
     host._keySort = { key: "manual", direction: "asc" };
     host._keyTileSortMode = "manual";
   });

@@ -8,12 +8,12 @@ import { PANEL_TAG, TAB_HASHES, TAB_HASH_BY_ID, TABS } from "./utils/constants.j
 import { escapeHtml } from "./utils/dom.js";
 import { copyText } from "./utils/clipboard.js";
 import { settingsRenderSignature } from "./utils/settings-signature.js";
-import { getPanelStyles } from "./styles/index.js?v=20260916-paired-receivers";
+import { getPanelStyles } from "./styles/index.js?v=20260917-list-drop-position";
 import { showNotice, confirmModal, callWsWithBlocker } from "./components/dialogs.js";
 import { installCameraRelayActions } from "./components/camera-actions.js?v=20260830-camera-modal-unlock";
 import { closeKeyActionsMenu } from "./components/key-menu.js";
 
-import { renderDevicesView, bindDevicesEvents } from "./views/devices-view.js?v=20260909-deferred-cancel";
+import { renderDevicesView, bindDevicesEvents } from "./views/devices-view.js?v=20260917-list-drop-position";
 import {
   renderActivityView,
   bindActivityEvents,
@@ -24,7 +24,7 @@ import {
   renderKeysView,
   bindKeysEvents,
   deleteSelectedKeys,
-} from "./views/keys-view.js?v=20260917-ha-device-names";
+} from "./views/keys-view.js?v=20260917-list-drop-position";
 import { renderSettingsView, bindSettingsEvents, updateActivityStorageProgress } from "./views/settings-view.js?v=20260917-ha-device-names";
 import { renderHelpView } from "./views/help-view.js";
 
@@ -309,9 +309,11 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
     const maxScroll = Math.max(0, viewport.scrollWidth - viewport.clientWidth);
     const showLeft = viewport.scrollLeft > 1;
     const showRight = viewport.scrollLeft < maxScroll - 1;
-    const changed = left.hidden === showLeft || right.hidden === showRight;
-    left.hidden = !showLeft;
-    right.hidden = !showRight;
+    const leftHidden = !showLeft;
+    const rightHidden = !showRight;
+    const changed = left.hidden !== leftHidden || right.hidden !== rightHidden;
+    left.hidden = leftHidden;
+    right.hidden = rightHidden;
     if (changed) requestAnimationFrame(() => this._updateTabScrollControls());
   }
 
@@ -739,8 +741,6 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
         new CustomEvent("hass-toggle-menu", { bubbles: true, composed: true })
       );
     });
-    this._setupTabScrolling();
-
     // Account selector event listener
     this.shadowRoot.querySelector("[data-account]")?.addEventListener("change", async (event) => {
       this._activeAccount = event.target.value;
@@ -769,7 +769,11 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
       bindSettingsEvents(this);
     }
 
+    // Restore first, then bring the selected tab into view. Reversing these
+    // calls makes the two scroll assignments compete on mobile Safari when a
+    // tab near the end of the strip is selected.
     this._restoreScrollPosition(scrollPosition);
+    this._setupTabScrolling();
   }
 }
 

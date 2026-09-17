@@ -104,7 +104,9 @@ export const mainStyles = `
     overflow-y: hidden;
     overscroll-behavior-x: contain;
     scrollbar-width: none;
-    scroll-behavior: smooth;
+    /* Only arrow-button navigation animates. Programmatic selection and
+       render restoration must settle immediately on mobile Safari. */
+    scroll-behavior: auto;
   }
 
   .tab-scroll-viewport::-webkit-scrollbar { display: none; }

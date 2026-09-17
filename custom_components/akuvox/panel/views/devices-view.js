@@ -4,7 +4,15 @@
 
 import { escapeHtml } from "../utils/dom.js";
 import { icons } from "../utils/icons.js?v=20260830-device-action-gradients";
-import { bindTileOrdering } from "../utils/tile-ordering.js?v=20260909-deferred-cancel";
+import { bindListOrdering, bindTileOrdering } from "../utils/tile-ordering.js?v=20260917-list-drop-position";
+
+const unlockButton = (relays, relay) => {
+  const label =
+    relays.length > 1
+      ? `Unlock ${relay.source_door_name || relay.door_name || `Relay ${relay.relay_id}`}`
+      : "Unlock";
+  return `<button class="action device-action device-unlock-action" data-relay="${escapeHtml(relay.relay_id)}" data-mac="${escapeHtml(relay.mac)}">${icons.doorOpen}<span>${escapeHtml(label)}</span></button>`;
+};
 
 /**
  * Render the HTML content for the Devices tab.
@@ -36,25 +44,17 @@ export const renderDevicesView = (host, account) => {
     devices.set(relay.name, device);
   });
 
-  const deviceList =
-    host._rowViewMode === "tiles"
-      ? host._orderTiles("devices", [...devices.values()], (device) => device.deviceId || device.name)
-      : [...devices.values()];
+  const deviceList = host._orderTiles(
+    "devices",
+    [...devices.values()],
+    (device) => device.deviceId || device.name
+  );
   const rows = deviceList
     .map(
       (device) => `
-      <tr>
+      <tr data-list-order-id="${escapeHtml(device.deviceId || device.name)}">
         <td>
-          <strong>${escapeHtml(device.name)}</strong>
-          ${
-            device.relays.length
-              ? `<br><small class="muted">${escapeHtml(
-                  device.relays
-                    .map((relay) => `${relay.door_name} (relay ${relay.relay_id})`)
-                    .join(", ")
-                )}</small>`
-              : ""
-          }
+          <div class="list-title"><button type="button" class="list-grab" data-list-grab aria-label="Reorder ${escapeHtml(device.name)}" title="Drag to reorder">⠿</button><strong>${escapeHtml(device.name)}</strong></div>
         </td>
         <td>
           <div class="actions">
@@ -69,10 +69,7 @@ export const renderDevicesView = (host, account) => {
           <div class="actions">
             ${
               device.relays
-                .map(
-                  (relay) =>
-                    `<button class="action device-action device-unlock-action" data-relay="${escapeHtml(relay.relay_id)}" data-mac="${escapeHtml(relay.mac)}">${icons.doorOpen}<span>Unlock</span></button>`
-                )
+                .map((relay) => unlockButton(device.relays, relay))
                 .join("") || '<span class="muted">No relay</span>'
             }
           </div>
@@ -101,7 +98,7 @@ export const renderDevicesView = (host, account) => {
           </div>
           <div class="tile-actions">
             ${device.camera ? `<button class="action device-action device-monitor-action" data-stream="${escapeHtml(device.camera.source_name || device.camera.name)}" data-mode="open">${icons.webcam}<span>Monitor</span></button>` : '<span class="muted">No camera</span>'}
-            ${device.relays.map((relay) => `<button class="action device-action device-unlock-action" data-relay="${escapeHtml(relay.relay_id)}" data-mac="${escapeHtml(relay.mac)}">${icons.doorOpen}<span>Unlock ${escapeHtml(relay.door_name)}</span></button>`).join("") || '<span class="muted">No relay</span>'}
+            ${device.relays.map((relay) => unlockButton(device.relays, relay)).join("") || '<span class="muted">No relay</span>'}
           </div>
         </article>
       `
@@ -126,7 +123,7 @@ export const renderDevicesView = (host, account) => {
             <th>Info</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody data-list-order="devices">
           ${rows || '<tr><td colspan="4">No devices discovered.</td></tr>'}
         </tbody>
       </table>`}
@@ -140,6 +137,7 @@ export const renderDevicesView = (host, account) => {
  */
 export const bindDevicesEvents = (host) => {
   bindTileOrdering(host, "devices");
+  bindListOrdering(host, "devices");
   host.shadowRoot.querySelectorAll("[data-stream]").forEach((button) =>
     button.addEventListener("click", () =>
       host._stream(button.dataset.stream, button.dataset.mode)

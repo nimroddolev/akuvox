@@ -117,6 +117,58 @@ export const tableStyles = `
 
   .tile-grab:active { cursor: grabbing; }
 
+  .list-title {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+  }
+
+  .list-grab {
+    width: 24px;
+    min-height: 30px;
+    flex: 0 0 auto;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    color: var(--secondary-text-color, #6b7280);
+    background: transparent;
+    cursor: grab;
+    font-size: 21px;
+    line-height: 1;
+    touch-action: none;
+    user-select: none;
+  }
+
+  .list-grab:hover,
+  .list-grab:focus-visible {
+    color: var(--aqua);
+    background: color-mix(in srgb, var(--aqua) 14%, transparent);
+  }
+
+  .list-grab:active { cursor: grabbing; }
+
+  .list-dragging { opacity: 0.35; }
+
+  .list-drop-target td { box-shadow: inset 0 2px 0 var(--aqua); }
+
+  .list-drop-target.list-drop-after td { box-shadow: inset 0 -2px 0 var(--aqua); }
+
+  .list-drag-preview {
+    position: fixed;
+    z-index: 10002;
+    margin: 0;
+    border-collapse: collapse;
+    pointer-events: none;
+    opacity: 0.92;
+    cursor: grabbing;
+    background: transparent;
+    box-shadow: 0 16px 32px rgb(0 0 0 / 24%);
+    transform: rotate(1deg) scale(1.02);
+    transition: none;
+  }
+
+
   .tile-dragging {
     opacity: 0.2;
     outline: 2px dashed var(--aqua);
