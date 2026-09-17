@@ -18,14 +18,14 @@ import {
   renderActivityView,
   bindActivityEvents,
   visibleActivityEvents,
-} from "./views/activity-view.js?v=20260909-visible-thumbnail-preload";
+} from "./views/activity-view.js?v=20260917-ha-device-names";
 import { renderCallsView, bindCallsEvents } from "./views/calls-view.js?v=20260908-call-history-dedupe";
 import {
   renderKeysView,
   bindKeysEvents,
   deleteSelectedKeys,
-} from "./views/keys-view.js?v=20260915-key-sort-direction";
-import { renderSettingsView, bindSettingsEvents, updateActivityStorageProgress } from "./views/settings-view.js?v=20260916-event-image-policy";
+} from "./views/keys-view.js?v=20260917-ha-device-names";
+import { renderSettingsView, bindSettingsEvents, updateActivityStorageProgress } from "./views/settings-view.js?v=20260917-ha-device-names";
 import { renderHelpView } from "./views/help-view.js";
 
 const ROW_VIEW_MODE_STORAGE_KEY = "akuvox-panel-row-view-mode";
@@ -529,7 +529,9 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
       return;
     }
 
-    const relays = (this._account()?.relays || []).filter((relay) => relay.name === cameraName);
+    const relays = (this._account()?.relays || []).filter(
+      (relay) => (relay.source_name || relay.name) === cameraName
+    );
     const settings = this._settings || {};
     const orientation = settings.custom_camera_stream_orientations
       ? settings.camera_stream_orientations?.[cameraName] || "none"

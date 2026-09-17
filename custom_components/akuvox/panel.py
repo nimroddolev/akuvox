@@ -200,22 +200,34 @@ async def websocket_panel_data(
             }
             for temp_key in panel_data["temporary_keys"]
         ]
+        device_names: dict[str, str] = {}
         for item in [*panel_data["cameras"], *panel_data["relays"]]:
-            name = str(item.get("name", ""))
+            source_name = str(item.get("source_name") or item.get("name", ""))
             device = device_registry.async_get_device(
-                identifiers={(DOMAIN, f"{entry.entry_id}:{name}")}
+                identifiers={(DOMAIN, f"{entry.entry_id}:{source_name}")}
             )
             # Existing installations used the device name as the identifier.
             # Retain that lookup while requiring ownership by this entry, so it
             # remains safe when multiple SmartPlus accounts share a device name.
             if device is None:
                 legacy_device = device_registry.async_get_device(
-                    identifiers={(DOMAIN, name)}
+                    identifiers={(DOMAIN, source_name)}
                 )
                 if legacy_device is not None and entry.entry_id in legacy_device.config_entries:
                     device = legacy_device
             if device is not None:
                 item["device_id"] = device.id
+                display_name = device.name_by_user or device.name or source_name
+                item["name"] = display_name
+                if "door_name" in item:
+                    item["door_name"] = display_name
+                device_names[source_name] = display_name
+        for activity in panel_data["activity"]:
+            source_name = str(activity.get("Location", "")).strip()
+            display_name = device_names.get(source_name)
+            if display_name:
+                activity["source_location"] = source_name
+                activity["Location"] = display_name
         accounts.append(
             {
                 "entry_id": entry.entry_id,

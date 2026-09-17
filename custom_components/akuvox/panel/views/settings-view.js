@@ -8,8 +8,7 @@ import { callWsWithBlocker, confirmModal, showNotice, showPairingLinkNotice } fr
 import { CAMERA_ORIENTATION_OPTIONS } from "../utils/orientation.js?v=20260830-combined-directional-labels";
 
 const cameraOptionsTable = (host) => {
-  const cameras = [...new Set((host._account()?.cameras || []).map((camera) => camera.name).filter(Boolean))]
-    .sort((left, right) => left.localeCompare(right));
+  const cameras = panelCameras(host);
   const streamOrientations = host._settings?.camera_stream_orientations || {};
   const activityOrientations = host._settings?.activity_image_orientations || {};
   return `
@@ -18,27 +17,35 @@ const cameraOptionsTable = (host) => {
         <thead><tr><th>Camera</th><th>Stream Orientation</th><th>Activity Image Orientation</th><th>RTSP Url</th></tr></thead>
         <tbody>
           ${cameras.map((camera) => `<tr>
-            <td title="${escapeHtml(camera)}">${escapeHtml(camera)}</td>
-            <td><select name="camera_stream_orientation" data-stream-orientation="${escapeHtml(camera)}" aria-label="${escapeHtml(camera)} stream orientation">${CAMERA_ORIENTATION_OPTIONS.map(([value, label]) => `<option value="${value}" ${streamOrientations[camera] === value ? "selected" : ""}>${label}</option>`).join("")}</select></td>
-            <td><select name="activity_image_orientation" data-activity-orientation="${escapeHtml(camera)}" aria-label="${escapeHtml(camera)} activity image orientation">${CAMERA_ORIENTATION_OPTIONS.map(([value, label]) => `<option value="${value}" ${activityOrientations[camera] === value ? "selected" : ""}>${label}</option>`).join("")}</select></td>
-            <td><button class="action camera-copy-rtsp" type="button" data-stream="${escapeHtml(camera)}" data-mode="copy" aria-label="Copy RTSP link" title="Copy RTSP link">${icons.copy}</button></td>
+            <td title="${escapeHtml(camera.name)}">${escapeHtml(camera.name)}</td>
+            <td><select name="camera_stream_orientation" data-stream-orientation="${escapeHtml(camera.sourceName)}" aria-label="${escapeHtml(camera.name)} stream orientation">${CAMERA_ORIENTATION_OPTIONS.map(([value, label]) => `<option value="${value}" ${streamOrientations[camera.sourceName] === value ? "selected" : ""}>${label}</option>`).join("")}</select></td>
+            <td><select name="activity_image_orientation" data-activity-orientation="${escapeHtml(camera.sourceName)}" aria-label="${escapeHtml(camera.name)} activity image orientation">${CAMERA_ORIENTATION_OPTIONS.map(([value, label]) => `<option value="${value}" ${activityOrientations[camera.sourceName] === value ? "selected" : ""}>${label}</option>`).join("")}</select></td>
+            <td><button class="action camera-copy-rtsp" type="button" data-stream="${escapeHtml(camera.sourceName)}" data-mode="copy" aria-label="Copy RTSP link" title="Copy RTSP link">${icons.copy}</button></td>
           </tr>`).join("") || '<tr><td colspan="4" class="muted">No cameras are currently available for this account.</td></tr>'}
         </tbody>
       </table>
     </div>`;
 };
 
+const panelCameras = (host) => [...new Map(
+  (host._account()?.cameras || [])
+    .filter((camera) => camera.name)
+    .map((camera) => {
+      const sourceName = camera.source_name || camera.name;
+      return [sourceName, { name: camera.name, sourceName }];
+    })
+).values()].sort((left, right) => left.name.localeCompare(right.name));
+
 const eventOptions = (host) => {
   const settings = host._settings || {};
-  const cameras = [...new Set((host._account()?.cameras || []).map((camera) => camera.name).filter(Boolean))]
-    .sort((left, right) => left.localeCompare(right));
+  const cameras = panelCameras(host);
   const overrides = settings.event_image_wait_overrides || {};
   return `<fieldset>
     <legend>Events</legend>
     <label class="check"><input name="wait_for_event_image" type="checkbox" ${settings.wait_for_event_image !== false ? "checked" : ""}> Wait for an image URL before firing a door event</label>
     <label class="check"><input name="custom_event_image_wait" type="checkbox" ${settings.custom_event_image_wait ? "checked" : ""}> Configure image waiting for each device</label>
     <div data-event-image-overrides ${settings.custom_event_image_wait ? "" : "hidden"}>
-      ${cameras.map((camera) => `<label class="check"><input type="checkbox" data-event-image-wait="${escapeHtml(camera)}" ${overrides[camera] !== undefined ? (overrides[camera] ? "checked" : "") : (settings.wait_for_event_image !== false ? "checked" : "")}> ${escapeHtml(camera)}</label>`).join("") || '<p class="muted">No devices are currently available.</p>'}
+      ${cameras.map((camera) => `<label class="check"><input type="checkbox" data-event-image-wait="${escapeHtml(camera.sourceName)}" ${overrides[camera.sourceName] !== undefined ? (overrides[camera.sourceName] ? "checked" : "") : (settings.wait_for_event_image !== false ? "checked" : "")}> ${escapeHtml(camera.name)}</label>`).join("") || '<p class="muted">No devices are currently available.</p>'}
     </div>
   </fieldset>`;
 };

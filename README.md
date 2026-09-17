@@ -58,11 +58,11 @@ You can view your temporary access keys from the SmartPlus app in Home Assistant
 Whenever any of your doors are rung or opened, the `akuvox_door_update` event is fired in Home Assistant. When you use the `akuvox_door_update` even as an automation trigger, you will have access to data associated with the specific door ring/open event, accessible under: `trigger.event.data`.
 
 #### 1. `trigger.event.data.Location`
-The `Location` value represents the name of the Akuvox door that was rung or opened, eg: `Front Door`, `Side Door`, etc.
+The `Location` value represents the Home Assistant device name for the door that was rung or opened, eg: `Front Door`, `Side Door`, etc. A custom device name set in Home Assistant is used here.
 
-#### 2. `trigger.event.data.CallType`
-The `CallType` value represents the door event type:
-| `CallType` Value | Meaning |
+#### 2. `trigger.event.data.CaptureType`
+The `CaptureType` value represents the door event type:
+| `CaptureType` Value | Meaning |
 |-|-|
 | `Call` | Someone rang the door. |
 | `Face Unlock` | The door was opened via facial recognition. |

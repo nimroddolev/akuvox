@@ -3,8 +3,10 @@ from __future__ import annotations
 
 import base64
 import io
+import sys
 import unittest
 import zipfile
+from types import SimpleNamespace
 from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 from custom_components.akuvox.api import AkuvoxApiClient
@@ -387,9 +389,11 @@ class TestSmartPlusApiE2E(unittest.IsolatedAsyncioTestCase):
             for call in self.hass.bus.async_fire.call_args_list
             if call.args[0] == "akuvox_door_update"
         )
-        self.assertEqual(door_event["door_name"], "Lobby")
-        self.assertEqual(door_event["opened_by"], "Visitor")
-        self.assertEqual(door_event["unlock_method"], "faceUnlock")
+        self.assertEqual(door_event["Location"], "Lobby")
+        self.assertEqual(door_event["Initiator"], "Visitor")
+        self.assertEqual(door_event["CaptureType"], "Face Unlock")
+        self.assertEqual(door_event["PicUrl"], "https://images.example/event.jpg")
+        self.assertEqual(door_event["RelayName"], "Relay1")
         panel_updates = [
             call
             for call in self.hass.bus.async_fire.call_args_list
@@ -436,6 +440,44 @@ class TestSmartPlusApiE2E(unittest.IsolatedAsyncioTestCase):
         await client.async_retrieve_personal_door_log()
 
         self.assertEqual(received_events[0]["Location"], "כניסה ראשית")
+
+    async def test_door_event_uses_the_home_assistant_device_name(self) -> None:
+        """A user-assigned device name is used in the public event payload."""
+        client = self._client([])
+        self.hass.data = {}
+        received_events = []
+        client.async_subscribe_to_door_unlocks("Lobby", received_events.append)
+        registry = MagicMock()
+        registry.async_get_device.side_effect = [
+            None,
+            SimpleNamespace(
+                id="device-id",
+                name="Lobby",
+                name_by_user="Main entrance",
+                config_entries={self.entry.entry_id},
+            ),
+        ]
+
+        api_module = sys.modules[AkuvoxApiClient.__module__]
+        with patch.object(api_module.dr, "async_get", return_value=registry):
+            client.async_publish_door_unlock(
+                "Lobby",
+                initiator="Resident",
+                capture_type="remoteOpenDoor",
+                source_data={"deviceName": "Lobby"},
+            )
+
+        event_data = received_events[0]
+        self.assertEqual(
+            event_data,
+            {
+                "Location": "Main entrance",
+                "CaptureType": "Unlock on SmartPlus",
+                "Initiator": "Resident",
+                "PicUrl": "",
+                "RelayName": "",
+            },
+        )
 
     async def test_first_door_log_response_is_never_published(self) -> None:
         """The API boundary suppresses startup data even if the parser returns it."""

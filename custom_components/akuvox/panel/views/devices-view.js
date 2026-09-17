@@ -60,7 +60,7 @@ export const renderDevicesView = (host, account) => {
           <div class="actions">
             ${
               device.camera
-                ? `<button class="action device-action device-monitor-action" data-stream="${escapeHtml(device.camera.name)}" data-mode="open">${icons.webcam}<span>Monitor</span></button>`
+                ? `<button class="action device-action device-monitor-action" data-stream="${escapeHtml(device.camera.source_name || device.camera.name)}" data-mode="open">${icons.webcam}<span>Monitor</span></button>`
                 : '<span class="muted">No camera</span>'
             }
           </div>
@@ -100,7 +100,7 @@ export const renderDevicesView = (host, account) => {
             ${device.deviceId ? `<a class="info-link" href="/config/devices/device/${encodeURIComponent(device.deviceId)}">${icons.externalLink}Device</a>` : ""}
           </div>
           <div class="tile-actions">
-            ${device.camera ? `<button class="action device-action device-monitor-action" data-stream="${escapeHtml(device.camera.name)}" data-mode="open">${icons.webcam}<span>Monitor</span></button>` : '<span class="muted">No camera</span>'}
+            ${device.camera ? `<button class="action device-action device-monitor-action" data-stream="${escapeHtml(device.camera.source_name || device.camera.name)}" data-mode="open">${icons.webcam}<span>Monitor</span></button>` : '<span class="muted">No camera</span>'}
             ${device.relays.map((relay) => `<button class="action device-action device-unlock-action" data-relay="${escapeHtml(relay.relay_id)}" data-mac="${escapeHtml(relay.mac)}">${icons.doorOpen}<span>Unlock ${escapeHtml(relay.door_name)}</span></button>`).join("") || '<span class="muted">No relay</span>'}
           </div>
         </article>

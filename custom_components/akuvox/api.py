@@ -19,7 +19,6 @@ from datetime import datetime, timezone
 from time import time
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from homeassistant.const import ATTR_DEVICE_ID
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers import device_registry as dr
@@ -167,41 +166,60 @@ class AkuvoxApiClient:
         source_data: dict[str, Any] | None = None,
     ) -> None:
         """Publish a door unlock to legacy and device-event consumers."""
-        event_data = dict(source_data or {})
-        event_data.update(
-            {
-                "Location": door_name,
-                "Initiator": initiator,
-                "CaptureType": capture_type,
-                "RelayName": relay_name,
-                "door_name": door_name,
-                "opened_by": initiator,
-                "unlock_method": capture_type,
-            }
-        )
+        akuvox_door_name = door_name
+        device = None
+        display_name = door_name
         if self._entry is not None and hasattr(self.hass, "data"):
             device_registry = dr.async_get(self.hass)
             device = device_registry.async_get_device(
                 identifiers={(DOMAIN, f"{self._entry.entry_id}:{door_name}")}
             )
             if device is None:
-                device = device_registry.async_get_device(
+                legacy_device = device_registry.async_get_device(
                     identifiers={(DOMAIN, door_name)}
                 )
+                if (
+                    legacy_device is not None
+                    and self._entry.entry_id in legacy_device.config_entries
+                ):
+                    device = legacy_device
             if device is not None:
-                event_data[ATTR_DEVICE_ID] = device.id
+                display_name = device.name_by_user or device.name or door_name
+
+        source_data = source_data or {}
+        event_data = {
+            "Location": display_name,
+            "CaptureType": self._event_capture_type(capture_type),
+            "Initiator": initiator,
+            "PicUrl": str(source_data.get("PicUrl", "")),
+            "RelayName": relay_name,
+        }
         listeners = self._door_unlock_listeners.get(door_name, set())
         LOGGER.debug(
-            "Publishing door event: door=%s capture_time=%s device_id=%s listeners=%s",
-            door_name,
-            event_data.get("CaptureTime"),
-            event_data.get(ATTR_DEVICE_ID),
+            "Publishing door event: akuvox_door=%s ha_device=%s capture_time=%s "
+            "listeners=%s",
+            akuvox_door_name,
+            display_name,
+            source_data.get("CaptureTime"),
             len(listeners),
         )
         self.hass.bus.async_fire("akuvox_door_update", event_data)
         for listener in listeners:
             listener(event_data)
-        LOGGER.debug("Door event published for %s", door_name)
+        LOGGER.debug("Door event published for %s", display_name)
+
+    @staticmethod
+    def _event_capture_type(capture_type: str) -> str:
+        """Translate SmartPlus event types to the documented event values."""
+        normalised = "".join(
+            character for character in capture_type.lower() if character.isalnum()
+        )
+        return {
+            "call": "Call",
+            "faceunlock": "Face Unlock",
+            "remoteopendoor": "Unlock on SmartPlus",
+            "unlockonsmartplus": "Unlock on SmartPlus",
+        }.get(normalised, capture_type)
 
     async def async_init_api(self) -> bool:
         """Initialize API configuration data."""
@@ -952,7 +970,12 @@ class AkuvoxApiClient:
                 door_name,
                 initiator=str(new_door_log.get("Initiator", "")),
                 capture_type=str(new_door_log.get("CaptureType", "")),
-                relay_name=str(new_door_log.get("RelayName", "")),
+                relay_name=str(
+                    new_door_log.get("RelayName")
+                    or new_door_log.get("Relay")
+                    or new_door_log.get("relayName")
+                    or ""
+                ),
                 source_data=new_door_log,
             )
         elif new_door_log is not None:
@@ -1445,11 +1468,19 @@ class AkuvoxApiClient:
                 and self._data.sip_account
                 and self._data.sip_password
             ),
-            "cameras": [{"name": camera.get("name", "")} for camera in cameras],
+            "cameras": [
+                {
+                    "name": camera.get("name", ""),
+                    "source_name": camera.get("name", ""),
+                }
+                for camera in cameras
+            ],
             "relays": [
                 {
                     "name": relay.get("name", ""),
                     "door_name": relay.get("door_name", ""),
+                    "source_name": relay.get("name", ""),
+                    "source_door_name": relay.get("door_name", ""),
                     "relay_id": relay.get("relay_id", ""),
                     "mac": relay.get("mac", ""),
                 }

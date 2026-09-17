@@ -20,7 +20,9 @@ import {
 const activityOrientation = (host, item) => {
   const settings = host._settings || {};
   if (!settings.custom_activity_image_orientations) return "none";
-  return settings.activity_image_orientations?.[String(item.Location || "").trim()] || "none";
+  return settings.activity_image_orientations?.[
+    String(item.source_location || item.Location || "").trim()
+  ] || "none";
 };
 
 const formatStorageAmount = (bytes) => {

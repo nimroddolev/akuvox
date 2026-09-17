@@ -64,7 +64,7 @@ export const renderKeysView = (host, account) => {
       (relay) => `
       <label class="check">
         <input type="checkbox" name="relay" value="${escapeHtml(relay.mac)}|${escapeHtml(relay.relay_id)}">
-        ${escapeHtml(relay.name || relay.door_name)} - ${escapeHtml(relay.door_name)} (relay ${escapeHtml(relay.relay_id)})
+        ${escapeHtml(relay.name || relay.door_name)} (relay ${escapeHtml(relay.relay_id)})
       </label>
     `
     )
@@ -341,7 +341,7 @@ export const showEditKeyDialog = (host, keyId) => {
       (relay) => `
       <label class="check">
         <input type="checkbox" disabled ${selected.has(`${relay.mac}|${relay.relay_id}`) ? "checked" : ""}>
-        ${escapeHtml(relay.name || relay.door_name)} - ${escapeHtml(relay.door_name)} (relay ${escapeHtml(relay.relay_id)})
+        ${escapeHtml(relay.name || relay.door_name)} (relay ${escapeHtml(relay.relay_id)})
       </label>
     `
     )
