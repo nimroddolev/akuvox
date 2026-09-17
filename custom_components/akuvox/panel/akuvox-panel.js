@@ -25,7 +25,7 @@ import {
   bindKeysEvents,
   deleteSelectedKeys,
 } from "./views/keys-view.js?v=20260915-key-sort-direction";
-import { renderSettingsView, bindSettingsEvents, updateActivityStorageProgress } from "./views/settings-view.js?v=20260916-quiet-receiver-actions";
+import { renderSettingsView, bindSettingsEvents, updateActivityStorageProgress } from "./views/settings-view.js?v=20260916-event-image-policy";
 import { renderHelpView } from "./views/help-view.js";
 
 const ROW_VIEW_MODE_STORAGE_KEY = "akuvox-panel-row-view-mode";

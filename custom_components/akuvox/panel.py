@@ -38,6 +38,9 @@ from .const import (
     ACTIVITY_HISTORY_MAX_STORAGE_MB,
     ACTIVITY_HISTORY_DEFAULT_STORAGE_MB,
     DEBUG_LOGGING,
+    WAIT_FOR_EVENT_IMAGE,
+    CUSTOM_EVENT_IMAGE_WAIT,
+    EVENT_IMAGE_WAIT_OVERRIDES,
     PANEL_RUNTIME_KEY,
     PANEL_RUNTIME_DOMAIN,
     PANEL_STATIC_URL,
@@ -416,6 +419,13 @@ async def websocket_panel_settings(
                         ACTIVITY_HISTORY_DEFAULT_STORAGE_MB,
                     )
                 ),
+                WAIT_FOR_EVENT_IMAGE: bool(_entry_value(entry, WAIT_FOR_EVENT_IMAGE, True)),
+                CUSTOM_EVENT_IMAGE_WAIT: bool(
+                    _entry_value(entry, CUSTOM_EVENT_IMAGE_WAIT, False)
+                ),
+                EVENT_IMAGE_WAIT_OVERRIDES: _entry_value(
+                    entry, EVENT_IMAGE_WAIT_OVERRIDES, {}
+                ),
                 "activity_history_storage_bytes": (
                     client.get_activity_storage_usage_bytes() if client else 0
                 ),
@@ -472,6 +482,9 @@ async def websocket_panel_export_sip_accounts_pdf(
         vol.Required(ACTIVITY_IMAGE_ORIENTATIONS): dict,
         vol.Required(STORE_ACTIVITY_HISTORY): bool,
         vol.Required(ACTIVITY_HISTORY_MAX_STORAGE_MB): vol.All(vol.Coerce(int), vol.Range(min=0)),
+        vol.Required(WAIT_FOR_EVENT_IMAGE): bool,
+        vol.Required(CUSTOM_EVENT_IMAGE_WAIT): bool,
+        vol.Required(EVENT_IMAGE_WAIT_OVERRIDES): dict,
         vol.Required(DEBUG_LOGGING): bool,
     }
 )
@@ -528,6 +541,13 @@ async def websocket_panel_save_settings(
             ),
             STORE_ACTIVITY_HISTORY: msg[STORE_ACTIVITY_HISTORY],
             ACTIVITY_HISTORY_MAX_STORAGE_MB: msg[ACTIVITY_HISTORY_MAX_STORAGE_MB],
+            WAIT_FOR_EVENT_IMAGE: msg[WAIT_FOR_EVENT_IMAGE],
+            CUSTOM_EVENT_IMAGE_WAIT: msg[CUSTOM_EVENT_IMAGE_WAIT],
+            EVENT_IMAGE_WAIT_OVERRIDES: {
+                name: bool(wait)
+                for name, wait in msg[EVENT_IMAGE_WAIT_OVERRIDES].items()
+                if name in camera_names and isinstance(wait, bool)
+            },
             DEBUG_LOGGING: msg[DEBUG_LOGGING],
         }
     )

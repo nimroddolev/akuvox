@@ -28,6 +28,21 @@ const cameraOptionsTable = (host) => {
     </div>`;
 };
 
+const eventOptions = (host) => {
+  const settings = host._settings || {};
+  const cameras = [...new Set((host._account()?.cameras || []).map((camera) => camera.name).filter(Boolean))]
+    .sort((left, right) => left.localeCompare(right));
+  const overrides = settings.event_image_wait_overrides || {};
+  return `<fieldset>
+    <legend>Events</legend>
+    <label class="check"><input name="wait_for_event_image" type="checkbox" ${settings.wait_for_event_image !== false ? "checked" : ""}> Wait for an image URL before firing a door event</label>
+    <label class="check"><input name="custom_event_image_wait" type="checkbox" ${settings.custom_event_image_wait ? "checked" : ""}> Configure image waiting for each device</label>
+    <div data-event-image-overrides ${settings.custom_event_image_wait ? "" : "hidden"}>
+      ${cameras.map((camera) => `<label class="check"><input type="checkbox" data-event-image-wait="${escapeHtml(camera)}" ${overrides[camera] !== undefined ? (overrides[camera] ? "checked" : "") : (settings.wait_for_event_image !== false ? "checked" : "")}> ${escapeHtml(camera)}</label>`).join("") || '<p class="muted">No devices are currently available.</p>'}
+    </div>
+  </fieldset>`;
+};
+
 const formatStorageAmount = (bytes) => {
   const units = ["B", "KB", "MB", "GB", "TB"];
   let value = Math.max(0, Number(bytes) || 0);
@@ -199,6 +214,7 @@ export const renderSettingsView = (host) => {
         <fieldset>
           <legend>Camera Options</legend>
           ${cameraOptionsTable(host)}
+          ${eventOptions(host)}
         </fieldset>
 
         <fieldset>
@@ -278,6 +294,11 @@ export const handleSaveSettings = async (host, event) => {
       activity_image_orientations: Object.fromEntries(
         [...settingsForm.querySelectorAll("[data-activity-orientation]")].map((select) => [select.dataset.activityOrientation, select.value])
       ),
+      wait_for_event_image: form.get("wait_for_event_image") === "on",
+      custom_event_image_wait: form.get("custom_event_image_wait") === "on",
+      event_image_wait_overrides: Object.fromEntries(
+        [...settingsForm.querySelectorAll("[data-event-image-wait]")].map((input) => [input.dataset.eventImageWait, input.checked])
+      ),
       debug_logging: form.get("debug_logging") === "on",
     };
 
@@ -334,6 +355,11 @@ export const bindSettingsEvents = (host) => {
   );
   storageHistoryToggle?.addEventListener("change", () => {
     if (storageLimitControls) storageLimitControls.hidden = !storageHistoryToggle.checked;
+  });
+  const eventOverrideToggle = settingsForm.querySelector('[name="custom_event_image_wait"]');
+  const eventOverrides = settingsForm.querySelector("[data-event-image-overrides]");
+  eventOverrideToggle?.addEventListener("change", () => {
+    if (eventOverrides) eventOverrides.hidden = !eventOverrideToggle.checked;
   });
 
   const storageLimitInput = settingsForm.querySelector(
