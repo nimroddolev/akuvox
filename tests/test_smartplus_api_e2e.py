@@ -376,6 +376,9 @@ class TestSmartPlusApiE2E(unittest.IsolatedAsyncioTestCase):
             side_effect=[None, None, {"CaptureTime": "old"}]
         )
         client._data.async_set_stored_data_for_key = AsyncMock()
+        # This test covers a response after the startup baseline was established.
+        client._door_log_first_response_pending = False
+        client._data._door_log_initialized = True
 
         self.assertTrue(await client.async_retrieve_personal_door_log())
         self.hass.bus.async_fire.assert_any_call("akuvox_door_update", ANY)
@@ -410,6 +413,62 @@ class TestSmartPlusApiE2E(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(panel_event["CaptureTime"], "2026-08-12 20:00:00")
         self.assertEqual(panel_event["Location"], "Lobby")
         self.assertEqual(panel_event["CaptureType"], "faceUnlock")
+
+    async def test_door_event_location_is_normalised_before_delivery(self) -> None:
+        """Polling whitespace must not prevent a device event subscription."""
+        client = self._client([])
+        received_events = []
+        client.async_subscribe_to_door_unlocks("כניסה ראשית", received_events.append)
+        client._data.async_parse_personal_door_log = AsyncMock(
+            return_value={
+                "CaptureTime": "2026-09-16 17:05:21",
+                "Location": " כניסה ראשית",
+                "Initiator": "Resident",
+                "CaptureType": "Remote Open Door",
+                "RelayName": "Relay1",
+            }
+        )
+        client.async_get_personal_door_log = AsyncMock(return_value=[{}])
+        client._async_record_panel_activity = AsyncMock(return_value=False)
+        client.async_retrieve_call_history = AsyncMock()
+        client._door_log_first_response_pending = False
+
+        await client.async_retrieve_personal_door_log()
+
+        self.assertEqual(received_events[0]["Location"], "כניסה ראשית")
+
+    async def test_first_door_log_response_is_never_published(self) -> None:
+        """The API boundary suppresses startup data even if the parser returns it."""
+        client = self._client([])
+        client._data.async_parse_personal_door_log = AsyncMock(
+            return_value={
+                "CaptureTime": "2026-09-16 17:05:21",
+                "Location": "Lobby",
+                "Initiator": "Resident",
+                "CaptureType": "Remote Open Door",
+            }
+        )
+        client.async_get_personal_door_log = AsyncMock(return_value=[{}])
+        client._async_record_panel_activity = AsyncMock(return_value=False)
+        client.async_retrieve_call_history = AsyncMock()
+
+        await client.async_retrieve_personal_door_log()
+
+        self.assertFalse(
+            any(
+                call.args[0] == "akuvox_door_update"
+                for call in self.hass.bus.async_fire.call_args_list
+            )
+        )
+
+        await client.async_retrieve_personal_door_log()
+
+        self.assertTrue(
+            any(
+                call.args[0] == "akuvox_door_update"
+                for call in self.hass.bus.async_fire.call_args_list
+            )
+        )
 
     async def test_activity_history_restored_and_persisted_for_panel(self) -> None:
         """Panel activity survived a restart and included the newly polled event."""
@@ -524,34 +583,18 @@ class TestSmartPlusApiE2E(unittest.IsolatedAsyncioTestCase):
         self.assertIn("opendoor?token=expired-token", request["url"])
         self.assertEqual(request["headers"]["X-AUTH-TOKEN"], "expired-token")
 
-    async def test_manual_relay_unlock_publishes_the_door_event(self) -> None:
-        """A successful HA relay action immediately triggers its door event."""
+    async def test_manual_relay_unlock_waits_for_the_activity_poll(self) -> None:
+        """Relay commands wait for the cloud log before publishing an event."""
         client = self._client([_success({"ok": True})])
-        received_events = []
-        client.async_subscribe_to_door_unlocks("Lobby", received_events.append)
 
         await client.async_make_opendoor_request(
             "Lobby, 1",
             "api.example",
             "session-token",
             "mac=AABBCC&relay=1",
-            door_name="Lobby",
-            relay_name="1",
         )
 
-        self.hass.bus.async_fire.assert_called_once_with(
-            "akuvox_door_update",
-            {
-                "Location": "Lobby",
-                "Initiator": "Home Assistant",
-                "CaptureType": "Unlock on Home Assistant",
-                "RelayName": "1",
-                "door_name": "Lobby",
-                "opened_by": "Home Assistant",
-                "unlock_method": "Unlock on Home Assistant",
-            },
-        )
-        self.assertEqual(len(received_events), 1)
+        self.hass.bus.async_fire.assert_not_called()
 
     async def test_temporary_key_mutations_used_documented_endpoints(self) -> None:
         """Akuvox temporary-key mutations used their documented response shapes."""

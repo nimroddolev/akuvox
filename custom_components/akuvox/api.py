@@ -117,6 +117,10 @@ class AkuvoxApiClient:
         self._token_refresh_lock = asyncio.Lock()
         self._door_log_failure_logged = False
         self._door_log_poll_interval = DOOR_LOG_FALLBACK_POLL_INTERVAL
+        # Keep an API-level startup guard as well as the parser's baseline.
+        # A config-entry reload creates a fresh client, and no data returned by
+        # that client's first successful poll may reach an EventEntity.
+        self._door_log_first_response_pending = True
         self._door_unlock_listeners: dict[str, set[Callable[[dict[str, Any]], None]]] = {}
         self._token_refresh_unsub: Callable[[], None] | None = None
         self._skip_next_entry_reload = False
@@ -186,9 +190,18 @@ class AkuvoxApiClient:
                 )
             if device is not None:
                 event_data[ATTR_DEVICE_ID] = device.id
+        listeners = self._door_unlock_listeners.get(door_name, set())
+        LOGGER.debug(
+            "Publishing door event: door=%s capture_time=%s device_id=%s listeners=%s",
+            door_name,
+            event_data.get("CaptureTime"),
+            event_data.get(ATTR_DEVICE_ID),
+            len(listeners),
+        )
         self.hass.bus.async_fire("akuvox_door_update", event_data)
-        for listener in self._door_unlock_listeners.get(door_name, set()):
+        for listener in listeners:
             listener(event_data)
+        LOGGER.debug("Door event published for %s", door_name)
 
     async def async_init_api(self) -> bool:
         """Initialize API configuration data."""
@@ -821,14 +834,7 @@ class AkuvoxApiClient:
         return None
 
     async def async_make_opendoor_request(
-        self,
-        name: str,
-        host: str,
-        token: str,
-        data: str,
-        *,
-        door_name: str | None = None,
-        relay_name: str = "",
+        self, name: str, host: str, token: str, data: str
     ) -> dict | list | None:
         """Send an asynchronous request to open a door relay."""
         LOGGER.debug("📡 Sending request to open door '%s'...", name)
@@ -851,13 +857,6 @@ class AkuvoxApiClient:
         )
         if json_data is not None:
             LOGGER.debug("✅ Door open request sent successfully.")
-            if door_name:
-                self.async_publish_door_unlock(
-                    door_name,
-                    initiator="Home Assistant",
-                    capture_type="Unlock on Home Assistant",
-                    relay_name=relay_name,
-                )
             return json_data
         LOGGER.error("❌ Request to open door failed.")
         return None
@@ -927,21 +926,41 @@ class AkuvoxApiClient:
         json_data = await self.async_get_personal_door_log()
         if json_data is None:
             return False
+        first_response = self._door_log_first_response_pending
+        self._door_log_first_response_pending = False
+        if first_response:
+            LOGGER.debug(
+                "First door-log polling response received; suppressing event delivery"
+            )
         activity_changed = await self._async_record_panel_activity(json_data)
         try:
             await self.async_retrieve_call_history()
         except AkuvoxApiClientError as error:
             LOGGER.debug("Unable to refresh SmartPlus call history: %s", error)
         new_door_log = await self._data.async_parse_personal_door_log(json_data)
-        if new_door_log is not None:
-            LOGGER.debug("🚪 New door open event occurred. Firing akuvox_door_update event")
-            door_name = str(new_door_log.get("Location", ""))
+        if new_door_log is not None and not first_response:
+            LOGGER.debug("Door-log detection is publishing a Home Assistant event")
+            raw_door_name = str(new_door_log.get("Location", ""))
+            door_name = raw_door_name.strip()
+            if raw_door_name != door_name:
+                LOGGER.debug(
+                    "Normalised door-log location from %r to %r",
+                    raw_door_name,
+                    door_name,
+                )
             self.async_publish_door_unlock(
                 door_name,
                 initiator=str(new_door_log.get("Initiator", "")),
                 capture_type=str(new_door_log.get("CaptureType", "")),
                 relay_name=str(new_door_log.get("RelayName", "")),
                 source_data=new_door_log,
+            )
+        elif new_door_log is not None:
+            LOGGER.debug(
+                "Door-log event suppressed because it came from the first polling response: "
+                "time=%s door=%r",
+                new_door_log.get("CaptureTime"),
+                new_door_log.get("Location"),
             )
         # Publish this only after all work for the poll has completed.  The
         # persistence and call-history steps can take several seconds, so
@@ -1692,8 +1711,6 @@ class AkuvoxApiClient:
                     host=self._data.host,
                     token=self._data.token,
                     data=f"mac={mac}&relay={relay_id}",
-                    door_name=str(relay.get("name", "")),
-                    relay_name=relay_id,
                 )
                 return
         raise AkuvoxApiClientError("Requested relay was not found")

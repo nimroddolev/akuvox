@@ -11,6 +11,9 @@ from .const import (
     LOGGER,
     PIC_URL_KEY,
     CAPTURE_TIME_KEY,
+    WAIT_FOR_EVENT_IMAGE,
+    CUSTOM_EVENT_IMAGE_WAIT,
+    EVENT_IMAGE_WAIT_OVERRIDES,
     DATA_STORAGE_KEY,
     account_storage_key,
     LOCATIONS_DICT,
@@ -36,6 +39,7 @@ class AkuvoxData:
 
         self.hass = hass
         self._entry = entry if entry is not None and not isinstance(entry, dict) else None
+        self._door_log_initialized = False
         self._storage_key = (
             account_storage_key(entry.entry_id, "state")
             if entry is not None and not isinstance(entry, dict)
@@ -319,30 +323,67 @@ class AkuvoxData:
 
     async def async_parse_personal_door_log(self, json_data: list):
         """Parse the getDoorLog API response."""
-        ret_value = None
-        if json_data is not None and len(json_data) > 0:
-            new_door_log = json_data[0]
-            latest_door_log = await self.async_get_stored_data_for_key("latest_door_log")
-            if latest_door_log is not None and CAPTURE_TIME_KEY in latest_door_log:
-                if new_door_log is not None and CAPTURE_TIME_KEY in new_door_log:
-                    # Ignore previous door open event
-                    if str(latest_door_log[CAPTURE_TIME_KEY]) == str(new_door_log[CAPTURE_TIME_KEY]):
-                        return None
-                    # Screenshot required and currently unavailable
-                    if PIC_URL_KEY in new_door_log and new_door_log[PIC_URL_KEY] == "":
-                        LOGGER.debug("New door entry detected --> Waiting for screenshot URL...")
-                        return None
-                    # New door event detected
-                    LOGGER.debug("ℹ️ New personal door log entry detected:")
-                    LOGGER.debug(" - Initiator: %s", new_door_log["Initiator"])
-                    LOGGER.debug(" - CaptureType: %s", new_door_log["CaptureType"])
-                    LOGGER.debug(" - Location: %s", new_door_log["Location"])
-                    LOGGER.debug(" - Door MAC: %s", new_door_log["MAC"])
-                    LOGGER.debug(" - Door Relay: %s", new_door_log["Relay"])
-                    ret_value = new_door_log
+        if not json_data:
+            return None
+        newest = json_data[0]
+        if not isinstance(newest, dict) or CAPTURE_TIME_KEY not in newest:
+            LOGGER.debug("Door-log poll ignored: newest row has no capture time")
+            return None
+        if not self._door_log_initialized:
+            self._door_log_initialized = True
+            await self.async_set_stored_data_for_key("latest_door_log", newest)
+            LOGGER.debug(
+                "Door-log poll initialised at %s; baseline event ignored",
+                newest[CAPTURE_TIME_KEY],
+            )
+            return None
 
-            await self.async_set_stored_data_for_key("latest_door_log", new_door_log)
-        return ret_value
+        latest_door_log = await self.async_get_stored_data_for_key("latest_door_log")
+        latest_capture_time = str((latest_door_log or {}).get(CAPTURE_TIME_KEY, ""))
+        known_event_index = next(
+            (
+                index
+                for index, event in enumerate(json_data)
+                if isinstance(event, dict)
+                and str(event.get(CAPTURE_TIME_KEY, "")) == latest_capture_time
+            ),
+            None,
+        )
+        if known_event_index == 0:
+            LOGGER.debug("Door-log poll has no new event after %s", latest_capture_time)
+            return None
+
+        event = newest if known_event_index is None else json_data[known_event_index - 1]
+        if not isinstance(event, dict):
+            LOGGER.debug("Door-log poll ignored: candidate row is not an object")
+            return None
+        wait_for_image = self._should_wait_for_event_image(event)
+        if wait_for_image and not str(event.get(PIC_URL_KEY, "")).strip():
+            LOGGER.debug(
+                "Door-log event %s for %s is waiting for its image URL",
+                event.get(CAPTURE_TIME_KEY), event.get("Location"),
+            )
+            return None
+
+        await self.async_set_stored_data_for_key("latest_door_log", event)
+        LOGGER.debug(
+            "Door-log event accepted: time=%s door=%s image=%s wait_for_image=%s",
+            event.get(CAPTURE_TIME_KEY), event.get("Location"),
+            bool(str(event.get(PIC_URL_KEY, "")).strip()), wait_for_image,
+        )
+        return event
+
+    def _should_wait_for_event_image(self, event: dict) -> bool:
+        """Return the configured image-wait policy for one door event."""
+        options = self._entry.options if self._entry is not None else {}
+        wait_for_image = bool(options.get(WAIT_FOR_EVENT_IMAGE, True))
+        if not options.get(CUSTOM_EVENT_IMAGE_WAIT, False):
+            return wait_for_image
+        overrides = options.get(EVENT_IMAGE_WAIT_OVERRIDES, {})
+        if not isinstance(overrides, dict):
+            return wait_for_image
+        door_name = str(event.get("Location", ""))
+        return bool(overrides.get(door_name, wait_for_image))
 
     ###################
 

@@ -73,6 +73,16 @@ class AkuvoxDoorUnlockEvent(EventEntity):
             self._door_name, self._handle_unlock
         )
 
+    async def async_get_last_state(self) -> None:
+        """Do not restore an old door opening when Home Assistant starts.
+
+        EventEntity restores its previous state by default.  Home Assistant
+        writes that restoration at startup and the logbook presents it as an
+        event detected at the startup time.  These entities are edge-only:
+        their state must exist only after a freshly polled door event.
+        """
+        return None
+
     async def async_will_remove_from_hass(self) -> None:
         """Remove the client callback when the entity unloads."""
         if self._unsub is not None:

@@ -518,3 +518,6 @@ CREDENTIAL_STORAGE_VERSION = 1
 
 CAPTURE_TIME_KEY = "CaptureTime"
 PIC_URL_KEY = "PicUrl"
+WAIT_FOR_EVENT_IMAGE = "wait_for_event_image"
+CUSTOM_EVENT_IMAGE_WAIT = "custom_event_image_wait"
+EVENT_IMAGE_WAIT_OVERRIDES = "event_image_wait_overrides"

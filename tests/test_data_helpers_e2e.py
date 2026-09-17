@@ -69,9 +69,52 @@ class TestDataAndHelpersE2E(unittest.IsolatedAsyncioTestCase):
             return_value={"CaptureTime": "old"}
         )
         self.data.async_set_stored_data_for_key = AsyncMock()
+        self.data._door_log_initialized = True
 
         self.assertEqual(await self.data.async_parse_personal_door_log([event]), event)
         self.data.async_set_stored_data_for_key.assert_awaited_once_with("latest_door_log", event)
+
+    async def test_first_door_log_is_used_as_the_polling_baseline(self) -> None:
+        """The initial poll never emits an event for a potentially stale row."""
+        event = {
+            "CaptureTime": "new",
+            "Initiator": "Resident",
+            "CaptureType": "Remote Open Door",
+            "Location": "כניסה ראשית",
+            "MAC": "001122",
+            "Relay": "1",
+            "PicUrl": "https://images.example/snapshot.jpg",
+        }
+        self.data.async_get_stored_data_for_key = AsyncMock(return_value=None)
+        self.data.async_set_stored_data_for_key = AsyncMock()
+
+        self.assertIsNone(await self.data.async_parse_personal_door_log([event]))
+        self.data.async_set_stored_data_for_key.assert_awaited_once_with("latest_door_log", event)
+
+    async def test_door_log_publishes_unseen_rows_one_at_a_time(self) -> None:
+        """A relay unlock is not skipped when a newer activity shares its poll."""
+        latest = {
+            "CaptureTime": "old",
+            "Initiator": "Visitor",
+            "CaptureType": "Call",
+            "Location": "Door",
+            "MAC": "001122",
+            "Relay": "1",
+        }
+        relay_unlock = {**latest, "CaptureTime": "relay-unlock", "PicUrl": "snapshot"}
+        newer_event = {**latest, "CaptureTime": "newer", "PicUrl": "snapshot"}
+        self.data.async_get_stored_data_for_key = AsyncMock(return_value=latest)
+        self.data.async_set_stored_data_for_key = AsyncMock()
+        self.data._door_log_initialized = True
+
+        event = await self.data.async_parse_personal_door_log(
+            [newer_event, relay_unlock, latest]
+        )
+
+        self.assertEqual(event, relay_unlock)
+        self.data.async_set_stored_data_for_key.assert_awaited_once_with(
+            "latest_door_log", relay_unlock
+        )
 
     async def test_door_log_with_empty_screenshot_url_waited_for_a_later_poll(self) -> None:
         """An incomplete new door-log entry was not published or marked as seen."""
@@ -88,9 +131,28 @@ class TestDataAndHelpersE2E(unittest.IsolatedAsyncioTestCase):
             return_value={"CaptureTime": "old"}
         )
         self.data.async_set_stored_data_for_key = AsyncMock()
+        self.data._door_log_initialized = True
 
         self.assertIsNone(await self.data.async_parse_personal_door_log([event]))
         self.data.async_set_stored_data_for_key.assert_not_awaited()
+
+    async def test_door_log_can_publish_before_an_image_is_available(self) -> None:
+        """The event setting can opt a door out of image waiting."""
+        event = {
+            "CaptureTime": "new",
+            "Initiator": "Visitor",
+            "CaptureType": "Remote Open Door",
+            "Location": "Door",
+            "MAC": "001122",
+            "Relay": "1",
+            "PicUrl": "",
+        }
+        self.data._entry = type("Entry", (), {"options": {"wait_for_event_image": False}})()
+        self.data._door_log_initialized = True
+        self.data.async_get_stored_data_for_key = AsyncMock(return_value={"CaptureTime": "old"})
+        self.data.async_set_stored_data_for_key = AsyncMock()
+
+        self.assertEqual(await self.data.async_parse_personal_door_log([event]), event)
 
     def test_helpers_resolved_known_and_unknown_regions(self) -> None:
         """Country lookups selected an API region and safe defaults."""
