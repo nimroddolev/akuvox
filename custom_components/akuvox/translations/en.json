@@ -89,8 +89,8 @@
             "description": "The source Home Assistant revoked this receiver. Re-pair the integration to restore access."
         },
         "credential_source_source_needs_reauth": {
-            "title": "Credential source needs reauthentication for {entry_title}",
-            "description": "Reauthenticate Akuvox SmartPlus on the source Home Assistant. This receiving instance cannot reauthenticate the shared account."
+            "title": "Credential source supplied invalid credentials for {entry_title}",
+            "description": "SmartPlus rejected the token supplied by the source Home Assistant. Reauthenticate Akuvox SmartPlus on the source instance, then refresh shared credentials on this receiving instance."
         }
     },
     "device_automation": {

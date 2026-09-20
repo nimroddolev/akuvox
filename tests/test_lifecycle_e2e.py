@@ -323,6 +323,27 @@ class TestAuthenticationRepairE2E(unittest.TestCase):
         )
         self.assertTrue(repairs.authentication_failed(hass, "entry-id"))
 
+    def test_remote_credential_problem_created_a_repair_and_panel_state(self) -> None:
+        """A receiving instance exposes an invalid source token to both UIs."""
+        hass = MagicMock()
+        hass.data = {}
+        entry = MagicMock(entry_id="entry-id", title="Remote home")
+
+        with patch("custom_components.akuvox.repairs.ir.async_create_issue") as create_issue:
+            repairs.async_update_credential_source_issue(
+                hass, entry, "source_needs_reauth"
+            )
+
+        self.assertEqual(
+            repairs.credential_source_problem(hass, "entry-id"),
+            "source_needs_reauth",
+        )
+        self.assertEqual(
+            create_issue.call_args.kwargs["translation_key"],
+            "credential_source_source_needs_reauth",
+        )
+        hass.bus.async_fire.assert_called_once()
+
 
 class TestActivityStorageRepairsE2E(unittest.TestCase):
     """Verify activity-storage warnings follow the configured threshold."""

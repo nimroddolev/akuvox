@@ -5,12 +5,13 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import issue_registry as ir
 
-from .const import DOMAIN, PANEL_RUNTIME_DOMAIN
+from .const import DOMAIN, PANEL_DATA_UPDATED_EVENT, PANEL_RUNTIME_DOMAIN
 
 _AUTH_FAILURES = "authentication_failures"
 _ACTIVITY_STORAGE_ISSUE_PREFIX = "activity_storage_limit_"
 _ACTIVITY_STORAGE_SETTINGS_URL = "/akuvox-smartplus#Settings"
 _CREDENTIAL_SOURCE_ISSUE_PREFIX = "credential_source_"
+_CREDENTIAL_SOURCE_PROBLEMS = "credential_source_problems"
 
 
 def async_update_activity_storage_warning(
@@ -82,11 +83,26 @@ def async_update_credential_source_issue(
 ) -> None:
     """Expose source connectivity/revocation without asking a receiver for SMS."""
     issue_id = f"{_CREDENTIAL_SOURCE_ISSUE_PREFIX}{entry.entry_id}"
-    if problem is None:
-        ir.async_delete_issue(hass, DOMAIN, issue_id)
-        return
-    ir.async_create_issue(
-        hass, DOMAIN, issue_id, is_fixable=False, severity=ir.IssueSeverity.WARNING,
-        translation_key=f"credential_source_{problem}",
-        translation_placeholders={"entry_title": entry.title},
+    problems = hass.data.setdefault(PANEL_RUNTIME_DOMAIN, {}).setdefault(
+        _CREDENTIAL_SOURCE_PROBLEMS, {}
     )
+    if problem is None:
+        problems.pop(entry.entry_id, None)
+        ir.async_delete_issue(hass, DOMAIN, issue_id)
+    else:
+        problems[entry.entry_id] = problem
+        ir.async_create_issue(
+            hass, DOMAIN, issue_id, is_fixable=False, severity=ir.IssueSeverity.WARNING,
+            translation_key=f"credential_source_{problem}",
+            translation_placeholders={"entry_title": entry.title},
+        )
+    # The custom panel subscribes to this event, so a failed background poll is
+    # explained immediately instead of only appearing in Home Assistant Repairs.
+    hass.bus.async_fire(PANEL_DATA_UPDATED_EVENT, {"entry_id": entry.entry_id})
+
+
+def credential_source_problem(hass: HomeAssistant, entry_id: str) -> str | None:
+    """Return the current remote credential-source problem for the panel."""
+    return hass.data.get(PANEL_RUNTIME_DOMAIN, {}).get(
+        _CREDENTIAL_SOURCE_PROBLEMS, {}
+    ).get(entry_id)

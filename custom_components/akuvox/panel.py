@@ -47,10 +47,14 @@ from .const import (
     PANEL_URL_PATH,
 )
 from .coordinator import AkuvoxDataUpdateCoordinator
-from .repairs import authentication_failed
+from .repairs import (
+    async_update_credential_source_issue,
+    authentication_failed,
+    credential_source_problem,
+)
 from .sharing import (
     SHARED_MODE, SHARED_MODE_REMOTE, async_create_share, async_list_shares,
-    async_delete_share, async_revoke_share,
+    async_delete_share, async_revoke_share, async_sync_remote_entry,
 )
 
 _PANEL_MODULE = "akuvox-panel.js"
@@ -125,6 +129,9 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, websocket_panel_data)
     websocket_api.async_register_command(hass, websocket_panel_settings)
     websocket_api.async_register_command(hass, websocket_panel_save_settings)
+    websocket_api.async_register_command(
+        hass, websocket_panel_refresh_shared_credentials
+    )
     websocket_api.async_register_command(hass, websocket_panel_create_credential_share)
     websocket_api.async_register_command(hass, websocket_panel_revoke_credential_share)
     websocket_api.async_register_command(hass, websocket_panel_delete_credential_share)
@@ -232,7 +239,12 @@ async def websocket_panel_data(
             {
                 "entry_id": entry.entry_id,
                 "title": entry.title,
-                "requires_reauthentication": authentication_failed(hass, entry.entry_id),
+                "requires_reauthentication": authentication_failed(
+                    hass, entry.entry_id
+                ),
+                "credential_source_problem": credential_source_problem(
+                    hass, entry.entry_id
+                ),
                 **panel_data,
             }
         )
@@ -586,6 +598,46 @@ async def websocket_panel_save_settings(
     except Exception:  # noqa: BLE001 - logger preferences must not fail a save.
         LOGGER.exception("Unable to update SmartPlus logger preferences")
     connection.send_result(msg["id"], {})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "akuvox/panel_refresh_shared_credentials",
+        vol.Required("entry_id"): str,
+    }
+)
+@websocket_api.async_response
+async def websocket_panel_refresh_shared_credentials(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Request a fresh credential snapshot from a remote Home Assistant."""
+    if not _require_admin(connection, msg):
+        return
+    entry = next(
+        (item for item in _panel_entries(hass) if item.entry_id == msg["entry_id"]),
+        None,
+    )
+    if entry is None or entry.data.get(SHARED_MODE) != SHARED_MODE_REMOTE:
+        connection.send_error(
+            msg["id"], "not_remote", "This account does not receive shared credentials"
+        )
+        return
+    try:
+        updated = await async_sync_remote_entry(hass, entry.entry_id)
+    except PermissionError as error:
+        async_update_credential_source_issue(hass, entry, "revoked")
+        client = _client_for_entry(hass, entry.entry_id)
+        if client is not None:
+            client.async_disable_shared_credentials()
+        connection.send_error(msg["id"], "revoked", str(error))
+        return
+    except Exception as error:  # noqa: BLE001 - surface a retryable source outage.
+        async_update_credential_source_issue(hass, entry, "unreachable")
+        connection.send_error(msg["id"], "unreachable", str(error))
+        return
+    connection.send_result(msg["id"], {"updated": updated})
 
 
 @websocket_api.websocket_command(

@@ -104,6 +104,12 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
         return;
       }
 
+      if (button.matches("[data-refresh-shared-credentials]")) {
+        event.stopPropagation();
+        this._refreshSharedCredentials();
+        return;
+      }
+
       if (button.matches("[data-toggle-key-selection]")) {
         event.stopPropagation();
         this._selectingKeys = !this._selectingKeys;
@@ -596,11 +602,68 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
       `;
     }
 
+    if (account.credential_source_problem) {
+      return this._remoteCredentialSourceNotice(account);
+    }
+
     if (this._activeTab === "activity") return renderActivityView(this, account);
     if (this._activeTab === "calls") return renderCallsView(this, account);
     if (this._activeTab === "keys") return renderKeysView(this, account);
     if (this._activeTab === "settings") return renderSettingsView(this);
     return renderDevicesView(this, account);
+  }
+
+  _remoteCredentialSourceNotice(account) {
+    const problem = account.credential_source_problem;
+    const details = {
+      unreachable: {
+        title: "Cannot reach the credential source",
+        text: "This Home Assistant cannot reach the host instance that supplies this account’s SmartPlus credentials. Cached credentials may continue to work until they expire.",
+      },
+      revoked: {
+        title: "Credential sharing was revoked",
+        text: "The host Home Assistant revoked this instance’s access. Re-pair this account from the local Akuvox integration after the host creates a new pairing link.",
+      },
+      source_needs_reauth: {
+        title: "The host supplied invalid SmartPlus credentials",
+        text: "SmartPlus rejected the token received from the host Home Assistant. Re-authenticate Akuvox SmartPlus on the host, then refresh shared credentials here.",
+      },
+    }[problem] || {
+      title: "Shared credentials need attention",
+      text: "The credentials supplied by the host Home Assistant could not be used. Refresh them or re-authenticate on the host.",
+    };
+    return `
+      <div class="card auth-notice">
+        <h2>${details.title}</h2>
+        <p>${details.text}</p>
+        <button class="action" type="button" data-refresh-shared-credentials>Refresh shared credentials</button>
+        <p class="muted">Re-authentication must be completed in the Akuvox integration on the host Home Assistant.</p>
+      </div>
+    `;
+  }
+
+  async _refreshSharedCredentials() {
+    try {
+      const result = await callWsWithBlocker(this, {
+        type: "akuvox/panel_refresh_shared_credentials",
+        entry_id: this._activeAccount,
+      });
+      await this._load();
+      showNotice(
+        this,
+        result.updated
+          ? "New credentials were received from the host Home Assistant."
+          : "The host is reachable; its shared credentials are already current.",
+        "Shared credentials refreshed"
+      );
+    } catch (error) {
+      await this._load();
+      showNotice(
+        this,
+        error?.message || "Could not reach the Home Assistant that shares these credentials.",
+        "Could not refresh shared credentials"
+      );
+    }
   }
 
   /** Return items in the saved local order, with new items appended. */
