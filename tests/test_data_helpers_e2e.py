@@ -36,7 +36,7 @@ class TestDataAndHelpersE2E(unittest.IsolatedAsyncioTestCase):
         )
         self.data.parse_userconf_data(
             {
-                "app_conf": {"project_name": "Home"},
+                "app_conf": {"project_name": "Home", "role": 21},
                 "dev_list": [
                     {
                         "location": "Door",
@@ -50,6 +50,7 @@ class TestDataAndHelpersE2E(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertEqual(self.data.project_name, "Home")
+        self.assertEqual(self.data.smartplus_role, "21")
         self.assertEqual(len(self.data.camera_data), 1)
         self.assertIn("documented-rtsp.example:554", self.data.camera_data[0]["video_url"])
         self.assertIn("safe%2Fpassword", self.data.camera_data[0]["video_url"])

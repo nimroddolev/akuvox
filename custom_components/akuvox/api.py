@@ -11,6 +11,7 @@ import re
 import secrets
 import socket
 import zipfile
+import unicodedata
 from collections.abc import Callable
 from math import ceil
 from pathlib import Path
@@ -70,6 +71,7 @@ from .const import (
     API_EDIT_TEMP_KEY,
     API_DELETE_TEMP_KEY,
     API_GET_PERSONAL_DOOR_LOG,
+    API_GET_MEMBER_PERSONAL_DOOR_LOG,
     API_GET_CALL_LOG,
     API_DOOR_LOG_HOST,
     USER_AGENT,
@@ -1944,7 +1946,8 @@ class AkuvoxApiClient:
     async def async_get_personal_door_log(self):
         """Request the user's personal door log data from the SmartPlus v4 API."""
         host = API_DOOR_LOG_HOST.replace("subdomain.", f"{self._data.subdomain}.")
-        url = f"https://{host}/{API_GET_PERSONAL_DOOR_LOG}&_t={int(time() * 1000)}"
+        endpoint = self._personal_door_log_endpoint()
+        url = f"https://{host}/{endpoint}&_t={int(time() * 1000)}"
         data = {}
         headers = {
             "x-cloud-version": "6.4",
@@ -1972,6 +1975,12 @@ class AkuvoxApiClient:
             return json_data
         LOGGER.debug("No personal door log data returned")
         return None
+
+    def _personal_door_log_endpoint(self) -> str:
+        """Choose the door-log endpoint for the SmartPlus account role."""
+        if self._data is not None and self._data.smartplus_role == "21":
+            return API_GET_MEMBER_PERSONAL_DOOR_LOG
+        return API_GET_PERSONAL_DOOR_LOG
 
     @staticmethod
     def _normalise_v4_door_log(record: dict[str, Any]) -> dict[str, Any]:
@@ -2096,7 +2105,7 @@ class AkuvoxApiClient:
 
     async def _async_process_async_response(self, response: aiohttp.ClientResponse, url: str):
         """Process aiohttp response and return dict with data (non-blocking)."""
-        if urlsplit(url).path.endswith(urlsplit(API_GET_PERSONAL_DOOR_LOG).path):
+        if urlsplit(url).path.endswith("/getDoorLog"):
             self._update_door_log_poll_interval(getattr(response, "headers", {}))
         if response.status in (401, 403):
             raise AkuvoxApiClientAuthenticationError(
@@ -2225,19 +2234,17 @@ class AkuvoxApiClient:
 
     def get_obfuscated_phone_number(self, phone_number):
         """Obfuscate the user's phone number for API requests."""
-        if (phone_number is None or len(phone_number) == 0):
-            LOGGER.error("No phone number provided for obfuscation")
-        # Mask phone number
-        try:
-            num_str = str(phone_number)
-        except Exception as error:
-            LOGGER.error("Unable to get obfuscated phone number from %s: %s",
-                         str(phone_number),
-                         str(error))
-            return False
+        num_str = str(phone_number or "")
+        digits = "".join(
+            str(unicodedata.digit(character))
+            for character in num_str
+            if character.isdecimal()
+        )
+        if not digits:
+            raise AkuvoxApiClientError("A phone number must contain at least one digit")
         transformed_str = ""
         # Iterate through each digit in the input number
-        for digit_char in num_str:
+        for digit_char in digits:
             digit = int(digit_char)
             # Add 3 to the digit and take the result modulo 10
             transformed_digit = (digit + 3) % 10

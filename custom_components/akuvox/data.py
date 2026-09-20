@@ -52,6 +52,7 @@ class AkuvoxData:
         self.sip_account = ""
         self.sip_password = ""
         self.sip_transport = ""
+        self.smartplus_role = ""
         self.sip_device_accounts: dict[str, str] = {}
         self.project_name = "Akuvox SmartPlus"
         self.camera_data: list[dict] = []
@@ -167,6 +168,7 @@ class AkuvoxData:
                     app_conf.get("main_sip_passwd") or app_conf.get("sip_passwd") or ""
                 ).strip()
                 self.sip_transport = str(app_conf.get("trans_type", "")).strip()
+                self.smartplus_role = str(app_conf.get("role", "")).strip()
             if isinstance(json_data.get("dev_list"), list):
                 for dev_data in json_data["dev_list"]:
                     if not isinstance(dev_data, dict):

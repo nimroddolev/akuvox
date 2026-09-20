@@ -185,6 +185,18 @@ class TestSmartPlusApiE2E(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(data.sip_transport, "1")
         self.assertEqual(data.sip_device_accounts, {"AABBCC": "door-sip"})
 
+    async def test_member_account_uses_its_door_log_endpoint(self) -> None:
+        """Member accounts poll their role-specific SmartPlus door log."""
+        client = self._client([_success({})])
+        client._data.smartplus_role = "21"
+        await client.async_get_personal_door_log()
+        self.assertIn("community/log/member/getDoorLog", self.session.requests[0]["url"])
+
+    def test_phone_number_obfuscation_ignores_directional_marks(self) -> None:
+        """Copied phone numbers with bidi marks cannot crash authentication."""
+        client = self._client([])
+        self.assertEqual(client.get_obfuscated_phone_number("\u202a052-123 4567"), "3854567890")
+
     async def test_sip_credentials_were_stored_privately_after_userconf(self) -> None:
         """Post-login SIP values were retained outside the panel payload."""
         client = self._client([])

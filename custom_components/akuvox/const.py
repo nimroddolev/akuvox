@@ -46,6 +46,12 @@ LOCATIONS_DICT = {
         "flag": "🇦🇺",
         "subdomain": "scloud"
     },
+    "GT": {
+        "country": "Guatemala",
+        "phone_number": "502",
+        "flag": "🇬🇹",
+        "subdomain": "ucloud",
+    },
     "AZ": {
         "country": "Azerbaijan",
         "phone_number": "994",
@@ -399,6 +405,7 @@ COUNTRY_PHONE: dict = {
     "CZ": "420",
     "EE": "372",
     "GE": "995",
+    "GT": "502",
     "DE": "49",
     "IR": "98",
     "IL": "972",
@@ -503,6 +510,7 @@ API_CREATE_TEMP_KEY = "web-server/v3/app/community/tempKey/addPersonalTempKey"
 API_EDIT_TEMP_KEY = "web-server/v3/app/community/tempKey/editPersonalTempKey"
 API_DELETE_TEMP_KEY = "web-server/v3/app/community/tempKey/delPersonalTempKey"
 API_GET_PERSONAL_DOOR_LOG = "web-server/v4/smartplus/community/log/master/getDoorLog?row=20&page=1"
+API_GET_MEMBER_PERSONAL_DOOR_LOG = "web-server/v4/smartplus/community/log/member/getDoorLog?row=20&page=1"
 API_GET_CALL_LOG = "web-server/v4/smartplus/community/log/master/getCallLog?row=20&page=1"
 
 TEMP_KEY_QR_HOST = "subdomain.akuvox.com"
