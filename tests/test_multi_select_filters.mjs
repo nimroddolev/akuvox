@@ -56,6 +56,7 @@ test("receiver sync timestamps do not trigger a Settings form rebuild", () => {
       receiver_name: "Holiday home",
       activated: true,
       revoked: false,
+      connected: true,
       last_sync: "2026-09-16T10:00:00+00:00",
     }],
   };
@@ -69,4 +70,22 @@ test("receiver sync timestamps do not trigger a Settings form rebuild", () => {
   };
 
   assert.equal(settingsRenderSignature(refreshed), settingsRenderSignature(initial));
+});
+
+test("receiver connectivity changes rebuild the Settings receiver status", () => {
+  const connected = {
+    credential_shares: [{
+      share_id: "receiver-1",
+      receiver_name: "Holiday home",
+      activated: true,
+      revoked: false,
+      connected: true,
+      last_sync: "2026-09-16T10:00:00+00:00",
+    }],
+  };
+  const disconnected = {
+    credential_shares: [{ ...connected.credential_shares[0], connected: false }],
+  };
+
+  assert.notEqual(settingsRenderSignature(disconnected), settingsRenderSignature(connected));
 });

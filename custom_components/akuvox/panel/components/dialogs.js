@@ -3,6 +3,18 @@
  */
 
 import { closeOnBackdrop } from "../utils/dom.js";
+import { icons } from "../utils/icons.js";
+
+const titleCase = (title) => String(title).replace(/\b\w/g, (letter) => letter.toUpperCase());
+const isFailureTitle = (title) => /failed|could not|unavailable|required|invalid|error/i.test(title);
+
+const addResultIcon = (dialog, successful) => {
+  const icon = dialog.ownerDocument.createElement("span");
+  icon.className = `result-icon ${successful ? "success" : "failure"}`;
+  icon.setAttribute("aria-hidden", "true");
+  icon.textContent = successful ? "✓" : "×";
+  dialog.append(icon);
+};
 
 /**
  * Show a simple informational modal dialog.
@@ -18,7 +30,7 @@ export const showNotice = (host, message, title = "Akuvox SmartPlus") => {
   const actions = documentRef.createElement("div");
   const closeButton = documentRef.createElement("button");
 
-  heading.textContent = title;
+  heading.textContent = titleCase(title);
   text.textContent = message;
   actions.className = "modal-actions";
   closeButton.type = "button";
@@ -27,6 +39,7 @@ export const showNotice = (host, message, title = "Akuvox SmartPlus") => {
   closeButton.addEventListener("click", () => dialog.close());
 
   actions.append(closeButton);
+  if (isFailureTitle(title)) addResultIcon(dialog, false);
   dialog.append(heading, text, actions);
   closeOnBackdrop(dialog);
 
@@ -47,48 +60,74 @@ export const showNotice = (host, message, title = "Akuvox SmartPlus") => {
 };
 
 /** Show a pairing confirmation with an explicit local clipboard action. */
-export const showPairingLinkNotice = (host, pairingLink) => {
+export const showPairingLinkNotice = (host, pairingLink) => new Promise((resolve) => {
   const documentRef = host.shadowRoot.ownerDocument;
   const dialog = documentRef.createElement("dialog");
   const heading = documentRef.createElement("h2");
   const text = documentRef.createElement("p");
+  const linkRow = documentRef.createElement("div");
+  const linkInput = documentRef.createElement("input");
   const actions = documentRef.createElement("div");
   const copyButton = documentRef.createElement("button");
   const closeButton = documentRef.createElement("button");
+  let copyResetTimer;
 
   heading.textContent = "Pairing Link Created";
-  text.textContent = "Copy it now to the receiving Home Assistant. For security, this pairing link will not be shown again.";
+  text.innerHTML = "Copy the link and provide it to the user of the remote Home Assistant instance.<br>This link will not be shown again once you close this dialogue.<br><br><span class=\"warning-icon\" aria-hidden=\"true\">!</span> Only share this link with someone you trust.";
+  linkRow.className = "pairing-link-row";
+  linkInput.className = "pairing-link-value";
+  linkInput.type = "text";
+  linkInput.value = pairingLink;
+  linkInput.readOnly = true;
+  linkInput.setAttribute("aria-label", "Pairing link");
   actions.className = "modal-actions";
   copyButton.type = "button";
-  copyButton.className = "modal-cancel";
-  copyButton.textContent = "Copy";
+  copyButton.className = "pairing-link-copy";
+  copyButton.setAttribute("aria-label", "Copy pairing link");
+  copyButton.title = "Copy pairing link";
+  copyButton.innerHTML = icons.copy;
   closeButton.type = "button";
   closeButton.className = "modal-action";
   closeButton.textContent = "OK";
   copyButton.addEventListener("click", async () => {
     try {
       await documentRef.defaultView.navigator.clipboard.writeText(pairingLink);
-      copyButton.textContent = "Copied";
-      copyButton.disabled = true;
+      documentRef.defaultView.clearTimeout(copyResetTimer);
+      copyButton.innerHTML = `${icons.check}<span>Copied</span>`;
+      copyButton.classList.add("is-copied");
+      copyButton.title = "Copied";
+      copyButton.setAttribute("aria-label", "Pairing link copied");
+      linkInput.select();
+      copyResetTimer = documentRef.defaultView.setTimeout(() => {
+        copyButton.innerHTML = icons.copy;
+        copyButton.classList.remove("is-copied");
+        copyButton.title = "Copy pairing link";
+        copyButton.setAttribute("aria-label", "Copy pairing link");
+      }, 1000);
     } catch (_) {
-      text.textContent = "Could not copy automatically. Select the pairing link below and copy it manually.";
+      linkInput.select();
+      copyButton.title = "Copy manually from the selected link";
     }
   });
   closeButton.addEventListener("click", () => dialog.close());
-  actions.append(copyButton, closeButton);
-  dialog.append(heading, text, actions);
+  linkRow.append(linkInput, copyButton);
+  actions.append(closeButton);
+  addResultIcon(dialog, true);
+  dialog.append(heading, text, linkRow, actions);
   closeOnBackdrop(dialog);
 
   host._modalCount = (host._modalCount || 0) + 1;
   dialog.addEventListener("close", () => {
+    documentRef.defaultView.clearTimeout(copyResetTimer);
     host._modalCount -= 1;
     dialog.remove();
     host._requestLoad?.();
+    resolve();
   }, { once: true });
   host.shadowRoot.append(dialog);
   dialog.showModal();
-  copyButton.focus();
-};
+  closeButton.focus();
+});
 
 /**
  * Show a confirmation modal dialog with Cancel / Action buttons.

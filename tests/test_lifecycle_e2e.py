@@ -23,6 +23,12 @@ from custom_components.akuvox import repairs
 from custom_components.akuvox.const import DOMAIN
 from custom_components.akuvox.coordinator import AkuvoxDataUpdateCoordinator
 from custom_components.akuvox import panel
+from custom_components.akuvox.sharing import (
+    _filter_shared_activity,
+    _filter_shared_devices,
+    _permission_relay_ids,
+    async_create_share,
+)
 
 
 class _Client:
@@ -300,6 +306,133 @@ class TestCoordinatorE2E(unittest.IsolatedAsyncioTestCase):
             await auth_coordinator._async_update_data()
         with self.assertRaises(UpdateFailed):
             await network_coordinator._async_update_data()
+
+
+class TestSharedDeviceScopingE2E(unittest.TestCase):
+    """Verify a receiver receives only its explicitly shared devices."""
+
+    def test_device_scope_excluded_other_devices_and_mixed_temporary_keys(self) -> None:
+        """Unshared devices and keys spanning an unshared relay stay hidden."""
+        source = {
+            "camera_data": [{"name": "Lobby"}, {"name": "Garage"}],
+            "door_relay_data": [
+                {"name": "Lobby", "mac": "AA", "relay_id": "0"},
+                {"name": "Garage", "mac": "BB", "relay_id": "1"},
+            ],
+            "door_keys_data": [
+                {"key_id": "only-lobby", "doors": [{"mac": "AA", "relay": "0"}]},
+                {"key_id": "mixed", "doors": [{"mac": "AA", "relay": "0"}, {"mac": "BB", "relay": "1"}]},
+            ],
+        }
+
+        scoped = _filter_shared_devices(source, ["camera:Lobby", "relay:AA:0"])
+
+        self.assertEqual(scoped["camera_data"], [{"name": "Lobby"}])
+        self.assertEqual(scoped["door_relay_data"], [source["door_relay_data"][0]])
+        self.assertEqual([key["key_id"] for key in scoped["door_keys_data"]], ["only-lobby"])
+
+    def test_create_permission_only_includes_explicitly_permitted_relays(self) -> None:
+        """A receiver cannot offer relays that were excluded from key creation."""
+        share = {
+            "device_ids": ["relay:AA:0", "relay:BB:1"],
+            "create_key_relay_ids": ["relay:AA:0"],
+        }
+
+        self.assertEqual(
+            _permission_relay_ids(share, "create_key_relay_ids", "allow_create_keys"),
+            ["relay:AA:0"],
+        )
+
+    def test_key_scope_excludes_keys_with_a_relay_without_view_permission(self) -> None:
+        """A key is visible only when every relay it uses has View permission."""
+        source = {
+            "camera_data": [],
+            "door_relay_data": [
+                {"name": "Lobby", "mac": "AA", "relay_id": "0"},
+                {"name": "Garage", "mac": "BB", "relay_id": "1"},
+            ],
+            "door_keys_data": [
+                {"key_id": "lobby", "doors": [{"mac": "AA", "relay": "0"}]},
+                {
+                    "key_id": "mixed",
+                    "doors": [{"mac": "AA", "relay": "0"}, {"mac": "BB", "relay": "1"}],
+                },
+            ],
+        }
+
+        scoped = _filter_shared_devices(
+            source,
+            ["relay:AA:0", "relay:BB:1"],
+            ["relay:AA:0"],
+        )
+
+        self.assertEqual([key["key_id"] for key in scoped["door_keys_data"]], ["lobby"])
+
+    def test_activity_scope_includes_all_event_types_for_selected_devices(self) -> None:
+        """Camera, motion, and door events share the same per-device scope."""
+        activity = [
+            {"Location": "Lobby", "CaptureType": "door"},
+            {"Location": "Lobby", "CaptureType": "motion"},
+            {"Location": "Garage", "CaptureType": "camera"},
+        ]
+
+        self.assertEqual(
+            _filter_shared_activity(activity, ["Lobby"]), activity[:2]
+        )
+
+
+class TestCredentialShareNamesE2E(unittest.IsolatedAsyncioTestCase):
+    """Verify pairing receiver names remain unique for an account."""
+
+    async def test_duplicate_receiver_name_is_rejected_case_insensitively(self) -> None:
+        """A receiver cannot reuse an existing name with different casing or spacing."""
+        store = MagicMock()
+        store.async_load = AsyncMock(return_value={
+            "existing": {"entry_id": "entry-id", "receiver_name": "Remote Home"}
+        })
+        store.async_save = AsyncMock()
+        entry = MagicMock(entry_id="entry-id")
+
+        with (
+            patch("custom_components.akuvox.sharing._store", return_value=store),
+            self.assertRaisesRegex(ValueError, "already uses this receiver name"),
+        ):
+            await async_create_share(
+                MagicMock(), entry, "https://example.com", " remote home ", []
+            )
+
+        store.async_save.assert_not_awaited()
+
+    async def test_share_persists_only_explicit_scoped_key_permissions(self) -> None:
+        """A receiver gets an Add Key control only for selected shared relays."""
+        store = MagicMock()
+        store.async_load = AsyncMock(return_value={})
+        store.async_save = AsyncMock()
+        entry = MagicMock(entry_id="entry-id")
+
+        with patch("custom_components.akuvox.sharing._store", return_value=store):
+            await async_create_share(
+                MagicMock(),
+                entry,
+                "https://example.com",
+                "Remote Home",
+                ["camera:Lobby", "relay:AA:0", "relay:BB:1"],
+                create_key_relay_ids=["relay:AA:0", "relay:NOT-SHARED:2"],
+                edit_key_relay_ids=[],
+                view_key_relay_ids=["relay:AA:0", "relay:NOT-SHARED:2"],
+                activity_device_names=["Lobby", "Garage"],
+            )
+
+        saved_shares = store.async_save.await_args.args[0]
+        saved_share = next(iter(saved_shares.values()))
+        self.assertEqual(saved_share["create_key_relay_ids"], ["relay:AA:0"])
+        self.assertTrue(saved_share["allow_create_keys"])
+        self.assertEqual(saved_share["edit_key_relay_ids"], [])
+        self.assertFalse(saved_share["allow_edit_keys"])
+        self.assertEqual(saved_share["view_key_relay_ids"], ["relay:AA:0"])
+        self.assertTrue(saved_share["allow_view_keys"])
+        self.assertTrue(saved_share["allow_activity"])
+        self.assertEqual(saved_share["activity_device_names"], ["Lobby"])
 
 
 class TestAuthenticationRepairE2E(unittest.TestCase):

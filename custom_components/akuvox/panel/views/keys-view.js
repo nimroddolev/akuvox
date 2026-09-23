@@ -22,7 +22,7 @@ import { copyText } from "../utils/clipboard.js";
 import { showNotice, confirmModal, callWsWithBlocker } from "../components/dialogs.js";
 import { showDateRangePicker } from "../components/date-range-picker.js?v=20260823-normalise-past-validity-start";
 import { showTemporaryKeyQrDialog } from "../components/qr-dialog.js";
-import { showKeyActionsMenu, closeKeyActionsMenu } from "../components/key-menu.js";
+import { showKeyActionsMenu, closeKeyActionsMenu } from "../components/key-menu.js?v=20260922-scoped-edit-permission";
 import { bindListOrdering, bindTileOrdering } from "../utils/tile-ordering.js?v=20260917-list-drop-position";
 
 /**
@@ -59,7 +59,22 @@ export const updateFormFieldErrors = (form) => {
  * @returns {string}
  */
 export const renderKeysView = (host, account) => {
-  const relayOptions = (account.relays || [])
+  const createRelayIds = account.shared_permissions?.create_key_relay_ids;
+  const hasScopedCreatePermissions = Array.isArray(createRelayIds);
+  const permittedRelays = hasScopedCreatePermissions
+    ? (account.relays || []).filter((relay) => createRelayIds.includes(`relay:${relay.mac}:${relay.relay_id}`))
+    : account.credential_mode === "remote" ? [] : (account.relays || []);
+  const canCreateKeys = hasScopedCreatePermissions
+    ? permittedRelays.length > 0
+    : account.shared_permissions?.allow_create_keys !== false;
+  const canEditKey = (key) => {
+    if (account.credential_mode !== "remote") return true;
+    const editRelayIds = account.shared_permissions?.edit_key_relay_ids;
+    return Array.isArray(editRelayIds) &&
+      Array.isArray(key.doors) && key.doors.length > 0 &&
+      key.doors.every((door) => editRelayIds.includes(`relay:${door.mac}:${door.relay}`));
+  };
+  const relayOptions = permittedRelays
     .map(
       (relay) => `
       <label class="check">
@@ -128,7 +143,7 @@ export const renderKeysView = (host, account) => {
         : `<span class="key-code"><button class="copy-code" type="button" data-copy-key-id="${escapeHtml(key.key_id)}" data-copy-key-code="${escapeHtml(key.key_code)}" aria-label="Copy code to clipboard" title="Copy code to clipboard">${icons.copy}</button><code>${escapeHtml(key.key_code)}</code></span>`;
       const menu = key.expired
         ? `<button class="danger key-menu-button" type="button" data-delete-key="${escapeHtml(key.key_id)}" aria-label="Delete temporary key" title="Delete temporary key">${icons.trash}</button>`
-        : `<button class="action key-menu-button" type="button" data-key-menu="${escapeHtml(key.key_id)}" data-key-code="${escapeHtml(key.key_code)}" data-key-expired="false" data-key-has-qr="${Boolean(key.has_qr_code)}" aria-label="Key actions" aria-haspopup="menu">⋯</button>`;
+        : `<button class="action key-menu-button" type="button" data-key-menu="${escapeHtml(key.key_id)}" data-key-code="${escapeHtml(key.key_code)}" data-key-expired="false" data-key-has-qr="${Boolean(key.has_qr_code)}" data-key-can-edit="${canEditKey(key)}" aria-label="Key actions" aria-haspopup="menu">⋯</button>`;
 
       return `
         <tr class="${selected ? "key-row-selected" : ""}" data-list-order-id="${escapeHtml(key.key_id)}">
@@ -138,7 +153,7 @@ export const renderKeysView = (host, account) => {
           <td>${escapeHtml(formatTimestamp(key.begin_time))}</td>
           <td>${escapeHtml(formatTimestamp(key.end_time))}</td>
           <td>${escapeHtml(key.access_times)}/${escapeHtml(key.allowed_times)}</td>
-          <td>${key.expired ? "Expired" : "Active"}</td>
+          <td><span class="key-status ${key.expired ? "expired" : "active"}">${key.expired ? "Expired" : "Active"}</span></td>
           <td><div class="key-actions">${menu}</div></td>
         </tr>
       `;
@@ -155,7 +170,7 @@ export const renderKeysView = (host, account) => {
         : `<span class="key-code"><button class="copy-code" type="button" data-copy-key-id="${escapeHtml(key.key_id)}" data-copy-key-code="${escapeHtml(key.key_code)}" aria-label="Copy code to clipboard" title="Copy code to clipboard">${icons.copy}</button><code>${escapeHtml(key.key_code)}</code></span>`;
       const menu = key.expired
         ? `<button class="danger key-menu-button" type="button" data-delete-key="${escapeHtml(key.key_id)}" aria-label="Delete temporary key" title="Delete temporary key">${icons.trash}</button>`
-        : `<button class="action key-menu-button" type="button" data-key-menu="${escapeHtml(key.key_id)}" data-key-code="${escapeHtml(key.key_code)}" data-key-expired="false" data-key-has-qr="${Boolean(key.has_qr_code)}" aria-label="Key actions" aria-haspopup="menu">⋯</button>`;
+        : `<button class="action key-menu-button" type="button" data-key-menu="${escapeHtml(key.key_id)}" data-key-code="${escapeHtml(key.key_code)}" data-key-expired="false" data-key-has-qr="${Boolean(key.has_qr_code)}" data-key-can-edit="${canEditKey(key)}" aria-label="Key actions" aria-haspopup="menu">⋯</button>`;
       return `
         <article class="tile-card key-tile ${key.expired ? "key-tile-expired" : "key-tile-active"} ${selected ? "key-row-selected" : ""}" data-tile-order-id="${escapeHtml(key.key_id)}">
           <div class="tile-card-heading">
@@ -186,7 +201,7 @@ export const renderKeysView = (host, account) => {
         <div class="key-heading-actions">
           ${selectedCount ? `<button type="button" class="danger" data-delete-selected>Delete Selected (${selectedCount})</button>` : ""}
           <button type="button" class="action" data-toggle-key-selection>${host._selectingKeys ? "Cancel selection" : "Select"}</button>
-          <button class="success add-key" data-create-key><span class="plus">+</span> Add Key</button>
+          ${canCreateKeys ? '<button class="success add-key" data-create-key><span class="plus">+</span> Add Key</button>' : ""}
           <div class="view-mode-toggle" role="group" aria-label="Temporary keys layout">
             <button type="button" class="action ${host._rowViewMode === "tiles" ? "" : "active"}" data-row-view-mode="table" aria-pressed="${host._rowViewMode !== "tiles"}">Table</button>
             <button type="button" class="action ${host._rowViewMode === "tiles" ? "active" : ""}" data-row-view-mode="tiles" aria-pressed="${host._rowViewMode === "tiles"}">Tiles</button>

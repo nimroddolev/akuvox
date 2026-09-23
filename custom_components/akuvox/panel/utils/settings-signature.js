@@ -13,11 +13,12 @@ export const settingsRenderSignature = (settings = {}) => {
 
   return JSON.stringify({
     ...savedSettings,
-    credential_shares: credentialShares.map(({ share_id, receiver_name, activated, revoked }) => ({
+    credential_shares: credentialShares.map(({ share_id, receiver_name, activated, revoked, connected }) => ({
       share_id,
       receiver_name,
       activated,
       revoked,
+      connected,
     })),
   });
 };

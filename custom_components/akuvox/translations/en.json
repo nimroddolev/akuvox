@@ -50,6 +50,7 @@
         },
         "error": {
             "cannot_connect": "Unable to request a SmartPlus SMS code. Try again shortly.",
+            "cannot_reach_source": "Unable to reach the Home Assistant that created this pairing link. Confirm its external HTTPS URL is reachable from this Home Assistant.",
             "invalid_auth": "The SMS code was invalid or expired.",
             "invalid_share": "This pairing link is invalid, expired, or has been revoked.",
             "external_url_required": "Set a valid HTTPS external URL in Home Assistant before creating a pairing link."

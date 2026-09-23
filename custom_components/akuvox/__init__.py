@@ -68,6 +68,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
     await async_update_configuration(hass=hass, entry=entry)
     LOGGER.debug("Akuvox setup: configuration applied")
+    if is_remote_entry(entry):
+        remote_sync = async_register_remote_synchronizer(hass, entry, coordinator.client)
+        entry.async_on_unload(remote_sync.async_stop)
     refresh_task = hass.async_create_task(_async_refresh_cloud_data(hass, entry))
     entry.async_on_unload(refresh_task.cancel)
     entry.async_on_unload(
@@ -78,10 +81,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
     entry.async_on_unload(coordinator.client.async_stop_proactive_token_refresh)
-    if is_remote_entry(entry):
-        remote_sync = async_register_remote_synchronizer(hass, entry, coordinator.client)
-        entry.async_on_unload(remote_sync.async_stop)
-
     return True
 
 
@@ -93,6 +92,11 @@ async def _async_refresh_cloud_data(hass: HomeAssistant, entry: ConfigEntry) -> 
     # The entry can be unloaded before this deliberately background task gets
     # its first event-loop turn.
     if coordinator is None:
+        return
+    # Receiver entries obtain their scoped data from the host snapshot.  A
+    # direct SmartPlus refresh can replace it with the account's full device
+    # list and leaves scoped entities unavailable while it races setup.
+    if is_remote_entry(entry):
         return
     try:
         await coordinator.async_refresh()
@@ -110,13 +114,18 @@ async def _async_start_runtime(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Start polling and entities after Home Assistant has initialized."""
     coordinator: AkuvoxDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
     async_clear_authentication_failure(hass, entry)
-    coordinator.client.async_start_proactive_token_refresh()
     if is_remote_entry(entry):
         remote_sync = hass.data.get("akuvox_credential_sharing", {}).get(entry.entry_id)
         if remote_sync is not None:
+            try:
+                await remote_sync.async_sync()
+            except Exception as error:  # The cached scoped snapshot remains usable.
+                LOGGER.warning("Unable to fetch the initial shared Akuvox snapshot: %s", error)
             remote_sync.async_start()
-    await coordinator.client.async_start_polling()
-    hass.async_create_task(coordinator.client.async_load_panel_history())
+    else:
+        coordinator.client.async_start_proactive_token_refresh()
+        await coordinator.client.async_start_polling()
+        hass.async_create_task(coordinator.client.async_load_panel_history())
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
 

@@ -4,8 +4,20 @@
 
 import { escapeHtml } from "../utils/dom.js";
 import { icons } from "../utils/icons.js?v=20260829-camera-copy-visible";
-import { callWsWithBlocker, confirmModal, showNotice, showPairingLinkNotice } from "../components/dialogs.js?v=20260916-pairing-one-time-warning";
+import { callWsWithBlocker, confirmModal, showNotice, showPairingLinkNotice } from "../components/dialogs.js?v=20260923-pairing-link-copy-feedback";
 import { CAMERA_ORIENTATION_OPTIONS } from "../utils/orientation.js?v=20260830-combined-directional-labels";
+
+const RECEIVER_CONTACT_TIMEOUT_MS = 2 * 60 * 1000;
+
+const receiverIsConnected = (share) => {
+  if (typeof share.connected === "boolean") return share.connected;
+  const lastContact = Date.parse(share.last_sync || "");
+  return Boolean(
+    share.activated &&
+    Number.isFinite(lastContact) &&
+    Date.now() - lastContact <= RECEIVER_CONTACT_TIMEOUT_MS
+  );
+};
 
 const cameraOptionsTable = (host) => {
   const cameras = panelCameras(host);
@@ -69,24 +81,197 @@ const formatPairingTimeRemaining = (milliseconds) => {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 };
 
+const relativeContactTime = (value) => {
+  const elapsed = Math.max(0, Date.now() - Date.parse(value || ""));
+  const minutes = Math.floor(elapsed / 60000);
+  if (minutes < 1) return "Last contacted just now";
+  if (minutes < 60) return `Last contacted ${minutes} minute${minutes === 1 ? "" : "s"} ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `Last contacted ${hours} hour${hours === 1 ? "" : "s"} ago`;
+  const days = Math.floor(hours / 24);
+  return `Last contacted ${days} day${days === 1 ? "" : "s"} ago`;
+};
+
+const relativeTime = (value) => {
+  const elapsed = Math.max(0, Date.now() - Date.parse(value || ""));
+  const minutes = Math.floor(elapsed / 60000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? "" : "s"} ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
+  const days = Math.floor(hours / 24);
+  return `${days} day${days === 1 ? "" : "s"} ago`;
+};
+
+const remoteShareConnectionSection = (lastSync) => {
+  const lastContact = Date.parse(lastSync || "");
+  const connected = Number.isFinite(lastContact) && Date.now() - lastContact <= RECEIVER_CONTACT_TIMEOUT_MS;
+  const status = connected ? "Connected" : "Connection delayed";
+  const detail = Number.isFinite(lastContact)
+    ? `Last connected ${relativeTime(lastSync)}`
+    : "Waiting for the first connection";
+  return `<p data-remote-share-connection class="credential-share-source-status ${connected ? "connected" : "waiting"}"><span>${connected ? "🟢" : "🟡"}</span> <strong>${status}</strong> · ${escapeHtml(detail)}</p>`;
+};
+
+/** Refresh receiver connection status without rebuilding the Settings form. */
+export const updateRemoteShareConnectionStatus = (host, lastSync) => {
+  const status = host.shadowRoot?.querySelector("[data-remote-share-connection]");
+  if (status) status.outerHTML = remoteShareConnectionSection(lastSync);
+};
+
 const pairedReceiversSection = (shares = []) => {
   if (!shares.length) return "";
   return `<div class="credential-share-receivers">
     <h3>Paired Home Assistants</h3>
     ${shares.map((share) => {
-      const status = share.revoked ? "Revoked" : share.activated ? "Connected" : "Waiting to pair";
-      const lastSync = share.revoked
-        ? ""
-        : share.last_sync ? ` · ${new Date(share.last_sync).toLocaleString()}` : " · Not yet synced";
+      const expiresAt = Date.parse(share.expires_at || "");
+      const pendingExpired = !share.activated && (!Number.isFinite(expiresAt) || expiresAt <= Date.now());
+      const status = pendingExpired ? "Pairing link expired" : share.revoked ? "Revoked" : !share.activated ? "Waiting to pair" : receiverIsConnected(share) ? "Connected" : "Disconnected";
+      const statusClass = status === "Connected" ? "connected" : status === "Waiting to pair" ? "waiting" : "disconnected";
+      const statusIndicator = status === "Connected" ? "🟢" : status === "Waiting to pair" ? "🟡" : status === "Pairing link expired" || status === "Revoked" ? "❌" : "🔴";
+      const detail = status === "Waiting to pair"
+        ? ` · Pairing link expires in <span data-pairing-expiry="${expiresAt}">${formatPairingTimeRemaining(expiresAt - Date.now())}</span>`
+        : share.last_sync ? ` · ${relativeContactTime(share.last_sync)}` : "";
       return `<div class="credential-share-receiver-row">
-        <span><strong>${escapeHtml(share.receiver_name)}</strong><small>${escapeHtml(status + lastSync)}</small></span>
-        ${share.revoked
+        <span class="credential-share-status ${statusClass}"><span class="credential-share-indicator">${statusIndicator}</span><strong>${escapeHtml(share.receiver_name)}</strong><small>${escapeHtml(status)}${detail}</small></span>
+        <span class="credential-share-actions"><button class="action" type="button" data-view-credential-share="${escapeHtml(share.share_id)}">View</button>${share.revoked
           ? `<button class="danger key-menu-button" type="button" data-delete-credential-share="${escapeHtml(share.share_id)}" aria-label="Delete paired Home Assistant" title="Delete paired Home Assistant">${icons.trash}</button>`
-          : `<button class="action" type="button" data-revoke-credential-share="${escapeHtml(share.share_id)}">Revoke</button>`}
+          : `<button class="action" type="button" data-revoke-credential-share="${escapeHtml(share.share_id)}">Revoke</button>`}</span>
       </div>`;
     }).join("")}
   </div>`;
 };
+
+const requestShareAccess = (host, viewedShare = null) => new Promise((resolve) => {
+  const readOnly = viewedShare !== null;
+  const account = host._account() || {};
+  const existingReceiverNames = new Set(
+    (host._settings?.credential_shares || [])
+      .map((share) => String(share.receiver_name || "").trim().toLocaleLowerCase())
+      .filter(Boolean),
+  );
+  const cameras = new Map((account.cameras || []).map((item) => [item.source_name || item.name, item]));
+  const relays = account.relays || [];
+  const names = [...new Set([...cameras.keys(), ...relays.map((item) => item.source_name || item.name)])].sort();
+  const selectedDeviceIds = new Set(viewedShare?.device_ids || []);
+  const createRelayIds = new Set(viewedShare?.create_key_relay_ids || []);
+  const editRelayIds = new Set(viewedShare?.edit_key_relay_ids || []);
+  const viewRelayIds = new Set(viewedShare?.view_key_relay_ids || []);
+  const activityDeviceNames = new Set(viewedShare?.activity_device_names || []);
+  const checked = (value, enabled = true) => (!readOnly || (enabled && value)) ? "checked" : "";
+  const disabled = readOnly ? "disabled" : "";
+  const readOnlyCheck = (enabled) => `<span class="share-readonly-check${enabled ? " enabled" : ""}">${enabled ? "✓" : ""}</span>`;
+  const checkbox = (attribute, value, inputValue = "") => readOnly
+    ? readOnlyCheck(value)
+    : `<input ${attribute} type="checkbox" value="${escapeHtml(inputValue)}" ${checked(value)}>`;
+  const dialog = host.shadowRoot.ownerDocument.createElement("dialog");
+  dialog.className = "share-access-dialog";
+  dialog.classList.toggle("theme-dark", Boolean(host._hass?.themes?.darkMode));
+  const hasMultipleRelays = relays.some((relay) => relays.filter((item) => (item.source_name || item.name) === (relay.source_name || relay.name)).length > 1);
+  const relayIds = relays.map((relay) => `relay:${relay.mac}:${relay.relay_id}`);
+  const allCameras = cameras.size > 0 && [...cameras.values()].every((camera) => selectedDeviceIds.has(`camera:${camera.source_name || camera.name}`));
+  const allRelays = relayIds.length > 0 && relayIds.every((id) => selectedDeviceIds.has(id));
+  const allActivity = names.length > 0 && names.every((name) => activityDeviceNames.has(name));
+  const allView = relayIds.length > 0 && relayIds.every((id) => viewRelayIds.has(id));
+  const allCreate = relayIds.length > 0 && relayIds.every((id) => createRelayIds.has(id));
+  const allEdit = relayIds.length > 0 && relayIds.every((id) => editRelayIds.has(id));
+  const deviceRows = names.map((name) => {
+    const camera = cameras.get(name);
+    const deviceRelays = relays.filter((item) => (item.source_name || item.name) === name);
+    const displayName = camera?.name || deviceRelays[0]?.name || name;
+    const relayCell = deviceRelays.map((relay) => {
+      const relayId = `relay:${relay.mac}:${relay.relay_id}`;
+      return `<label class="check">${checkbox("data-share-relay", selectedDeviceIds.has(relayId), relayId)} ${hasMultipleRelays ? escapeHtml(relay.door_name || `Relay ${relay.relay_id}`) : ""}</label>`;
+    }).join("<br>");
+    const permitsCreate = deviceRelays.length > 0 && deviceRelays.every((relay) => createRelayIds.has(`relay:${relay.mac}:${relay.relay_id}`));
+    const permitsEdit = deviceRelays.length > 0 && deviceRelays.every((relay) => editRelayIds.has(`relay:${relay.mac}:${relay.relay_id}`));
+    const permitsView = deviceRelays.length > 0 && deviceRelays.every((relay) => viewRelayIds.has(`relay:${relay.mac}:${relay.relay_id}`));
+    const cameraId = `camera:${camera?.source_name || camera?.name}`;
+    const keyPermissionCell = (attribute, enabled) => deviceRelays.length
+      ? checkbox(attribute, enabled)
+      : '<span class="share-empty-cell">—</span>';
+    return `<tr><td>${escapeHtml(displayName)}</td><td>${camera ? checkbox("data-share-device", selectedDeviceIds.has(cameraId), cameraId) : '<span class="share-empty-cell">—</span>'}</td><td>${relayCell || '<span class="share-empty-cell">—</span>'}</td><td>${checkbox("data-share-activity", activityDeviceNames.has(name), name)}</td><td>${keyPermissionCell("data-view-keys", permitsView)}</td><td>${keyPermissionCell("data-create-keys", permitsCreate)}</td><td>${keyPermissionCell("data-edit-keys", permitsEdit)}</td></tr>`;
+  }).join("");
+  const selectAllRow = `<tr class="share-select-all-row"><td>Select all</td><td>${checkbox("data-all-camera", allCameras)}</td><td>${checkbox("data-all-relay", allRelays)}</td><td>${checkbox("data-all-activity", allActivity)}</td><td>${checkbox("data-all-view", allView)}</td><td>${checkbox("data-all-create", allCreate)}</td><td>${checkbox("data-all-edit", allEdit)}</td></tr>`;
+  const accessExpiresAt = viewedShare?.access_expires_at;
+  const basics = readOnly
+    ? `<fieldset class="share-basics"><legend>Pairing Details</legend><span>${accessExpiresAt ? `Expires at ${escapeHtml(new Date(accessExpiresAt).toLocaleString())}` : "Never expire"}</span></fieldset>`
+    : `<fieldset class="share-basics"><legend>Pairing Details</legend><label>Name<input data-receiver-name maxlength="100" required></label><label class="check"><input data-never-expire name="access-duration" type="radio" checked> Never expire</label><label class="check" data-access-expiry-row><input data-expiring name="access-duration" type="radio"> Expires at<input data-access-expiry type="datetime-local" disabled></label></fieldset>`;
+  dialog.innerHTML = `<h2>${readOnly ? escapeHtml(viewedShare.receiver_name) : "Create Pairing Link"}</h2>${basics}<p class="notice share-error" data-share-error hidden></p><fieldset><legend>Share access</legend><div class="table-wrap"><table class="share-access-table"><thead><tr><th colspan="4">Device</th><th colspan="3">Temporary Keys</th></tr><tr><th>Name</th><th>Camera</th><th>${hasMultipleRelays ? "Relays" : "Relay"}</th><th>Activity</th><th>View</th><th>Create</th><th>Edit</th></tr></thead><tbody>${selectAllRow}${deviceRows}</tbody></table></div></fieldset><div class="modal-actions"><button class="modal-cancel" data-cancel type="button">${readOnly ? "Close" : "Cancel"}</button>${readOnly ? "" : '<button class="modal-action" data-confirm type="button">Create</button>'}</div>`;
+  const devices = [...dialog.querySelectorAll("[data-share-device], [data-share-relay]")];
+  const activity = [...dialog.querySelectorAll("[data-share-activity]")];
+  const neverExpire = dialog.querySelector("[data-never-expire]");
+  const expires = dialog.querySelector("[data-expiring]");
+  const expiry = dialog.querySelector("[data-access-expiry]");
+  const syncSelectAll = (master, inputs) => {
+    if (!master || !inputs.length) return;
+    const selected = inputs.filter((item) => item.checked).length;
+    master.checked = selected === inputs.length;
+    master.indeterminate = selected > 0 && selected < inputs.length;
+  };
+  const wireSelectAll = (masterSelector, itemSelector) => {
+    const master = dialog.querySelector(masterSelector);
+    const inputs = [...dialog.querySelectorAll(itemSelector)];
+    master?.addEventListener("change", () => {
+      inputs.forEach((input) => { input.checked = master.checked; });
+    });
+    inputs.forEach((input) => input.addEventListener("change", () => {
+      syncSelectAll(master, inputs);
+    }));
+  };
+  wireSelectAll("[data-all-camera]", "[data-share-device]");
+  wireSelectAll("[data-all-relay]", "[data-share-relay]");
+  wireSelectAll("[data-all-activity]", "[data-share-activity]");
+  wireSelectAll("[data-all-view]", "[data-view-keys]");
+  wireSelectAll("[data-all-create]", "[data-create-keys]");
+  wireSelectAll("[data-all-edit]", "[data-edit-keys]");
+  const updateExpiryState = () => {
+    if (expiry) expiry.disabled = !expires?.checked;
+  };
+  neverExpire?.addEventListener("change", updateExpiryState);
+  expires?.addEventListener("change", updateExpiryState);
+  dialog.querySelector("[data-cancel]").addEventListener("click", () => dialog.close());
+  dialog.querySelector("[data-confirm]")?.addEventListener("click", () => {
+    const name = dialog.querySelector("[data-receiver-name]").value.trim();
+    const error = dialog.querySelector("[data-share-error]");
+    if (!name || (!neverExpire.checked && !expiry.value)) {
+      error.textContent = !name ? "Enter a name." : "Choose an access expiry date.";
+      error.hidden = false;
+      return;
+    }
+    const hasSelectedDeviceField = [...dialog.querySelectorAll("tbody tr:not(.share-select-all-row) input[type='checkbox']")]
+      .some((input) => input.checked);
+    if (!hasSelectedDeviceField) {
+      error.textContent = "Select at least one device option to share.";
+      error.hidden = false;
+      return;
+    }
+    if (existingReceiverNames.has(name.toLocaleLowerCase())) {
+      error.textContent = "A paired Home Assistant already uses this receiver name.";
+      error.hidden = false;
+      return;
+    }
+    const relayIdsFor = (permissionSelector) => [...dialog.querySelectorAll("tbody tr")]
+      .filter((row) => row.querySelector(permissionSelector)?.checked)
+      .flatMap((row) => [...row.querySelectorAll("[data-share-relay]")]
+        .filter((relay) => relay.checked)
+        .map((relay) => relay.value));
+    const createKeyRelayIds = relayIdsFor("[data-create-keys]");
+    const editKeyRelayIds = relayIdsFor("[data-edit-keys]");
+    const viewKeyRelayIds = relayIdsFor("[data-view-keys]");
+    const activityDeviceNames = activity.filter((item) => item.checked).map((item) => item.value);
+    resolve({ receiverName: name, deviceIds: devices.filter((item) => item.checked).map((item) => item.value), allowActivity: activityDeviceNames.length > 0, activityDeviceNames, allowCreateKeys: createKeyRelayIds.length > 0, allowEditKeys: editKeyRelayIds.length > 0, createKeyRelayIds, editKeyRelayIds, viewKeyRelayIds, accessExpiresAt: neverExpire.checked ? null : new Date(expiry.value).toISOString() });
+    dialog.close();
+  });
+  dialog.addEventListener("close", () => {
+    host._modalCount = Math.max(0, (host._modalCount || 1) - 1);
+    dialog.remove();
+    host._requestLoad?.();
+    resolve(null);
+  }, { once: true });
+  host._modalCount = (host._modalCount || 0) + 1;
+  host.shadowRoot.append(dialog); dialog.showModal();
+});
 
 const activityStorageLimitWarning = (settings) => {
   const limitMb = Number(settings.activity_history_max_storage_mb) || 0;
@@ -258,15 +443,14 @@ export const renderSettingsView = (host) => {
 
         ${settings.credential_mode === "remote" ? `
         <fieldset>
-          <legend>Credential Sharing</legend>
+          <legend>Share Access</legend>
           <p class="muted">This Home Assistant receives credentials from another instance. Manage pairing on the source instance.</p>
+          ${remoteShareConnectionSection(settings.remote_last_sync)}
         </fieldset>` : `
         <fieldset>
-          <legend>Credential Sharing</legend>
-          <p class="muted">Create a one-time pairing link for another Home Assistant. The link expires after 10 minutes.</p>
-          <label>Receiver name<input data-share-receiver-name maxlength="100" placeholder="e.g. Holiday home"></label>
-          <button class="action" type="button" data-create-credential-share>Create pairing link</button>
-          <div data-credential-share-result></div>
+          <legend>Share Access</legend>
+          <p class="muted">Generate a pairing link to securely share your Akuvox SmartPlus devices with another Home Assistant instance running the integration.<br>You can select which devices to share and whether temporary keys can be created or edited.</p>
+          <button class="action" type="button" data-create-credential-share>Create Pairing Link</button>
           ${pairedReceiversSection(settings.credential_shares)}
         </fieldset>`}
 
@@ -340,6 +524,22 @@ export const handleSaveSettings = async (host, event) => {
  * @param {HTMLElement} host
  */
 export const bindSettingsEvents = (host) => {
+  window.clearInterval(host._pairingExpiryTimer);
+  const updatePairingExpiry = () => {
+    host.shadowRoot.querySelectorAll("[data-pairing-expiry]").forEach((element) => {
+      const remaining = Number(element.dataset.pairingExpiry) - Date.now();
+      if (remaining <= 0) {
+        window.clearInterval(host._pairingExpiryTimer);
+        host._requestLoad?.({ forceRender: true });
+      } else {
+        element.textContent = formatPairingTimeRemaining(remaining);
+      }
+    });
+  };
+  if (host.shadowRoot.querySelector("[data-pairing-expiry]")) {
+    host._pairingExpiryTimer = window.setInterval(updatePairingExpiry, 1000);
+    updatePairingExpiry();
+  }
   const settingsForm = host.shadowRoot.querySelector("[data-settings-form]");
   if (!settingsForm) return;
 
@@ -502,59 +702,38 @@ export const bindSettingsEvents = (host) => {
   });
 
   settingsForm.querySelector("[data-create-credential-share]")?.addEventListener("click", async () => {
-    const receiver = settingsForm.querySelector("[data-share-receiver-name]");
-    const result = settingsForm.querySelector("[data-credential-share-result]");
-    const receiverName = receiver?.value?.trim();
-    if (!receiverName) {
-      showNotice(host, "Enter a name for the receiving Home Assistant.", "Receiver name required");
-      receiver?.focus();
-      return;
-    }
+    const access = await requestShareAccess(host);
+    if (!access) return;
+    const receiverName = access.receiverName;
     try {
       const response = await callWsWithBlocker(host, {
         type: "akuvox/panel_create_credential_share",
         entry_id: host._activeAccount,
         receiver_name: receiverName,
+        source_url: window.location.origin,
+        device_ids: access.deviceIds,
+        allow_activity: access.allowActivity,
+        activity_device_names: access.activityDeviceNames,
+        allow_create_keys: access.allowCreateKeys,
+        allow_edit_keys: access.allowEditKeys,
+        create_key_relay_ids: access.createKeyRelayIds,
+        edit_key_relay_ids: access.editKeyRelayIds,
+        view_key_relay_ids: access.viewKeyRelayIds,
+        access_expires_at: access.accessExpiresAt,
       });
-      if (result) {
-        const expiresAt = Date.now() + 10 * 60 * 1000;
-        result.innerHTML = `<label>
-          <span class="credential-share-link-heading">Pairing link (<span data-credential-share-expiry>expires in 10:00</span>)</span>
-          <span class="credential-share-link-row">
-            <span class="credential-share-link-name">${escapeHtml(receiverName)}</span>
-            <input readonly aria-label="Pairing link for ${escapeHtml(receiverName)}" value="${escapeHtml(response.pairing_link)}">
-            <button class="action" type="button" data-copy-credential-share>Copy</button>
-          </span>
-        </label>`;
-        result.querySelector("input")?.select();
-        const expiry = result.querySelector("[data-credential-share-expiry]");
-        const updateExpiry = () => {
-          if (!result.isConnected || !expiry?.isConnected) {
-            window.clearInterval(expiryTimer);
-            return;
-          }
-          const remaining = expiresAt - Date.now();
-          expiry.textContent = remaining > 0
-            ? `expires in ${formatPairingTimeRemaining(remaining)}`
-            : "expired";
-          if (remaining <= 0) window.clearInterval(expiryTimer);
-        };
-        const expiryTimer = window.setInterval(updateExpiry, 1000);
-        updateExpiry();
-        result.querySelector("[data-copy-credential-share]")?.addEventListener("click", async (event) => {
-          const copyButton = event.currentTarget;
-          try {
-            await host.shadowRoot.ownerDocument.defaultView.navigator.clipboard.writeText(response.pairing_link);
-            copyButton.textContent = "Copied";
-            copyButton.disabled = true;
-          } catch (_) {
-            showNotice(host, "Could not copy automatically. Select the link and copy it manually.", "Copy failed");
-          }
-        });
-      }
-      showPairingLinkNotice(host, response.pairing_link);
+      await showPairingLinkNotice(host, response.pairing_link);
+      host._requestLoad?.({ forceRender: true });
     } catch (error) {
-      showNotice(host, error?.message || "Could not create a pairing link.", "Pairing failed");
+      const message = String(error?.message || "");
+      const reloadRequired = message.includes("source_url")
+        && message.includes("extra keys not allowed");
+      showNotice(
+        host,
+        reloadRequired
+          ? "Reload the Akuvox SmartPlus integration on this Home Assistant, then generate the pairing link again."
+          : message || "Could not create a pairing link.",
+        reloadRequired ? "Reload required" : "Pairing failed"
+      );
     }
   });
 
@@ -580,15 +759,17 @@ export const bindSettingsEvents = (host) => {
     });
   });
 
+  settingsForm.querySelectorAll("[data-view-credential-share]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const share = host._settings?.credential_shares?.find(
+        (item) => item.share_id === button.dataset.viewCredentialShare
+      );
+      if (share) requestShareAccess(host, share);
+    });
+  });
+
   settingsForm.querySelectorAll("[data-delete-credential-share]").forEach((button) => {
     button.addEventListener("click", async () => {
-      const confirmed = await confirmModal(
-        host,
-        "This permanently removes the revoked receiver record from this Home Assistant.",
-        "Delete revoked receiver?",
-        "Delete"
-      );
-      if (!confirmed) return;
       try {
         await callWsWithBlocker(host, {
           type: "akuvox/panel_delete_credential_share",

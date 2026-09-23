@@ -117,7 +117,7 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         except Exception as error:  # Network and TLS failures should be user-actionable.
             LOGGER.warning("Unable to reach Akuvox credential source: %s", error)
             return self.async_show_form(
-                step_id="shared_credentials", data_schema=schema, errors={"base": "cannot_connect"}
+                step_id="shared_credentials", data_schema=schema, errors={"base": "cannot_reach_source"}
             )
         self.data = {
             SHARED_MODE: SHARED_MODE_REMOTE,
@@ -129,6 +129,8 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                 key: device_data.get(key, [])
                 for key in ("camera_data", "door_relay_data", "door_keys_data")
             },
+            "activity_data": snapshot.get("activity_data", []),
+            "shared_permissions": snapshot.get("permissions", {}),
             "auth_token": credentials["auth_token"],
             "token": credentials["token"],
         }
@@ -501,6 +503,10 @@ class AkuvoxOptionsFlowHandler(config_entries.OptionsFlow):
                     self.config_entry,
                     self.hass.config.external_url,
                     receiver_name,
+                    [
+                        *[f"camera:{item.get('name', '')}" for item in self.config_entry.data.get("camera_data", [])],
+                        *[f"relay:{item.get('mac', '')}:{item.get('relay_id', '')}" for item in self.config_entry.data.get("door_relay_data", [])],
+                    ],
                 )
             except (AttributeError, ValueError):
                 return self.async_show_form(

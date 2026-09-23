@@ -31,6 +31,7 @@ export const showKeyActionsMenu = (host, trigger, event, { onQr, onEdit, onDelet
   const keyCode = trigger.dataset.keyCode;
   const expired = trigger.dataset.keyExpired === "true";
   const hasQrCode = trigger.dataset.keyHasQr === "true";
+  const canEdit = trigger.dataset.keyCanEdit !== "false";
   if (!keyId || !keyCode) return;
 
   if (host._keyActionsMenu?.dataset.keyId === keyId) {
@@ -49,7 +50,7 @@ export const showKeyActionsMenu = (host, trigger, event, { onQr, onEdit, onDelet
 
   menu.innerHTML = `
     ${!expired && hasQrCode ? `<button type="button" role="menuitem" data-menu-qr>${icons.qrCode}<span>QR Code</span></button>` : ""}
-    ${!expired ? `<button type="button" role="menuitem" data-menu-edit>${icons.edit}<span>Edit</span></button>` : ""}
+    ${!expired ? `<button type="button" role="menuitem" data-menu-edit ${canEdit ? "" : "disabled title=\"Editing requires permission for every relay in this key\""}>${icons.edit}<span>Edit</span></button>` : ""}
     <button type="button" role="menuitem" data-menu-delete class="delete-action">${icons.trash}<span>Delete</span></button>
   `;
 

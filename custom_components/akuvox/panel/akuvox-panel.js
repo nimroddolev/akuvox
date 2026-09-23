@@ -8,7 +8,7 @@ import { PANEL_TAG, TAB_HASHES, TAB_HASH_BY_ID, TABS } from "./utils/constants.j
 import { escapeHtml } from "./utils/dom.js";
 import { copyText } from "./utils/clipboard.js";
 import { settingsRenderSignature } from "./utils/settings-signature.js";
-import { getPanelStyles } from "./styles/index.js?v=20260917-list-drop-position";
+import { getPanelStyles } from "./styles/index.js?v=20260923-pairing-link-copy-single-row";
 import { showNotice, confirmModal, callWsWithBlocker } from "./components/dialogs.js";
 import { installCameraRelayActions } from "./components/camera-actions.js?v=20260830-camera-modal-unlock";
 import { closeKeyActionsMenu } from "./components/key-menu.js";
@@ -19,13 +19,13 @@ import {
   bindActivityEvents,
   visibleActivityEvents,
 } from "./views/activity-view.js?v=20260917-ha-device-names";
-import { renderCallsView, bindCallsEvents } from "./views/calls-view.js?v=20260908-call-history-dedupe";
+import { renderCallsView, bindCallsEvents } from "./views/calls-view.js?v=20260922-call-status-badges";
 import {
   renderKeysView,
   bindKeysEvents,
   deleteSelectedKeys,
-} from "./views/keys-view.js?v=20260917-list-drop-position";
-import { renderSettingsView, bindSettingsEvents, updateActivityStorageProgress } from "./views/settings-view.js?v=20260917-ha-device-names";
+} from "./views/keys-view.js?v=20260922-scoped-edit-permission";
+import { renderSettingsView, bindSettingsEvents, updateActivityStorageProgress, updateRemoteShareConnectionStatus } from "./views/settings-view.js?v=20260923-share-device-validation";
 import { renderHelpView } from "./views/help-view.js";
 
 const ROW_VIEW_MODE_STORAGE_KEY = "akuvox-panel-row-view-mode";
@@ -49,6 +49,7 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
     this._loadQueued = false;
     this._panelDataSignature = null;
     this._settingsSignature = null;
+    this._renderDeferredForNativeSelect = false;
 
     this._activityFilters = { Location: [], CaptureType: [], Initiator: [] };
     this._activitySort = { key: "CaptureTime", direction: "desc" };
@@ -144,6 +145,20 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
       else this._selectedKeyIds.delete(input.dataset.selectKey);
       this._render();
     }, { capture: true });
+
+    // Native select menus are owned by the browser and are dismissed when the
+    // underlying element is replaced. Panel updates can arrive while one is
+    // open, so wait until focus leaves it before applying a deferred redraw.
+    this.shadowRoot.addEventListener("focusout", (event) => {
+      if (!(event.target instanceof HTMLSelectElement)) return;
+      window.clearTimeout(this._selectFocusReleaseTimer);
+      this._selectFocusReleaseTimer = window.setTimeout(() => {
+        this._selectFocusReleaseTimer = undefined;
+        if (!this._renderDeferredForNativeSelect || this._hasFocusedNativeSelect()) return;
+        this._renderDeferredForNativeSelect = false;
+        this._requestLoad({ forceRender: true });
+      }, 0);
+    }, { capture: true });
   }
 
   set hass(value) {
@@ -171,6 +186,8 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
     this._multiFilterOutsideAbort?.abort();
     this._copiedKeyCodes.forEach((timeout) => window.clearTimeout(timeout));
     this._copiedKeyCodes.clear();
+    window.clearTimeout(this._selectFocusReleaseTimer);
+    this._selectFocusReleaseTimer = undefined;
     this._panelDataSubscriptionActive = false;
     this._unsubscribePanelDataUpdates?.();
     this._unsubscribePanelDataUpdates = undefined;
@@ -227,6 +244,10 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
   }
 
   _shouldDeferRender() {
+    if (this._hasFocusedNativeSelect()) {
+      this._renderDeferredForNativeSelect = true;
+      return true;
+    }
     return (
       (this._settingsDirty && this._activeTab === "settings") ||
       this._settingsSaving ||
@@ -234,6 +255,10 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
       this._keyDialogOpen ||
       this._modalCount > 0
     );
+  }
+
+  _hasFocusedNativeSelect() {
+    return this.shadowRoot.activeElement instanceof HTMLSelectElement;
   }
 
   async _load({ forceRender = true } = {}) {
@@ -363,6 +388,7 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
       if (entryId !== this._activeAccount) return;
       this._settings = result.settings;
       this._settingsEntryId = entryId;
+      updateRemoteShareConnectionStatus(this, this._settings.remote_last_sync);
       // Storage usage changes independently of saved options, so it must not
       // rebuild the Settings form while a native select is open.
       // Receiver sync timestamps are runtime status, not editable settings.
@@ -615,10 +641,14 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
 
   _remoteCredentialSourceNotice(account) {
     const problem = account.credential_source_problem;
+    const sourceUrl = String(account.remote_source_url || "");
+    const sourceLink = sourceUrl.startsWith("https://")
+      ? `<a href="${escapeHtml(sourceUrl)}">${escapeHtml(sourceUrl)}</a>`
+      : "the host instance";
     const details = {
       unreachable: {
         title: "Cannot reach the credential source",
-        text: "This Home Assistant cannot reach the host instance that supplies this account’s SmartPlus credentials. Cached credentials may continue to work until they expire.",
+        text: `This Home Assistant cannot reach the host instance that supplies this account’s SmartPlus credentials: ${sourceLink}<br />Cached credentials may continue to work until they expire.`,
       },
       revoked: {
         title: "Credential sharing was revoked",

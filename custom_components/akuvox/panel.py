@@ -182,9 +182,57 @@ async def websocket_panel_data(
     accounts = []
     for entry in _panel_entries(hass):
         client = _client_for_entry(hass, entry.entry_id)
-        if client is None:
-            continue
-        panel_data = client.get_panel_data()
+        # Keep every configured hub selectable, including an entry still
+        # starting up or temporarily unavailable. Its saved entry title is a
+        # useful fallback until SmartPlus supplies the project (hub) name.
+        panel_data = client.get_panel_data() if client else {
+            "project_name": entry.title,
+            "cameras": [],
+            "relays": [],
+            "temporary_keys": [],
+            "activity": [],
+            "calls": [],
+        }
+        # A remote client may receive broader cloud responses after pairing;
+        # the source-approved entry snapshot remains the authority for panel UI.
+        if entry.data.get(SHARED_MODE) == SHARED_MODE_REMOTE:
+            panel_data["cameras"] = [
+                {"name": item.get("name", ""), "source_name": item.get("name", "")}
+                for item in entry.data.get("camera_data", [])
+            ]
+            panel_data["relays"] = [
+                {"name": item.get("name", ""), "door_name": item.get("door_name", ""),
+                 "source_name": item.get("name", ""), "relay_id": item.get("relay_id", ""), "mac": item.get("mac", "")}
+                for item in entry.data.get("door_relay_data", [])
+            ]
+            allowed = {
+                (str(item.get("mac", "")), str(item.get("relay_id", "")))
+                for item in entry.data.get("door_relay_data", [])
+            }
+            permissions = entry.data.get("shared_permissions", {})
+            permitted_key_relays = {
+                tuple(item.removeprefix("relay:").split(":", 1))
+                for item in permissions.get("view_key_relay_ids", [])
+                if isinstance(item, str) and item.startswith("relay:")
+            }
+            allowed.intersection_update(permitted_key_relays)
+            # The source snapshot is the authority.  Do not expose keys from
+            # a broader response returned by the receiver's cloud client, or
+            # keys that contain relays with no temporary-key permission.
+            panel_data["temporary_keys"] = [
+                key
+                for key in entry.data.get("door_keys_data", [])
+                if key.get("doors")
+                and all(
+                    (str(door.get("mac", "")), str(door.get("relay", ""))) in allowed
+                    for door in key["doors"]
+                )
+            ]
+            panel_data["activity"] = [
+                dict(activity)
+                for activity in entry.data.get("activity_data", [])
+                if isinstance(activity, dict)
+            ]
         panel_data["activity"] = [
             {
                 **{
@@ -238,13 +286,16 @@ async def websocket_panel_data(
         accounts.append(
             {
                 "entry_id": entry.entry_id,
-                "title": entry.title,
+                "title": panel_data.get("project_name") or entry.title,
+                "credential_mode": entry.data.get(SHARED_MODE, "local"),
                 "requires_reauthentication": authentication_failed(
                     hass, entry.entry_id
                 ),
                 "credential_source_problem": credential_source_problem(
                     hass, entry.entry_id
                 ),
+                "remote_source_url": entry.data.get("remote_source_url", ""),
+                "shared_permissions": entry.data.get("shared_permissions", {}),
                 **panel_data,
             }
         )
@@ -419,6 +470,7 @@ async def websocket_panel_settings(
         connection.send_error(msg["id"], "not_found", "Akuvox account was not found")
         return
     client = _client_for_entry(hass, entry.entry_id)
+    remote_sync = hass.data.get("akuvox_credential_sharing", {}).get(entry.entry_id)
     connection.send_result(
         msg["id"],
         {
@@ -459,6 +511,11 @@ async def websocket_panel_settings(
                 "sip_accounts": client.get_sip_accounts() if client else {},
                 "credential_mode": entry.data.get(SHARED_MODE, "local"),
                 "credential_shares": await async_list_shares(hass, entry.entry_id),
+                "remote_last_sync": (
+                    remote_sync.last_successful_sync.isoformat()
+                    if remote_sync and remote_sync.last_successful_sync
+                    else None
+                ),
             },
         },
     )
@@ -645,6 +702,16 @@ async def websocket_panel_refresh_shared_credentials(
         vol.Required("type"): "akuvox/panel_create_credential_share",
         vol.Required("entry_id"): str,
         vol.Required("receiver_name"): vol.All(str, vol.Length(min=1, max=100)),
+        vol.Required("source_url"): str,
+        vol.Required("device_ids"): [str],
+        vol.Optional("allow_activity", default=True): bool,
+        vol.Optional("activity_device_names", default=[]): [str],
+        vol.Optional("allow_create_keys", default=True): bool,
+        vol.Optional("allow_edit_keys", default=True): bool,
+        vol.Optional("create_key_relay_ids", default=[]): [str],
+        vol.Optional("edit_key_relay_ids", default=[]): [str],
+        vol.Optional("view_key_relay_ids", default=None): vol.Any(None, [str]),
+        vol.Optional("access_expires_at", default=None): vol.Any(None, str),
     }
 )
 @websocket_api.async_response
@@ -665,9 +732,17 @@ async def websocket_panel_create_credential_share(
         return
     try:
         pairing_link = await async_create_share(
-            hass, entry, hass.config.external_url, msg["receiver_name"]
+            hass, entry, msg["source_url"], msg["receiver_name"],
+            msg["device_ids"], msg["allow_create_keys"], msg["allow_edit_keys"],
+            msg["access_expires_at"], msg["create_key_relay_ids"],
+            msg["edit_key_relay_ids"],
+            msg["view_key_relay_ids"], msg["allow_activity"],
+            msg["activity_device_names"],
         )
-    except (AttributeError, ValueError) as error:
+    except ValueError as error:
+        connection.send_error(msg["id"], "duplicate_receiver_name", str(error))
+        return
+    except AttributeError as error:
         connection.send_error(msg["id"], "external_url_required", str(error))
         return
     connection.send_result(msg["id"], {"pairing_link": pairing_link})
@@ -863,8 +938,27 @@ async def websocket_panel_create_temp_key(
     """Create a temporary key only after a reviewed and confirmed request."""
     if not _require_admin(connection, msg):
         return
+    entry = hass.config_entries.async_get_entry(msg["entry_id"])
     client = _client_for_entry(hass, msg["entry_id"])
     devices = _validated_panel_devices(client, msg["dev_list"]) if client else None
+    if entry and entry.data.get(SHARED_MODE) == SHARED_MODE_REMOTE:
+        permissions = entry.data.get("shared_permissions", {})
+        permitted = permissions.get("create_key_relay_ids")
+        if isinstance(permitted, list):
+            allowed = {
+                tuple(item.removeprefix("relay:").split(":", 1))
+                for item in permitted if isinstance(item, str) and item.startswith("relay:")
+            }
+            requested = {
+                (str(device["mac"]), relay)
+                for device in (devices or []) for relay in str(device["relay"]).split(";")
+            }
+            if not requested or not requested.issubset(allowed):
+                connection.send_error(msg["id"], "not_allowed", "The credential source does not allow creating temporary keys for the selected relay")
+                return
+        else:
+            connection.send_error(msg["id"], "not_allowed", "Refresh shared credentials before creating a temporary key")
+            return
     if devices is None:
         connection.send_error(msg["id"], "invalid_format", "Select at least one valid relay")
         return
@@ -912,6 +1006,7 @@ async def websocket_panel_create_temp_key(
 async def websocket_panel_edit_temp_key(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
     """Update a known temporary key after validating requested relays."""
     if not _require_admin(connection, msg): return
+    entry = hass.config_entries.async_get_entry(msg["entry_id"])
     client = _client_for_entry(hass, msg["entry_id"])
     key = next(
         (
@@ -921,6 +1016,25 @@ async def websocket_panel_edit_temp_key(hass: HomeAssistant, connection: websock
         ),
         None,
     ) if client else None
+    if entry and entry.data.get(SHARED_MODE) == SHARED_MODE_REMOTE:
+        permitted = entry.data.get("shared_permissions", {}).get("edit_key_relay_ids")
+        allowed = {
+            tuple(item.removeprefix("relay:").split(":", 1))
+            for item in permitted
+            if isinstance(item, str) and item.startswith("relay:")
+        } if isinstance(permitted, list) else set()
+        key_relays = {
+            (str(door.get("mac", "")), str(door.get("relay", "")))
+            for door in (key or {}).get("doors", [])
+            if isinstance(door, dict)
+        }
+        if not key_relays or not key_relays.issubset(allowed):
+            connection.send_error(
+                msg["id"],
+                "not_allowed",
+                "The credential source does not allow editing every relay in this temporary key",
+            )
+            return
     devices = _preserved_temp_key_devices(key, msg["dev_list"]) if key else None
     if devices is None or key is None:
         LOGGER.warning(

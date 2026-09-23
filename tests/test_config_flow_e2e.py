@@ -63,6 +63,28 @@ class TestConfigFlowE2E(unittest.TestCase):
         )
 
 
+class TestSharedCredentialsFlowE2E(unittest.IsolatedAsyncioTestCase):
+    """Verify shared-credential failures identify the source connection."""
+
+    async def test_source_connection_failure_has_a_pairing_specific_error(self) -> None:
+        """A source outage does not incorrectly report an SMS delivery failure."""
+        flow = AkuvoxFlowHandler()
+        flow.hass = _Hass()
+        flow.async_show_form = MagicMock(return_value={"type": "form"})
+
+        with patch(
+            "custom_components.akuvox.config_flow.async_fetch_shared_snapshot",
+            new_callable=AsyncMock,
+            side_effect=OSError("source unavailable"),
+        ):
+            result = await flow.async_step_shared_credentials(
+                {"pairing_link": "akuvox-share://v1?url=https%3A%2F%2Fexample.com&id=share&secret=secret"}
+            )
+
+        self.assertEqual(result, {"type": "form"})
+        self.assertEqual(flow.async_show_form.call_args.kwargs["errors"], {"base": "cannot_reach_source"})
+
+
 class _ReauthEntry:
     """Represents an existing account which needs a new SmartPlus session."""
 

@@ -812,12 +812,34 @@ export const viewStyles = `
     border-top: 1px solid var(--divider-color, #ddd);
   }
 
-  .credential-share-receiver-row span {
-    min-width: 0;
+  .credential-share-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
   }
 
-  .credential-share-receiver-row small {
-    display: block;
+  .credential-share-receiver-row .credential-share-status {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    gap: 6px;
+    white-space: nowrap;
+  }
+
+  .credential-share-receiver-row .credential-share-status small {
     color: var(--secondary-text-color, #666);
   }
+  .credential-share-status.connected strong { color: #16803c; }
+  .credential-share-status.waiting strong { color: #a36a00; }
+  .credential-share-status.disconnected strong { color: #c23131; }
+
+  .credential-share-source-status {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin: 10px 0 0;
+  }
+
+  .credential-share-source-status.connected strong { color: #16803c; }
+  .credential-share-source-status.waiting strong { color: #a36a00; }
 `;
