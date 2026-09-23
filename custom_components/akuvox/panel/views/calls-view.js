@@ -103,7 +103,7 @@ export const renderCallsView = (host, account) => {
                 <td>${escapeHtml(call.callerName || "")}</td>
                 <td>${escapeHtml(call.calleeName || "")}</td>
                 <td>
-                  <span style="color:${call.isAnswer ? "#16a34a" : "#dc2626"};font-weight:700">
+                  <span class="call-status ${call.isAnswer ? "answered" : "missed"}">
                     ${call.isAnswer ? "Answered" : "Missed"}
                   </span>
                 </td>

@@ -280,6 +280,17 @@ export const tableStyles = `
   .key-status.active { color: #176b45; background: #d8f4e4; }
   .key-status.expired { color: #9f2d2d; background: #fde0e0; }
 
+  .call-status {
+    display: inline-block;
+    padding: 3px 7px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .call-status.answered { color: #176b45; background: #d8f4e4; }
+  .call-status.missed { color: #9f2d2d; background: #fde0e0; }
+
   .key-tile-active { border-color: #62c78c; }
   .key-tile-expired { border-color: #e56b6b; }
 
