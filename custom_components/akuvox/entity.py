@@ -22,14 +22,18 @@ class AkuvoxEntity(Entity):
         token = self.get_saved_value("token")
         phone_number = self.get_saved_value("phone_number")
         country_code = self.get_saved_value("country_code") if len(self.get_saved_value("country_code")) > 0 else None
-        self.client.init_api_with_data(
-            hass=self.hass,
-            host=host,
-            subdomain=None,
-            auth_token=auth_token,
-            token=token,
-            phone_number=phone_number,
-            country_code=country_code)
+        # Credentials are now stored privately and deliberately removed from
+        # config-entry data. Do not overwrite the initialized client with
+        # empty legacy values when an entity is created.
+        if auth_token and token:
+            self.client.init_api_with_data(
+                hass=self.hass,
+                host=host,
+                subdomain=None,
+                auth_token=auth_token,
+                token=token,
+                phone_number=phone_number,
+                country_code=country_code)
 
     def get_saved_value(self, key: str) -> str:
         """Get the value for a given key. Options flow 1st, Config flow 2nd."""

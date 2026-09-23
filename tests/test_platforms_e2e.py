@@ -132,8 +132,8 @@ class TestPlatformSetupE2E(unittest.IsolatedAsyncioTestCase):
 
         await relay_entity.async_press()
 
-        self.assertEqual(camera_entity.unique_id, "Lobby")
-        self.assertEqual(relay_entity.unique_id, "Lobby, 1")
+        self.assertEqual(camera_entity.unique_id, "entry-id:Lobby")
+        self.assertEqual(relay_entity.unique_id, "entry-id:Lobby, 1")
         self.assertTrue(key_entity.is_key_active())
         client.async_make_opendoor_request.assert_awaited_once()
 

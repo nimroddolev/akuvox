@@ -60,7 +60,7 @@ class AkuvoxDoorUnlockEvent(EventEntity):
         self._unsub: Callable[[], None] | None = None
         self._attr_unique_id = f"{entry.entry_id}_{door_name}_door_unlocked"
         self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, door_name)},
+            identifiers={(DOMAIN, f"{entry.entry_id}:{door_name}")},
             name=door_name,
             model=VERSION,
             manufacturer=NAME,

@@ -84,20 +84,21 @@ class AkuvoxDoorRelayEntity(ButtonEntity, AkuvoxEntity):
             client=client,
             entry=entry
         )
-        unique_name = name + ", " + relay_id
+        device_identity = f"{entry.entry_id}:{name}"
+        relay_name = name + ", " + relay_id
         self._client = client
-        self._name = unique_name
+        self._name = relay_name
         client_data = getattr(client, "_data", None)
         self._host = client_data.host if client_data else self.get_saved_value("host")
         self._token = client_data.token if client_data else self.get_saved_value("token")
         self._data = data
 
-        self._attr_unique_id = unique_name
-        self._attr_name = unique_name
+        self._attr_unique_id = f"{entry.entry_id}:{relay_name}"
+        self._attr_name = relay_name
 
-        LOGGER.debug("Adding Akuvox door relay '%s'", unique_name)
+        LOGGER.debug("Adding Akuvox door relay '%s'", relay_name)
         self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, name)},  # type: ignore
+            identifiers={(DOMAIN, device_identity)},
             name=name,
             model=VERSION,
             manufacturer=NAME,

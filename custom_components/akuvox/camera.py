@@ -69,12 +69,14 @@ class AkuvoxCameraEntity(GenericCamera):
             rtsp_url = name
             name = str(entry)
             entry = None
+        entry_id = str(getattr(entry, "entry_id", ""))
+        identity = f"{entry_id}:{name}" if entry_id else name
         LOGGER.debug("Adding Akuvox camera '%s'", name)
 
         super().__init__(
             hass=hass,
             device_info={
-                ATTR_IDENTIFIERS: {(DOMAIN, name)},
+                ATTR_IDENTIFIERS: {(DOMAIN, identity)},
                 CONF_NAME: name,
                 "stream_source": rtsp_url,
                 "content_type": "image/jpeg",
@@ -88,17 +90,17 @@ class AkuvoxCameraEntity(GenericCamera):
                     "rtsp_transport": "udp",
                 },
             },
-            identifier=name,
+            identifier=identity,
             title=name,
         )
 
         self._name = name
         self._rtsp_url = rtsp_url
-        self._attr_unique_id = name
+        self._attr_unique_id = identity
         self._attr_name = name
 
         self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, name)},
+            identifiers={(DOMAIN, identity)},
             name=name,
             model=VERSION,
             manufacturer=NAME,
