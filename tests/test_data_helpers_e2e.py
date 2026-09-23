@@ -65,6 +65,7 @@ class TestDataAndHelpersE2E(unittest.IsolatedAsyncioTestCase):
             "Location": "Door",
             "MAC": "001122",
             "Relay": "1",
+            "PicUrl": "snapshot",
         }
         self.data.async_get_stored_data_for_key = AsyncMock(
             return_value={"CaptureTime": "old"}

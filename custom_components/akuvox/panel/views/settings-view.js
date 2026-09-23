@@ -710,7 +710,6 @@ export const bindSettingsEvents = (host) => {
         type: "akuvox/panel_create_credential_share",
         entry_id: host._activeAccount,
         receiver_name: receiverName,
-        source_url: window.location.origin,
         device_ids: access.deviceIds,
         allow_activity: access.allowActivity,
         activity_device_names: access.activityDeviceNames,

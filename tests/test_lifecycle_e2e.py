@@ -154,7 +154,6 @@ class TestPanelRegistrationE2E(unittest.IsolatedAsyncioTestCase):
         hass = _Hass()
         hass.config_entries.entries = [_Entry()]
         with (
-            patch("custom_components.akuvox.panel.async_panel_exists", return_value=False),
             patch("custom_components.akuvox.panel.add_extra_js_url"),
             patch(
                 "custom_components.akuvox.panel.panel_custom.async_register_panel",

@@ -10,7 +10,6 @@ import voluptuous as vol
 from homeassistant.components import panel_custom, websocket_api
 from homeassistant.components.frontend import (
     add_extra_js_url,
-    async_panel_exists,
     async_remove_panel,
 )
 from homeassistant.components.http import StaticPathConfig
@@ -82,16 +81,12 @@ async def async_refresh_panel(hass: HomeAssistant) -> None:
     """Register the sidebar panel whenever at least one account exists."""
     entries = _panel_entries(hass)
     runtime = hass.data.setdefault(PANEL_RUNTIME_DOMAIN, {})
-    panel_exists = async_panel_exists(hass, PANEL_URL_PATH)
-
     if not entries:
-        if panel_exists:
-            async_remove_panel(hass, PANEL_URL_PATH)
+        async_remove_panel(hass, PANEL_URL_PATH, warn_if_unknown=False)
         runtime.pop(PANEL_RUNTIME_KEY, None)
         return
 
-    if panel_exists:
-        async_remove_panel(hass, PANEL_URL_PATH)
+    async_remove_panel(hass, PANEL_URL_PATH, warn_if_unknown=False)
 
     if not runtime.get(PANEL_RUNTIME_KEY):
         await hass.http.async_register_static_paths(
@@ -407,10 +402,12 @@ async def websocket_panel_import_activity_storage(
 @websocket_api.async_response
 async def websocket_panel_call_image(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
     """Return an authorised call image to the panel."""
-    if not _require_admin(connection, msg): return
+    if not _require_admin(connection, msg):
+        return
     client = _client_for_entry(hass, msg["entry_id"])
     if client is None:
-        connection.send_error(msg["id"], "not_found", "Akuvox account was not found"); return
+        connection.send_error(msg["id"], "not_found", "Akuvox account was not found")
+        return
     try:
         connection.send_result(msg["id"], await client.async_get_panel_call_image(msg["call_id"]))
     except AkuvoxApiClientError as error:
@@ -702,7 +699,6 @@ async def websocket_panel_refresh_shared_credentials(
         vol.Required("type"): "akuvox/panel_create_credential_share",
         vol.Required("entry_id"): str,
         vol.Required("receiver_name"): vol.All(str, vol.Length(min=1, max=100)),
-        vol.Required("source_url"): str,
         vol.Required("device_ids"): [str],
         vol.Optional("allow_activity", default=True): bool,
         vol.Optional("activity_device_names", default=[]): [str],
@@ -732,7 +728,7 @@ async def websocket_panel_create_credential_share(
         return
     try:
         pairing_link = await async_create_share(
-            hass, entry, msg["source_url"], msg["receiver_name"],
+        hass, entry, hass.config.external_url, msg["receiver_name"],
             msg["device_ids"], msg["allow_create_keys"], msg["allow_edit_keys"],
             msg["access_expires_at"], msg["create_key_relay_ids"],
             msg["edit_key_relay_ids"],
@@ -1005,7 +1001,8 @@ async def websocket_panel_create_temp_key(
 @websocket_api.async_response
 async def websocket_panel_edit_temp_key(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
     """Update a known temporary key after validating requested relays."""
-    if not _require_admin(connection, msg): return
+    if not _require_admin(connection, msg):
+        return
     entry = hass.config_entries.async_get_entry(msg["entry_id"])
     client = _client_for_entry(hass, msg["entry_id"])
     key = next(
@@ -1053,7 +1050,8 @@ async def websocket_panel_edit_temp_key(hass: HomeAssistant, connection: websock
     try:
         begin = datetime.strptime(msg["begin_time"], "%Y-%m-%d %H:%M:%S")
         end = datetime.strptime(msg["end_time"], "%Y-%m-%d %H:%M:%S")
-        if end <= begin: raise ValueError
+        if end <= begin:
+            raise ValueError
         if bool(key.get("expired", False)):
             LOGGER.info("Rejected update for expired temporary key ID %s", msg["key_id"])
             connection.send_error(
@@ -1065,7 +1063,8 @@ async def websocket_panel_edit_temp_key(hass: HomeAssistant, connection: websock
         await client.async_edit_panel_temp_key(msg["key_id"], msg["description"], msg["begin_time"], msg["end_time"], msg["counts"], devices, msg["id_number"], msg["license_plate"], msg["uhf_card"])
     except (ValueError, AkuvoxApiClientError) as error:
         LOGGER.warning("Sidebar temporary-key update failed: %s", error)
-        connection.send_error(msg["id"], "operation_failed", str(error) or "Unable to update temporary key"); return
+        connection.send_error(msg["id"], "operation_failed", str(error) or "Unable to update temporary key")
+        return
     connection.send_result(msg["id"])
 
 

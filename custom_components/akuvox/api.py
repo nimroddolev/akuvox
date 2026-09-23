@@ -1306,7 +1306,7 @@ class AkuvoxApiClient:
         except KeyError:
             return []
         if not isinstance(payload, list):
-            raise ValueError(f"{name} is not a list")
+            raise TypeError(f"{name} is not a list")
         return [dict(record) for record in payload if isinstance(record, dict)]
 
     @staticmethod
@@ -1643,21 +1643,23 @@ class AkuvoxApiClient:
                 }
             )
         try:
-            async with async_timeout.timeout(15):
-                async with self._session.get(
+            async with (
+                async_timeout.timeout(15),
+                self._session.get(
                     image_url, headers=headers, allow_redirects=True, max_redirects=3
-                ) as response:
-                    content_type = response.content_type.lower()
-                    if response.status != 200:
-                        LOGGER.debug(
-                            "SmartPlus event image request failed with HTTP %s from %s",
-                            response.status,
-                            image_host,
-                        )
-                        raise AkuvoxApiClientError("SmartPlus did not provide an event image")
-                    if response.content_length is not None and response.content_length > 5_000_000:
-                        raise AkuvoxApiClientError("The SmartPlus event image is too large")
-                    image = await response.read()
+                ) as response,
+            ):
+                content_type = response.content_type.lower()
+                if response.status != 200:
+                    LOGGER.debug(
+                        "SmartPlus event image request failed with HTTP %s from %s",
+                        response.status,
+                        image_host,
+                    )
+                    raise AkuvoxApiClientError("SmartPlus did not provide an event image")
+                if response.content_length is not None and response.content_length > 5_000_000:
+                    raise AkuvoxApiClientError("The SmartPlus event image is too large")
+                image = await response.read()
         except (aiohttp.ClientError, TimeoutError) as error:
             raise AkuvoxApiClientCommunicationError(
                 "Unable to retrieve the SmartPlus event image"

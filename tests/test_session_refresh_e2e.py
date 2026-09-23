@@ -160,14 +160,16 @@ class TestSmartPlusSessionRefreshE2E(unittest.IsolatedAsyncioTestCase):
             ]
         )
 
-        with patch("custom_components.akuvox.api.async_report_authentication_failure"):
-            with self.assertRaises(AkuvoxApiClientAuthenticationError):
-                await client._async_api_wrapper(
-                    "get",
-                    "https://api.example/userconf?token=expired-token",
-                    None,
-                    {"x-auth-token": "expired-token"},
-                )
+        with (
+            patch("custom_components.akuvox.api.async_report_authentication_failure"),
+            self.assertRaises(AkuvoxApiClientAuthenticationError),
+        ):
+            await client._async_api_wrapper(
+                "get",
+                "https://api.example/userconf?token=expired-token",
+                None,
+                {"x-auth-token": "expired-token"},
+            )
 
         self.assertTrue(self.entry.reauth_started)
         self.assertEqual(len(self.session.requests), 2)
@@ -181,14 +183,16 @@ class TestSmartPlusSessionRefreshE2E(unittest.IsolatedAsyncioTestCase):
             ]
         )
 
-        with patch("custom_components.akuvox.api.async_report_authentication_failure"):
-            with self.assertRaises(AkuvoxApiClientAuthenticationError):
-                await client._async_api_wrapper(
-                    "post",
-                    "https://gate.ecloud.akuvox.com:8600/servers_list",
-                    {},
-                    {"x-auth-token": "expired-token"},
-                )
+        with (
+            patch("custom_components.akuvox.api.async_report_authentication_failure"),
+            self.assertRaises(AkuvoxApiClientAuthenticationError),
+        ):
+            await client._async_api_wrapper(
+                "post",
+                "https://gate.ecloud.akuvox.com:8600/servers_list",
+                {},
+                {"x-auth-token": "expired-token"},
+            )
 
         self.assertTrue(self.entry.reauth_started)
         self.assertEqual(len(self.session.requests), 2)
@@ -208,14 +212,16 @@ class TestSmartPlusSessionRefreshE2E(unittest.IsolatedAsyncioTestCase):
             ]
         )
 
-        with patch("custom_components.akuvox.api.async_report_authentication_failure"):
-            with self.assertRaises(AkuvoxApiClientAuthenticationError):
-                await client._async_api_wrapper(
-                    "post",
-                    "https://gate.ecloud.akuvox.com:8600/servers_list",
-                    {},
-                    {"x-auth-token": "expired-token"},
-                )
+        with (
+            patch("custom_components.akuvox.api.async_report_authentication_failure"),
+            self.assertRaises(AkuvoxApiClientAuthenticationError),
+        ):
+            await client._async_api_wrapper(
+                "post",
+                "https://gate.ecloud.akuvox.com:8600/servers_list",
+                {},
+                {"x-auth-token": "expired-token"},
+            )
 
         self.assertTrue(self.entry.reauth_started)
         self.assertEqual(len(self.session.requests), 2)

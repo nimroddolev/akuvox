@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Mapping
 from contextlib import suppress
 import hashlib
 import secrets
@@ -141,7 +142,7 @@ async def async_create_share(
         view_key_relay_ids = [
             item for item in view_key_relay_ids if isinstance(item, str) and item in shared_relays
         ]
-    entry_data = entry.data if isinstance(entry.data, dict) else {}
+    entry_data = entry.data if isinstance(entry.data, Mapping) else {}
     shared_activity_devices = {
         item.removeprefix("camera:")
         for item in device_ids
