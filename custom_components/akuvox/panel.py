@@ -1,13 +1,17 @@
 """SmartPlus sidebar panel registration and authenticated WebSocket API."""
 from __future__ import annotations
 
+import base64
+import asyncio
 import logging
 from pathlib import Path
 from typing import Any
 from datetime import datetime
 
 import voluptuous as vol
+from haffmpeg.tools import IMAGE_JPEG, ImageFrame
 from homeassistant.components import panel_custom, websocket_api
+from homeassistant.components.ffmpeg import get_ffmpeg_manager
 from homeassistant.components.frontend import (
     add_extra_js_url,
     async_remove_panel,
@@ -21,6 +25,7 @@ from homeassistant.components.logger.helpers import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
 
 from .api import AkuvoxApiClient, AkuvoxApiClientError, get_config_entry_device
@@ -58,6 +63,7 @@ from .sharing import (
 
 _PANEL_MODULE = "akuvox-panel.js"
 _PANEL_ICONSET = "akuvox-iconset.js"
+DATA_CAMERA_PREVIEW_LOCK = f"{DOMAIN}_panel_camera_preview_lock"
 
 
 def _panel_module_url() -> str:
@@ -136,6 +142,7 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, websocket_panel_create_credential_share)
     websocket_api.async_register_command(hass, websocket_panel_revoke_credential_share)
     websocket_api.async_register_command(hass, websocket_panel_delete_credential_share)
+    websocket_api.async_register_command(hass, websocket_panel_camera_preview)
     websocket_api.async_register_command(hass, websocket_panel_stream)
     websocket_api.async_register_command(hass, websocket_panel_activity_image)
     websocket_api.async_register_command(hass, websocket_panel_clear_activity_storage)
@@ -269,6 +276,7 @@ async def websocket_panel_data(
             }
             for temp_key in panel_data["temporary_keys"]
         ]
+        entity_registry = er.async_get(hass)
         device_names: dict[str, str] = {}
         for item in [*panel_data["cameras"], *panel_data["relays"]]:
             source_name = str(item.get("source_name") or item.get("name", ""))
@@ -287,6 +295,17 @@ async def websocket_panel_data(
                 if "door_name" in item:
                     item["door_name"] = display_name
                 device_names[source_name] = display_name
+        for camera in panel_data["cameras"]:
+            source_name = str(camera.get("source_name") or camera.get("name", ""))
+            entity_id = entity_registry.async_get_entity_id(
+                "camera", DOMAIN, f"{entry.entry_id}:{source_name}"
+            )
+            state = hass.states.get(entity_id) if entity_id else None
+            token = state.attributes.get("access_token") if state else None
+            if entity_id and token:
+                camera["preview_url"] = (
+                    f"/api/camera_proxy/{entity_id}?token={token}"
+                )
         for activity in panel_data["activity"]:
             source_name = str(activity.get("Location", "")).strip()
             display_name = device_names.get(source_name)
@@ -871,6 +890,48 @@ async def websocket_panel_delete_credential_share(
         connection.send_error(msg["id"], "not_found", "Revoked receiver was not found")
         return
     connection.send_result(msg["id"], {})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "akuvox/panel_camera_preview",
+        vol.Required("entry_id"): str,
+        vol.Required("camera_name"): str,
+    }
+)
+@websocket_api.async_response
+async def websocket_panel_camera_preview(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Capture a still from an authorised panel camera without exposing its URL."""
+    if not _require_admin(connection, msg):
+        return
+    client = _client_for_entry(hass, msg["entry_id"])
+    stream_url = client.get_stream_url(msg["camera_name"]) if client else None
+    if not stream_url:
+        connection.send_result(msg["id"], {"image": None})
+        return
+    # SmartPlus's cloud RTSP service permits one frame extraction at a time.
+    # Share this lock across every open panel tab so concurrent FFmpeg readers
+    # cannot cause all previews to time out.
+    lock = hass.data.setdefault(DATA_CAMERA_PREVIEW_LOCK, asyncio.Lock())
+    async with lock:
+        try:
+            ffmpeg = ImageFrame(get_ffmpeg_manager(hass).binary)
+            image = await ffmpeg.get_image(
+                f"-rtsp_transport udp -i {stream_url}",
+                output_format=IMAGE_JPEG,
+                timeout=8,
+            )
+        except Exception as error:
+            LOGGER.debug("Unable to capture panel camera preview: %s", error)
+            image = None
+    connection.send_result(
+        msg["id"],
+        {"image": base64.b64encode(image).decode("ascii") if image else None},
+    )
 
 
 @websocket_api.websocket_command(

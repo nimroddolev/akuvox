@@ -2,8 +2,8 @@
 
 from collections.abc import Callable, Awaitable
 
-from haffmpeg.tools import IMAGE_JPEG
-from homeassistant.components.ffmpeg import async_get_image
+from haffmpeg.tools import IMAGE_JPEG, ImageFrame
+from homeassistant.components.ffmpeg import get_ffmpeg_manager
 from homeassistant.helpers import storage
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.const import ATTR_IDENTIFIERS, CONF_NAME, CONF_VERIFY_SSL
@@ -131,13 +131,11 @@ class AkuvoxCameraEntity(GenericCamera):
         frame directly with the same UDP transport that succeeds for Akuvox.
         """
         try:
-            return await async_get_image(
-                self.hass,
-                self._rtsp_url,
+            ffmpeg = ImageFrame(get_ffmpeg_manager(self.hass).binary)
+            return await ffmpeg.get_image(
+                f"-rtsp_transport udp -i {self._rtsp_url}",
                 output_format=IMAGE_JPEG,
-                extra_cmd="-rtsp_transport udp",
-                width=width,
-                height=height,
+                timeout=8,
             )
         except Exception as error:  # The camera proxy requires None on failure.
             LOGGER.debug("Unable to capture Akuvox camera snapshot: %s", error)
