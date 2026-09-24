@@ -3,7 +3,7 @@
  */
 
 import { escapeHtml } from "../utils/dom.js";
-import { icons } from "../utils/icons.js?v=20260830-device-action-gradients";
+import { icons } from "../utils/icons.js?v=20260924-view-mode-toggle";
 import { bindListOrdering, bindTileOrdering } from "../utils/tile-ordering.js?v=20260917-list-drop-position";
 
 const unlockButton = (relays, relay) => {
@@ -49,9 +49,20 @@ export const renderDevicesView = (host, account) => {
     [...devices.values()],
     (device) => device.deviceId || device.name
   );
+  const previewStatus = (camera) => {
+    const key = camera?.source_name || camera?.name;
+    const state = key && host._cameraPreviewStates?.get(key);
+    if (state === "ready") return { className: "ready", label: "Camera connected" };
+    if (state === "unavailable" || !camera?.preview_url) {
+      return { className: "unavailable", label: "Camera disconnected" };
+    }
+    return { className: "loading", label: "Camera connecting…" };
+  };
   const rows = deviceList
-    .map(
-      (device) => `
+    .map((device) => {
+      const status = previewStatus(device.camera);
+      const cameraKey = device.camera?.source_name || device.camera?.name || "";
+      return `
       <tr data-list-order-id="${escapeHtml(device.deviceId || device.name)}">
         <td>
           <div class="list-title"><button type="button" class="list-grab" data-list-grab aria-label="Reorder ${escapeHtml(device.name)}" title="Drag to reorder">⠿</button><strong>${escapeHtml(device.name)}</strong></div>
@@ -83,12 +94,14 @@ export const renderDevicesView = (host, account) => {
         </td>
       </tr>
     `
-    )
+    })
     .join("");
 
   const tiles = deviceList
-    .map(
-      (device) => `
+    .map((device) => {
+      const status = previewStatus(device.camera);
+      const cameraKey = device.camera?.source_name || device.camera?.name || "";
+      return `
         <article class="tile-card device-tile" data-tile-order-id="${escapeHtml(device.deviceId || device.name)}">
           <div class="tile-card-heading">
             <div>
@@ -96,25 +109,34 @@ export const renderDevicesView = (host, account) => {
             </div>
             ${device.deviceId ? `<a class="info-link" href="/config/devices/device/${encodeURIComponent(device.deviceId)}">${icons.externalLink}Device</a>` : ""}
           </div>
+          <div class="device-preview ${status.className}" aria-label="${device.camera ? `Camera preview from ${escapeHtml(device.name)}` : "No camera preview available"}">
+            <span class="device-preview-placeholder" aria-hidden="true">${icons.webcam}</span>
+            <p class="device-status ${status.className}" data-camera-status>${status.label}</p>
+            ${device.camera?.preview_url ? `<img data-camera-key="${escapeHtml(cameraKey)}" src="${escapeHtml(device.camera.preview_url)}" alt="" loading="eager">` : ""}
+            ${device.camera ? `<button type="button" class="device-preview-play device-monitor-action" data-stream="${escapeHtml(device.camera.source_name || device.camera.name)}" data-mode="open" aria-label="Monitor ${escapeHtml(device.name)}">${icons.play}</button>` : ""}
+          </div>
           <div class="tile-actions">
             ${device.camera ? `<button class="action device-action device-monitor-action" data-stream="${escapeHtml(device.camera.source_name || device.camera.name)}" data-mode="open">${icons.webcam}<span>Monitor</span></button>` : '<span class="muted">No camera</span>'}
             ${device.relays.map((relay) => unlockButton(device.relays, relay)).join("") || '<span class="muted">No relay</span>'}
           </div>
         </article>
-      `
-    )
+      `;
+    })
     .join("");
 
   return `
-    <div class="card table-wrap">
+    <section class="devices-view">
       <div class="section-heading row-view-heading">
-        <h2>Devices</h2>
+        <div>
+          <h2>Devices</h2>
+          <p class="devices-summary">${deviceList.length} ${deviceList.length === 1 ? "device" : "devices"}</p>
+        </div>
         <div class="view-mode-toggle" role="group" aria-label="Device layout">
-          <button type="button" class="action ${host._rowViewMode === "tiles" ? "" : "active"}" data-row-view-mode="table" aria-pressed="${host._rowViewMode !== "tiles"}">Table</button>
-          <button type="button" class="action ${host._rowViewMode === "tiles" ? "active" : ""}" data-row-view-mode="tiles" aria-pressed="${host._rowViewMode === "tiles"}">Tiles</button>
+          <button type="button" class="action ${host._rowViewMode === "tiles" ? "active" : ""}" data-row-view-mode="tiles" aria-pressed="${host._rowViewMode === "tiles"}">${icons.grid}<span>Tiles</span></button>
+          <button type="button" class="action ${host._rowViewMode === "tiles" ? "" : "active"}" data-row-view-mode="table" aria-pressed="${host._rowViewMode !== "tiles"}">${icons.table}<span>Table</span></button>
         </div>
       </div>
-      ${host._rowViewMode === "tiles" ? `<div class="tile-grid device-tile-grid" data-tile-grid="devices">${tiles || '<p>No devices discovered.</p>'}</div>` : `<table class="device-table">
+      ${host._rowViewMode === "tiles" ? `<div class="tile-grid device-tile-grid" data-tile-grid="devices">${tiles || '<p class="devices-empty">No devices discovered.</p>'}</div>` : `<div class="card table-wrap"><table class="device-table">
         <thead>
           <tr>
             <th>Device</th>
@@ -126,8 +148,8 @@ export const renderDevicesView = (host, account) => {
         <tbody data-list-order="devices">
           ${rows || '<tr><td colspan="4">No devices discovered.</td></tr>'}
         </tbody>
-      </table>`}
-    </div>
+      </table></div>`}
+    </section>
   `;
 };
 
@@ -138,6 +160,44 @@ export const renderDevicesView = (host, account) => {
 export const bindDevicesEvents = (host) => {
   bindTileOrdering(host, "devices");
   bindListOrdering(host, "devices");
+  host._cameraPreviewStates ||= new Map();
+  host.shadowRoot.querySelectorAll(".device-preview img").forEach((image) => {
+    let loadTimer;
+    const cameraKey = image.dataset.cameraKey;
+    const setCameraStatus = (text, state) => {
+      const status = image.closest(".device-tile")?.querySelector("[data-camera-status]");
+      if (!status) return;
+      status.textContent = text;
+      status.classList.remove("loading", "ready", "unavailable");
+      status.classList.add(state);
+      image.parentElement?.classList.remove("loading", "ready", "unavailable");
+      image.parentElement?.classList.add(state);
+    };
+    const markPreviewLoaded = () => {
+      window.clearTimeout(loadTimer);
+      host._cameraPreviewStates.set(cameraKey, "ready");
+      image.parentElement?.classList.add("loaded");
+      setCameraStatus("Camera connected", "ready");
+    };
+    image.addEventListener("load", markPreviewLoaded);
+    image.addEventListener("error", () => {
+      window.clearTimeout(loadTimer);
+      host._cameraPreviewStates.set(cameraKey, "unavailable");
+      image.parentElement?.classList.remove("loaded");
+      image.remove();
+      setCameraStatus("Camera unavailable", "unavailable");
+    });
+    // Cached camera stills can finish before this binding runs.
+    if (image.complete && image.naturalWidth > 0) markPreviewLoaded();
+    else {
+      loadTimer = window.setTimeout(() => {
+        if (!image.complete || image.naturalWidth === 0) {
+          host._cameraPreviewStates.set(cameraKey, "unavailable");
+          setCameraStatus("Camera disconnected", "unavailable");
+        }
+      }, 8000);
+    }
+  });
   host.shadowRoot.querySelectorAll("[data-stream]").forEach((button) =>
     button.addEventListener("click", () =>
       host._stream(button.dataset.stream, button.dataset.mode)

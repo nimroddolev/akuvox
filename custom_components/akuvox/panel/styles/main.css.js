@@ -4,27 +4,33 @@
 
 export const mainStyles = `
   :host {
-    --aqua: #00a9ce;
-    --navy: #003b5c;
-    --mint: #76c8c3;
-    color: var(--primary-text-color, #17212b);
+    --aqua: #03a9f4;
+    --navy: #006493;
+    --mint: #e1f5fe;
+    --panel-surface: #fbf9f9;
+    --panel-card: #ffffff;
+    --panel-text: #1b1c1c;
+    --panel-muted: #5e6972;
+    --panel-outline: #dbe2e8;
+    color: var(--panel-text);
     display: block;
     max-width: 100%;
     min-width: 0;
     overflow-x: hidden;
     overflow-x: clip;
     width: 100%;
-    font: 14px/1.45 var(--paper-font-body1_-_font-family, Arial, sans-serif);
+    font: 14px/1.45 "Roboto Flex", Roboto, var(--paper-font-body1_-_font-family, Arial, sans-serif);
   }
 
   main {
     box-sizing: border-box;
-    max-width: 1440px;
+    max-width: 1600px;
     margin: auto;
     min-width: 0;
     overflow-x: hidden;
     overflow-x: clip;
-    padding: 24px;
+    padding: 28px;
+    background: var(--panel-surface);
     width: 100%;
   }
 
@@ -39,17 +45,18 @@ export const mainStyles = `
     display: flex;
     gap: 16px;
     align-items: center;
-    padding: 22px;
-    color: white;
-    border-radius: 18px;
-    background: linear-gradient(135deg, #55d9e8 0%, #299fd8 52%, #0c63c9 100%);
+    padding: 16px 20px;
+    color: var(--panel-text);
+    border: 1px solid var(--panel-outline);
+    border-radius: 12px;
+    background: var(--panel-card);
   }
 
   .brand-mark {
     width: 52px;
     height: 52px;
     object-fit: contain;
-    filter: brightness(0) invert(1);
+    filter: none;
   }
 
   .logo-title-row {
@@ -60,18 +67,23 @@ export const mainStyles = `
 
   h1 {
     margin: 0;
-    font-size: 26px;
+    font-size: 20px;
+    font-weight: 600;
   }
 
   header p {
     margin: 2px 0 0;
-    opacity: 0.85;
+    color: var(--panel-muted);
+    opacity: 1;
   }
 
   header select {
     margin-left: auto;
     max-width: 280px;
-    padding: 8px;
+    padding: 8px 10px;
+    border: 1px solid var(--panel-outline);
+    color: var(--panel-text);
+    background: var(--panel-surface);
     border-radius: 8px;
   }
 
@@ -79,9 +91,9 @@ export const mainStyles = `
 
   nav {
     display: flex;
-    gap: 5px;
-    margin: 20px 0;
-    border-bottom: 1px solid var(--divider-color, #ddd);
+    gap: 2px;
+    margin: 16px 0 28px;
+    border-bottom: 1px solid var(--panel-outline);
   }
 
   .tab-navigation {
@@ -92,8 +104,8 @@ export const mainStyles = `
     min-width: 0;
     overflow: hidden;
     width: 100%;
-    margin: 20px 0;
-    border-bottom: 1px solid var(--divider-color, #ddd);
+    margin: 16px 0 28px;
+    border-bottom: 1px solid var(--panel-outline);
   }
 
   .tab-scroll-viewport {
@@ -126,8 +138,8 @@ export const mainStyles = `
     border: 0;
     border-radius: 10px;
     margin: 4px;
-    color: var(--primary-text-color, #17212b);
-    background: rgb(127 127 127 / 18%);
+    color: var(--panel-muted);
+    background: transparent;
     font-size: 26px;
     line-height: 1;
   }
@@ -147,14 +159,16 @@ export const mainStyles = `
   .tab {
     border: 0;
     background: transparent;
-    padding: 12px 14px;
-    color: inherit;
+    padding: 11px 14px;
+    color: var(--panel-muted);
+    font-size: 13px;
+    font-weight: 500;
   }
 
   .tab.selected {
-    color: var(--aqua);
+    color: var(--navy);
     border-bottom: 3px solid var(--aqua);
-    font-weight: 700;
+    font-weight: 600;
   }
 
   .grid {
@@ -164,14 +178,16 @@ export const mainStyles = `
   }
 
   .card {
-    border: 1px solid var(--divider-color, #ddd);
-    border-radius: 14px;
+    border: 1px solid var(--panel-outline);
+    border-radius: 12px;
     padding: 16px;
-    background: var(--card-background-color, #fff);
+    background: var(--panel-card);
   }
 
   .card h2 {
-    font-size: 16px;
+    color: var(--panel-text);
+    font-size: 22px;
+    font-weight: 600;
     margin: 0;
   }
 
@@ -185,7 +201,7 @@ export const mainStyles = `
 
   .action {
     color: white;
-    background: #55bfe6;
+    background: var(--aqua);
     border: 0;
     border-radius: 8px;
     padding: 8px 10px;
@@ -444,11 +460,11 @@ export const mainStyles = `
       padding: 0;
       border: 0;
       border-radius: 8px;
-      color: white;
+      color: var(--panel-text);
       background: transparent;
       cursor: pointer;
     }
-    .mobile-menu-toggle:hover { background: #ffffff24; }
+    .mobile-menu-toggle:hover { background: var(--mint); }
     .mobile-menu-toggle span {
       display: block;
       width: 21px;

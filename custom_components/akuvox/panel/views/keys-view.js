@@ -4,7 +4,7 @@ import {
   matchesSelectedFilter,
   renderMultiSelectFilter,
 } from "../utils/multi-select-filter.js?v=20260827-multi-table-filters";
-import { icons } from "../utils/icons.js";
+import { icons } from "../utils/icons.js?v=20260924-view-mode-toggle";
 import {
   parseDateTimeInput,
   normaliseUhfCard,
@@ -203,8 +203,8 @@ export const renderKeysView = (host, account) => {
           <button type="button" class="action" data-toggle-key-selection>${host._selectingKeys ? "Cancel selection" : "Select"}</button>
           ${canCreateKeys ? '<button class="success add-key" data-create-key><span class="plus">+</span> Add Key</button>' : ""}
           <div class="view-mode-toggle" role="group" aria-label="Temporary keys layout">
-            <button type="button" class="action ${host._rowViewMode === "tiles" ? "" : "active"}" data-row-view-mode="table" aria-pressed="${host._rowViewMode !== "tiles"}">Table</button>
-            <button type="button" class="action ${host._rowViewMode === "tiles" ? "active" : ""}" data-row-view-mode="tiles" aria-pressed="${host._rowViewMode === "tiles"}">Tiles</button>
+            <button type="button" class="action ${host._rowViewMode === "tiles" ? "active" : ""}" data-row-view-mode="tiles" aria-pressed="${host._rowViewMode === "tiles"}">${icons.grid}<span>Tiles</span></button>
+            <button type="button" class="action ${host._rowViewMode === "tiles" ? "" : "active"}" data-row-view-mode="table" aria-pressed="${host._rowViewMode !== "tiles"}">${icons.table}<span>Table</span></button>
           </div>
         </div>
       </div>

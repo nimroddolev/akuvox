@@ -8,23 +8,23 @@ import { PANEL_TAG, TAB_HASHES, TAB_HASH_BY_ID, TABS } from "./utils/constants.j
 import { escapeHtml } from "./utils/dom.js";
 import { copyText } from "./utils/clipboard.js";
 import { settingsRenderSignature } from "./utils/settings-signature.js";
-import { getPanelStyles } from "./styles/index.js?v=20260923-pairing-link-copy-single-row";
+import { getPanelStyles } from "./styles/index.js?v=20260924-activity-reverted";
 import { showNotice, confirmModal, callWsWithBlocker } from "./components/dialogs.js";
 import { installCameraRelayActions } from "./components/camera-actions.js?v=20260830-camera-modal-unlock";
 import { closeKeyActionsMenu } from "./components/key-menu.js";
 
-import { renderDevicesView, bindDevicesEvents } from "./views/devices-view.js?v=20260917-list-drop-position";
+import { renderDevicesView, bindDevicesEvents } from "./views/devices-view.js?v=20260924-view-mode-toggle";
 import {
   renderActivityView,
   bindActivityEvents,
   visibleActivityEvents,
-} from "./views/activity-view.js?v=20260917-ha-device-names";
+} from "./views/activity-view.js?v=20260924-activity-age-label";
 import { renderCallsView, bindCallsEvents } from "./views/calls-view.js?v=20260922-call-status-badges";
 import {
   renderKeysView,
   bindKeysEvents,
   deleteSelectedKeys,
-} from "./views/keys-view.js?v=20260922-scoped-edit-permission";
+} from "./views/keys-view.js?v=20260924-view-mode-toggle";
 import { renderSettingsView, bindSettingsEvents, updateActivityStorageProgress, updateRemoteShareConnectionStatus } from "./views/settings-view.js?v=20260924-live-pairing-url";
 import { renderHelpView } from "./views/help-view.js";
 
@@ -70,9 +70,9 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
     try {
       this._rowViewMode = localStorage.getItem(ROW_VIEW_MODE_STORAGE_KEY) === "tiles"
         ? "tiles"
-        : "table";
+        : "tiles";
     } catch (_) {
-      this._rowViewMode = "table";
+      this._rowViewMode = "tiles";
     }
     this._selectingKeys = false;
     this._selectedKeyIds = new Set();

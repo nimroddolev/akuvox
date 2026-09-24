@@ -83,6 +83,51 @@ const updateActivityUpdatedLabel = (host) => {
   if (label) label.textContent = formatUpdatedAgo(label.dataset.activityUpdatedAt);
 };
 
+const parseActivityTimestamp = (value) => {
+  const match = String(value || "").match(
+    /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?/
+  );
+  if (!match) return null;
+  const [, year, month, day, hour, minute, second = "0"] = match;
+  const timestamp = new Date(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    Number(hour),
+    Number(minute),
+    Number(second)
+  );
+  return Number.isNaN(timestamp.getTime()) ? null : timestamp;
+};
+
+const formatActivityAge = (value) => {
+  const timestamp = parseActivityTimestamp(value);
+  if (!timestamp) return "";
+  const now = new Date();
+  const elapsedMinutes = Math.max(0, Math.floor((now - timestamp) / 60_000));
+  const isToday = timestamp.toDateString() === now.toDateString();
+  const dayLabel = isToday ? "Today" : "";
+  const withDayLabel = (age) => (dayLabel ? `${dayLabel} • ${age}` : age);
+  if (elapsedMinutes < 1) return withDayLabel("Just now");
+  if (elapsedMinutes < 60) {
+    return withDayLabel(`${elapsedMinutes} min${elapsedMinutes === 1 ? "" : "s"} ago`);
+  }
+  const elapsedHours = Math.floor(elapsedMinutes / 60);
+  if (elapsedHours < 24) {
+    return withDayLabel(`${elapsedHours} hour${elapsedHours === 1 ? "" : "s"} ago`);
+  }
+  const elapsedDays = Math.floor(elapsedHours / 24);
+  return `${elapsedDays} day${elapsedDays === 1 ? "" : "s"} ago`;
+};
+
+const renderActivityTimestamp = (value, formatTimestamp) => {
+  const age = formatActivityAge(value);
+  return `<div class="activity-timestamp">
+    <time>${escapeHtml(formatTimestamp(value))}</time>
+    ${age ? `<span>${escapeHtml(age)}</span>` : ""}
+  </div>`;
+};
+
 /** Return the events currently represented by rows in the activity table. */
 export const visibleActivityEvents = (host, activity) => {
   const filtered = activity
@@ -181,7 +226,7 @@ export const renderActivityView = (host, account) => {
               .map(
                 (item) => `
               <tr>
-                <td>${escapeHtml(formatTimestamp(item.CaptureTime))}</td>
+                <td>${renderActivityTimestamp(item.CaptureTime, formatTimestamp)}</td>
                 <td>${escapeHtml(item.Location || "")}</td>
                 <td>${escapeHtml(formatActivityEventType(item.CaptureType))}</td>
                 <td>${escapeHtml(item.Initiator || "")}</td>
