@@ -21,10 +21,9 @@ from homeassistant.components.logger.helpers import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import device_registry as dr
 from homeassistant.util import dt as dt_util
 
-from .api import AkuvoxApiClient, AkuvoxApiClientError
+from .api import AkuvoxApiClient, AkuvoxApiClientError, get_config_entry_device
 from .const import (
     DOMAIN,
     LOGGER,
@@ -52,7 +51,8 @@ from .repairs import (
     credential_source_problem,
 )
 from .sharing import (
-    SHARED_MODE, SHARED_MODE_REMOTE, async_create_share, async_list_shares,
+    SHARED_MODE, SHARED_MODE_REMOTE, async_apply_remote_share_link, async_create_share,
+    async_fetch_shared_image, async_list_shares, get_external_url,
     async_delete_share, async_revoke_share, async_sync_remote_entry,
 )
 
@@ -127,6 +127,7 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(
         hass, websocket_panel_refresh_shared_credentials
     )
+    websocket_api.async_register_command(hass, websocket_panel_apply_remote_share_link)
     websocket_api.async_register_command(hass, websocket_panel_create_credential_share)
     websocket_api.async_register_command(hass, websocket_panel_revoke_credential_share)
     websocket_api.async_register_command(hass, websocket_panel_delete_credential_share)
@@ -173,7 +174,6 @@ async def websocket_panel_data(
     """Return currently available, non-secret data for every active account."""
     if not _require_admin(connection, msg):
         return
-    device_registry = dr.async_get(hass)
     accounts = []
     for entry in _panel_entries(hass):
         client = _client_for_entry(hass, entry.entry_id)
@@ -228,6 +228,11 @@ async def websocket_panel_data(
                 for activity in entry.data.get("activity_data", [])
                 if isinstance(activity, dict)
             ]
+            panel_data["calls"] = [
+                dict(call)
+                for call in entry.data.get("call_data", [])
+                if isinstance(call, dict)
+            ]
         panel_data["activity"] = [
             {
                 **{
@@ -235,12 +240,21 @@ async def websocket_panel_data(
                     for key, value in activity.items()
                     if key not in {"PicUrl", "LocalPreview"}
                 },
-                "has_image": bool(activity.get("PicUrl") or activity.get("LocalPreview")),
+                "has_image": bool(
+                    activity.get("has_image")
+                    or activity.get("PicUrl")
+                    or activity.get("LocalPreview")
+                ),
             }
             for activity in panel_data["activity"]
         ]
         panel_data["calls"] = [
-            {**{key: value for key, value in call.items() if key not in {"picUrl", "smallPicUrl"}}, "has_image": bool(call.get("picUrl") or call.get("smallPicUrl"))}
+            {
+                **{key: value for key, value in call.items() if key not in {"picUrl", "smallPicUrl"}},
+                "has_image": bool(
+                    call.get("has_image") or call.get("picUrl") or call.get("smallPicUrl")
+                ),
+            }
             for call in panel_data["calls"]
         ]
         panel_data["temporary_keys"] = [
@@ -253,18 +267,14 @@ async def websocket_panel_data(
         device_names: dict[str, str] = {}
         for item in [*panel_data["cameras"], *panel_data["relays"]]:
             source_name = str(item.get("source_name") or item.get("name", ""))
-            device = device_registry.async_get_device(
-                identifiers={(DOMAIN, f"{entry.entry_id}:{source_name}")}
+            device = get_config_entry_device(
+                hass, entry, (DOMAIN, f"{entry.entry_id}:{source_name}")
             )
             # Existing installations used the device name as the identifier.
             # Retain that lookup while requiring ownership by this entry, so it
             # remains safe when multiple SmartPlus accounts share a device name.
             if device is None:
-                legacy_device = device_registry.async_get_device(
-                    identifiers={(DOMAIN, source_name)}
-                )
-                if legacy_device is not None and entry.entry_id in legacy_device.config_entries:
-                    device = legacy_device
+                device = get_config_entry_device(hass, entry, (DOMAIN, source_name))
             if device is not None:
                 item["device_id"] = device.id
                 display_name = device.name_by_user or device.name or source_name
@@ -281,7 +291,10 @@ async def websocket_panel_data(
         accounts.append(
             {
                 "entry_id": entry.entry_id,
-                "title": panel_data.get("project_name") or entry.title,
+                # The configuration-entry title is Home Assistant's hub
+                # instance name. Never substitute the cloud project name: it
+                # can be identical across otherwise distinct configured hubs.
+                "title": entry.title,
                 "credential_mode": entry.data.get(SHARED_MODE, "local"),
                 "requires_reauthentication": authentication_failed(
                     hass, entry.entry_id
@@ -318,7 +331,20 @@ async def websocket_panel_activity_image(
         connection.send_error(msg["id"], "not_found", "Akuvox account was not found")
         return
     try:
-        image = await client.async_get_panel_activity_image(msg["capture_time"])
+        entry = hass.config_entries.async_get_entry(msg["entry_id"])
+        if entry is not None and entry.data.get(SHARED_MODE) == SHARED_MODE_REMOTE:
+            from .credentials import async_get_remote_share_secret
+
+            image = await async_fetch_shared_image(
+                hass,
+                str(entry.data["remote_source_url"]),
+                str(entry.data["remote_share_id"]),
+                await async_get_remote_share_secret(hass, entry.entry_id),
+                "activity",
+                msg["capture_time"],
+            )
+        else:
+            image = await client.async_get_panel_activity_image(msg["capture_time"])
     except AkuvoxApiClientError as error:
         connection.send_error(msg["id"], "not_found", str(error))
         return
@@ -409,7 +435,21 @@ async def websocket_panel_call_image(hass: HomeAssistant, connection: websocket_
         connection.send_error(msg["id"], "not_found", "Akuvox account was not found")
         return
     try:
-        connection.send_result(msg["id"], await client.async_get_panel_call_image(msg["call_id"]))
+        entry = hass.config_entries.async_get_entry(msg["entry_id"])
+        if entry is not None and entry.data.get(SHARED_MODE) == SHARED_MODE_REMOTE:
+            from .credentials import async_get_remote_share_secret
+
+            image = await async_fetch_shared_image(
+                hass,
+                str(entry.data["remote_source_url"]),
+                str(entry.data["remote_share_id"]),
+                await async_get_remote_share_secret(hass, entry.entry_id),
+                "call",
+                msg["call_id"],
+            )
+        else:
+            image = await client.async_get_panel_call_image(msg["call_id"])
+        connection.send_result(msg["id"], image)
     except AkuvoxApiClientError as error:
         connection.send_error(msg["id"], "not_found", str(error))
 
@@ -696,9 +736,38 @@ async def websocket_panel_refresh_shared_credentials(
 
 @websocket_api.websocket_command(
     {
+        vol.Required("type"): "akuvox/panel_apply_remote_share_link",
+        vol.Required("entry_id"): str,
+        vol.Required("pairing_link"): vol.All(str, vol.Length(min=1)),
+    }
+)
+@websocket_api.async_response
+async def websocket_panel_apply_remote_share_link(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Apply a replacement pairing link to an existing remote entry."""
+    if not _require_admin(connection, msg):
+        return
+    entry = next((item for item in _panel_entries(hass) if item.entry_id == msg["entry_id"]), None)
+    if entry is None or entry.data.get(SHARED_MODE) != SHARED_MODE_REMOTE:
+        connection.send_error(msg["id"], "not_remote", "This account does not receive shared credentials")
+        return
+    try:
+        await async_apply_remote_share_link(hass, entry, msg["pairing_link"])
+    except ValueError as error:
+        connection.send_error(msg["id"], "invalid_share", str(error))
+        return
+    connection.send_result(msg["id"])
+
+
+@websocket_api.websocket_command(
+    {
         vol.Required("type"): "akuvox/panel_create_credential_share",
         vol.Required("entry_id"): str,
         vol.Required("receiver_name"): vol.All(str, vol.Length(min=1, max=100)),
+        vol.Optional("source_url", default=""): str,
         vol.Required("device_ids"): [str],
         vol.Optional("allow_activity", default=True): bool,
         vol.Optional("activity_device_names", default=[]): [str],
@@ -727,8 +796,11 @@ async def websocket_panel_create_credential_share(
         connection.send_error(msg["id"], "not_owner", "Only the credential owner can create pairing links")
         return
     try:
+        source_url = str(msg["source_url"]).strip()
+        if not source_url.startswith("https://"):
+            source_url = get_external_url(hass)
         pairing_link = await async_create_share(
-        hass, entry, hass.config.external_url, msg["receiver_name"],
+            hass, entry, source_url, msg["receiver_name"],
             msg["device_ids"], msg["allow_create_keys"], msg["allow_edit_keys"],
             msg["access_expires_at"], msg["create_key_relay_ids"],
             msg["edit_key_relay_ids"],

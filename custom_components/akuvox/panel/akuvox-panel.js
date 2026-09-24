@@ -25,7 +25,7 @@ import {
   bindKeysEvents,
   deleteSelectedKeys,
 } from "./views/keys-view.js?v=20260922-scoped-edit-permission";
-import { renderSettingsView, bindSettingsEvents, updateActivityStorageProgress, updateRemoteShareConnectionStatus } from "./views/settings-view.js?v=20260923-share-device-validation";
+import { renderSettingsView, bindSettingsEvents, updateActivityStorageProgress, updateRemoteShareConnectionStatus } from "./views/settings-view.js?v=20260924-live-pairing-url";
 import { renderHelpView } from "./views/help-view.js";
 
 const ROW_VIEW_MODE_STORAGE_KEY = "akuvox-panel-row-view-mode";
@@ -108,6 +108,12 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
       if (button.matches("[data-refresh-shared-credentials]")) {
         event.stopPropagation();
         this._refreshSharedCredentials();
+        return;
+      }
+
+      if (button.matches("[data-apply-remote-share-link]")) {
+        event.stopPropagation();
+        this._applyRemoteShareLink();
         return;
       }
 
@@ -667,9 +673,65 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
         <h2>${details.title}</h2>
         <p>${details.text}</p>
         <button class="action" type="button" data-refresh-shared-credentials>Refresh shared credentials</button>
+        ${problem === "unreachable" ? '<button class="action" type="button" data-apply-remote-share-link>Apply new share link</button>' : ""}
         <p class="muted">Re-authentication must be completed in the Akuvox integration on the host Home Assistant.</p>
       </div>
     `;
+  }
+
+  _requestRemoteShareLink() {
+    return new Promise((resolve) => {
+      const dialog = this.shadowRoot.ownerDocument.createElement("dialog");
+      dialog.innerHTML = `<h2>Apply New Share Link</h2>
+        <p>Paste the replacement pairing link from the host Home Assistant.</p>
+        <form method="dialog">
+          <label>Share link<input data-share-link required autocomplete="off"></label>
+          <p class="form-error" data-share-link-error hidden></p>
+          <div class="modal-actions"><button class="modal-cancel" value="cancel">Cancel</button><button class="modal-action" value="apply">Apply</button></div>
+        </form>`;
+      const form = dialog.querySelector("form");
+      const input = dialog.querySelector("[data-share-link]");
+      form.addEventListener("submit", (event) => {
+        if (event.submitter?.value !== "apply") return;
+        if (input.value.trim()) return;
+        event.preventDefault();
+        const error = dialog.querySelector("[data-share-link-error]");
+        error.textContent = "Paste a share link.";
+        error.hidden = false;
+      });
+      dialog.addEventListener("close", () => {
+        const value = dialog.returnValue === "apply" ? input.value.trim() : "";
+        dialog.remove();
+        resolve(value || null);
+      }, { once: true });
+      this._modalCount = (this._modalCount || 0) + 1;
+      dialog.addEventListener("close", () => {
+        this._modalCount = Math.max(0, (this._modalCount || 1) - 1);
+      }, { once: true });
+      this.shadowRoot.append(dialog);
+      dialog.showModal();
+      input.focus();
+    });
+  }
+
+  async _applyRemoteShareLink() {
+    const pairingLink = await this._requestRemoteShareLink();
+    if (!pairingLink) return;
+    try {
+      await callWsWithBlocker(this, {
+        type: "akuvox/panel_apply_remote_share_link",
+        entry_id: this._activeAccount,
+        pairing_link: pairingLink,
+      });
+      await this._load();
+      showNotice(
+        this,
+        "The new share link was saved. Cached devices and credentials remain available until the new source synchronizes.",
+        "New Share Link Applied"
+      );
+    } catch (error) {
+      showNotice(this, error?.message || "The share link could not be applied.", "Could Not Apply Share Link");
+    }
   }
 
   async _refreshSharedCredentials() {
