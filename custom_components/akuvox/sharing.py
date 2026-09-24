@@ -477,7 +477,11 @@ class CredentialShareView(HomeAssistantView):
         ]
         call_data = [
             {
-                **{key: value for key, value in item.items() if key not in {"picUrl", "smallPicUrl"}},
+                **{
+                    key: value
+                    for key, value in item.items()
+                    if key not in {"picUrl", "smallPicUrl"}
+                },
                 "has_image": bool(item.get("picUrl") or item.get("smallPicUrl")),
             }
             for item in (

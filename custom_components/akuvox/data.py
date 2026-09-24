@@ -47,7 +47,9 @@ class AkuvoxData:
         )
         self.location_dict: dict = {}
         self.app_type = self._get_activity_endpoint_type(entry)
-        self.rtsp_server = ""
+        self.rtsp_server = str(self.get_value_for_key(entry, "rtsp_server", ""))
+        if not self.rtsp_server:
+            self.rtsp_server = self._get_rtsp_server_from_saved_cameras(entry)
         self.sip_server = ""
         self.sip_account = ""
         self.sip_password = ""
@@ -122,13 +124,18 @@ class AkuvoxData:
         return bool(self.host)
 
     def parse_sms_login_response(self, json_data: dict) -> None:
-        """Parse the sms_login API response."""
+        """Parse a SmartPlus login API response."""
         if not isinstance(json_data, dict):
             return
         payload = json_data.get("datas", json_data)
         if not isinstance(payload, dict):
             return
-        self.auth_token = str(payload.get("auth_token", self.auth_token))
+        # SMS sign-in calls this the ``auth_token``. The email/password OTP
+        # endpoint returns the same long-lived credential as ``refresh_token``.
+        # Store both formats in the common field used by token refreshes.
+        self.auth_token = str(
+            payload.get("auth_token") or payload.get("refresh_token") or self.auth_token
+        )
         self.token = str(payload.get("token", self.token))
         self.rtsp_server = self._normalise_rtsp_server(
             # ``rtsp_server`` is the documented video-monitoring endpoint.
@@ -151,6 +158,19 @@ class AkuvoxData:
         if not parsed.hostname:
             return ""
         return f"{parsed.hostname}:{parsed.port or 554}"
+
+    @staticmethod
+    def _get_rtsp_server_from_saved_cameras(entry: ConfigEntry | None) -> str:
+        """Recover the RTSP endpoint for email-login entries created before it was saved."""
+        if entry is None or isinstance(entry, dict):
+            return ""
+        for camera in entry.data.get("camera_data", []):
+            if not isinstance(camera, dict):
+                continue
+            parsed = urlsplit(str(camera.get("video_url", "")))
+            if parsed.hostname:
+                return f"{parsed.hostname}:{parsed.port or 554}"
+        return ""
 
     def parse_userconf_data(self, json_data: dict):
         """Parse the userconf API response."""
@@ -437,6 +457,7 @@ class AkuvoxData:
         """Device data dictionary."""
         return {
             "host": self.host,
+            "rtsp_server": self.rtsp_server,
             "camera_data": self.camera_data,
             "door_relay_data": self.door_relay_data,
             "door_keys_data": self.door_keys_data

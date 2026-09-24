@@ -7,6 +7,7 @@ import binascii
 import csv
 import io
 import json
+import hashlib
 import re
 import secrets
 import socket
@@ -46,6 +47,10 @@ from .const import (
     API_SEND_SMS,
     SMS_LOGIN_API_VERSION,
     API_SMS_LOGIN,
+    API_EMAIL_PASSWORD_LOGIN,
+    API_SEND_TWO_FACTOR_AUTHENTICATION_CODE,
+    API_VERIFY_TWO_FACTOR_AUTHENTICATION_CODE,
+    EMAIL_LOGIN_USER_AGENT,
     API_SERVERS_LIST,
     API_REFRESH_TOKEN,
     TOKEN_REFRESH_INTERVAL,
@@ -771,6 +776,120 @@ class AkuvoxApiClient:
 
         return False
 
+    async def async_begin_email_sign_in(
+        self, login_account: str, password: str
+    ) -> dict | None:
+        """Validate an email address or username and password for OTP sign-in.
+
+        SmartPlus's app applies a Caesar shift of three to the account name,
+        then sends a double MD5 digest of the password. The original password
+        remains only in the config-flow memory and is never written to an
+        entry or credential store.
+        """
+        self.init_api_with_data(hass=self.hass, subdomain="ecloud")
+        obfuscated_login_account = self._caesar_shift_login_value(login_account)
+        password_digest = self._double_md5_password(password)
+        params = urlencode(
+            {"user": obfuscated_login_account, "passwd": password_digest, "id_code": "(null)"}
+        )
+        response = await self._async_api_wrapper(
+            method="get",
+            url=(
+                f"https://{REST_SERVER_ADDR.replace('subdomain', 'ecloud')}"
+                f":{REST_SERVER_PORT}/{API_EMAIL_PASSWORD_LOGIN}?{params}"
+            ),
+            headers={
+                "Accept": "*/*",
+                "X-AUTH-TOKEN": "",
+                "api-version": "7.33",
+                "User-Agent": EMAIL_LOGIN_USER_AGENT,
+                "Accept-Language": "en-AU;q=1, he-AU;q=0.9, ru-RU;q=0.8",
+            },
+            data=None,
+        )
+        if not isinstance(response, dict):
+            return None
+        self._data.parse_sms_login_response(response)
+        return response
+
+    @staticmethod
+    def _caesar_shift_login_value(value: str) -> str:
+        """Apply SmartPlus's three-character alphabetical login obfuscation."""
+        shifted: list[str] = []
+        for character in value:
+            if "a" <= character <= "z":
+                shifted.append(chr((ord(character) - ord("a") + 3) % 26 + ord("a")))
+            elif "A" <= character <= "Z":
+                shifted.append(chr((ord(character) - ord("A") + 3) % 26 + ord("A")))
+            else:
+                shifted.append(character)
+        return "".join(shifted)
+
+    @staticmethod
+    def _double_md5_password(password: str) -> str:
+        """Return the password representation used by SmartPlus app login."""
+        first_digest = hashlib.md5(password.encode("utf-8")).hexdigest()
+        return hashlib.md5(first_digest.encode("ascii")).hexdigest()
+
+    async def async_send_email_otp(
+        self, login_account: str, temporary_token: str
+    ) -> bool:
+        """Request the email OTP after a successful password check."""
+        if self._data is None or not self._data.host or not temporary_token:
+            return False
+        response = await self._async_api_wrapper(
+            method="post",
+            url=f"https://{self._data.host}/{API_SEND_TWO_FACTOR_AUTHENTICATION_CODE}",
+            headers={
+                "Accept": "*/*",
+                "Content-Type": "application/x-www-form-urlencoded",
+                "X-AUTH-TOKEN": "",
+                "api-version": "7.1",
+                "User-Agent": EMAIL_LOGIN_USER_AGENT,
+                "Accept-Language": "en-AU;q=1, he-AU;q=0.9, ru-RU;q=0.8",
+            },
+            data={
+                "account_type": "enduser",
+                "login_account": login_account,
+                "two_factor_auth_temp_token": temporary_token,
+            },
+        )
+        return response == {} or (
+            isinstance(response, dict)
+            and (response.get("result") == 0 or str(response.get("err_code", "")) == "0")
+        )
+
+    async def async_email_otp_sign_in(
+        self, login_account: str, verification_code: str, start_polling: bool = True
+    ) -> bool:
+        """Complete email/username sign-in with the emailed OTP."""
+        response = await self._async_api_wrapper(
+            method="post",
+            url=(f"https://{REST_SERVER_ADDR.replace('subdomain', 'ecloud')}"
+                 f":{REST_SERVER_PORT}/{API_VERIFY_TWO_FACTOR_AUTHENTICATION_CODE}"),
+            headers={
+                "Accept": "*/*",
+                "Content-Type": "application/json",
+                "X-AUTH-TOKEN": "",
+                "api-version": "7.33",
+                "User-Agent": EMAIL_LOGIN_USER_AGENT,
+                "Accept-Language": "en-AU;q=1, he-AU;q=0.9, ru-RU;q=0.8",
+            },
+            data=json.dumps({"verify_code": verification_code, "user": login_account}),
+        )
+        if not isinstance(response, dict):
+            return False
+        self._data.parse_sms_login_response(response)
+        if not self._data.token or not self._data.auth_token:
+            return False
+        if not self._data.rtsp_server:
+            return await self.async_retrieve_user_data(start_polling=start_polling)
+        device_data_loaded = await self.async_retrieve_device_data()
+        await self.async_retrieve_temp_keys_data()
+        if device_data_loaded and start_polling:
+            await self.async_start_polling_personal_door_log()
+        return device_data_loaded
+
     async def async_validate_sms_code(self, phone_number: str, country_code: str, sms_code: str) -> dict | None:
         """Validate the SMS code received by the user."""
         LOGGER.debug("📡 Logging in user with phone number and SMS code...")
@@ -794,6 +913,17 @@ class AkuvoxApiClient:
 
     async def async_retrieve_user_data(self, start_polling: bool = True) -> bool:
         """Retrieve user devices and temp keys data."""
+        # Email/password sign-in already returns the REST and RTSP endpoints.
+        # Unlike SMS login it has no phone number, so it must not call the
+        # phone-only ``servers_list`` bootstrap endpoint during startup.
+        if not self._data.phone_number:
+            device_data_loaded = await self.async_retrieve_device_data()
+            temp_keys_loaded = await self.async_retrieve_temp_keys_data()
+            if device_data_loaded and start_polling:
+                await self.async_start_polling_personal_door_log()
+            if not temp_keys_loaded:
+                LOGGER.warning("Temporary keys could not be loaded")
+            return device_data_loaded
         if await self.async_make_servers_list_request(
             hass=self.hass,
             auth_token=self._data.auth_token,

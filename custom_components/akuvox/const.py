@@ -494,11 +494,15 @@ STORE_ACTIVITY_HISTORY = "store_activity_history"
 ACTIVITY_HISTORY_MAX_STORAGE_MB = "activity_history_max_storage_mb"
 ACTIVITY_HISTORY_DEFAULT_STORAGE_MB = 5
 API_SMS_LOGIN = "sms_login"
+API_EMAIL_PASSWORD_LOGIN = "login"
+API_SEND_TWO_FACTOR_AUTHENTICATION_CODE = "apprest/v2/send_two_factor_authentication_code"
+API_VERIFY_TWO_FACTOR_AUTHENTICATION_CODE = "enduser/enduser_verify_code"
 API_USERCONF = "userconf"
 API_OPENDOOR = "opendoor"
 
 # Standard User Agents
 USER_AGENT = "VBell/7.50.4 (iPhone; iOS 26.6; Scale/3.00)"
+EMAIL_LOGIN_USER_AGENT = "VBell/7.51.3 (iPhone; iOS 27.0; Scale/3.00)"
 SMARTPLUS_USER_AGENT = "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) SmartPlus/6.2"
 SMARTPLUS_USER_AGENT_ALT = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) SmartPlus/6.2"
 SMARTPLUS_REFRESH_USER_AGENT = "VBell/7.50.3 (iPhone; iOS 26.6; Scale/3.00)"

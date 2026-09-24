@@ -1,6 +1,7 @@
 """Configuration-flow schema tests for supported SmartPlus sign-in methods."""
 from __future__ import annotations
 
+import hashlib
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -10,6 +11,8 @@ from custom_components.akuvox.config_flow import (
     _normalise_subscriber_number,
     _subdomain_select_options,
 )
+from custom_components.akuvox.api import AkuvoxApiClient
+from custom_components.akuvox.data import AkuvoxData
 
 
 class _Config:
@@ -61,6 +64,39 @@ class TestConfigFlowE2E(unittest.TestCase):
             _subdomain_select_options(include_default=True)[0],
             {"value": "Default", "label": "Automatic (recommended)"},
         )
+
+    def test_email_login_obfuscation_matches_the_smartplus_app(self) -> None:
+        """SmartPlus shifts the account name and double-hashes the password."""
+        self.assertEqual(
+            AkuvoxApiClient._caesar_shift_login_value("Liv.dolev@gmail.com"),
+            "Oly.grohy@gmail.com",
+        )
+        self.assertEqual(
+            AkuvoxApiClient._caesar_shift_login_value("Zz9-@#"), "Cc9-@#"
+        )
+        first_digest = hashlib.md5(b"test-password").hexdigest()
+        self.assertEqual(
+            AkuvoxApiClient._double_md5_password("test-password"),
+            hashlib.md5(first_digest.encode("ascii")).hexdigest(),
+        )
+
+    def test_email_otp_response_uses_refresh_token_as_auth_token(self) -> None:
+        """The email OTP endpoint names its refresh credential differently."""
+        data = AkuvoxData(entry=None, hass=self.flow.hass)
+
+        data.parse_sms_login_response(
+            {"datas": {"refresh_token": "refresh", "token": "session"}}
+        )
+
+        self.assertEqual(data.auth_token, "refresh")
+        self.assertEqual(data.token, "session")
+
+    def test_device_data_persists_the_rtsp_server(self) -> None:
+        """Email logins retain their RTSP endpoint without an SMS bootstrap."""
+        data = AkuvoxData(entry=None, hass=self.flow.hass)
+        data.rtsp_server = "rtsp.example:8601"
+
+        self.assertEqual(data.get_device_data()["rtsp_server"], "rtsp.example:8601")
 
 
 class TestSharedCredentialsFlowE2E(unittest.IsolatedAsyncioTestCase):
@@ -122,6 +158,18 @@ class _ReauthClient:
         return {"auth_token": "new-auth-token", "token": "new-session-token"}
 
 
+class _EmailClient(_ReauthClient):
+    """Models the two email-login requests without retaining passwords."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.async_begin_email_sign_in = AsyncMock(
+            return_value={"two_factor_auth_temp_token": "temporary-token"}
+        )
+        self.async_send_email_otp = AsyncMock(return_value=True)
+        self.async_email_otp_sign_in = AsyncMock(return_value=True)
+
+
 class TestReauthFlowE2E(unittest.IsolatedAsyncioTestCase):
     """Verify reauthentication renewed the active config entry in place."""
 
@@ -156,3 +204,50 @@ class TestReauthFlowE2E(unittest.IsolatedAsyncioTestCase):
         self.assertIn("token_refreshed_at", update["options"])
         self.assertEqual(update["options"]["token_update_type"], "refreshed")
         self.assertEqual(update["reason"], "reauth_successful")
+
+
+class TestEmailPasswordFlowE2E(unittest.IsolatedAsyncioTestCase):
+    """Verify email/username login follows the app's password-plus-OTP flow."""
+
+    async def test_password_request_sends_otp_without_persisting_password(self) -> None:
+        """The password is used for the request but never retained in flow data."""
+        flow = AkuvoxFlowHandler()
+        flow.hass = _Hass()
+        flow.akuvox_api_client = _EmailClient()
+        flow.async_show_form = MagicMock(return_value={"type": "form"})
+
+        result = await flow.async_step_email_password_sign_in(
+            {"login_account": "person@example.com", "password": "not-stored"}
+        )
+
+        self.assertEqual(result, {"type": "form"})
+        flow.akuvox_api_client.async_begin_email_sign_in.assert_awaited_once_with(
+            "person@example.com", "not-stored"
+        )
+        flow.akuvox_api_client.async_send_email_otp.assert_awaited_once_with(
+            "person@example.com", "temporary-token"
+        )
+        self.assertEqual(
+            flow.data, {"login_method": "email_password", "login_account": "person@example.com"}
+        )
+
+    async def test_verified_email_otp_creates_an_entry(self) -> None:
+        """A valid email OTP saves only the resulting SmartPlus tokens."""
+        flow = AkuvoxFlowHandler()
+        flow.hass = _Hass()
+        flow.data = {"login_method": "email_password", "login_account": "person@example.com"}
+        flow.akuvox_api_client = _EmailClient()
+        flow.akuvox_api_client.get_devices_json = MagicMock(return_value={"host": "api.example"})
+        flow.akuvox_api_client.get_credentials = MagicMock(
+            return_value={"auth_token": "auth", "token": "token"}
+        )
+        flow.akuvox_api_client.get_title = MagicMock(return_value="Home")
+        flow.async_create_entry = MagicMock(return_value={"type": "create_entry"})
+
+        result = await flow.async_step_verify_email_code({"email_code": "123456"})
+
+        self.assertEqual(result, {"type": "create_entry"})
+        flow.akuvox_api_client.async_email_otp_sign_in.assert_awaited_once_with(
+            "person@example.com", "123456", start_polling=False
+        )
+        self.assertNotIn("password", flow.data)

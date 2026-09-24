@@ -89,10 +89,15 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         return AkuvoxOptionsFlowHandler()
 
     async def async_step_user(self, user_input=None):
-        """Choose direct SMS login or credentials shared by another HA."""
+        """Choose a sign-in method or credentials shared by another HA."""
         return self.async_show_menu(
-            step_id="user", menu_options=["sms_sign_in", "shared_credentials"]
+            step_id="user",
+            menu_options=["sms_sign_in", "email_password_sign_in", "shared_credentials"],
         )
+
+    async def async_step_email_password_sign_in(self, user_input=None):
+        """Validate an email address (or username) and send an email OTP."""
+        return await self._async_step_email_password_sign_in(user_input)
 
     async def async_step_shared_credentials(self, user_input=None):
         """Pair this entry with an existing Akuvox integration on another HA."""
@@ -165,6 +170,16 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         """Begin reauthentication after SmartPlus can no longer refresh a session."""
         self._reauth_entry = self._get_reauth_entry()
         entry_data = dict(self._reauth_entry.data)
+        if entry_data.get("login_method") == "email_password":
+            self.data = {
+                "login_method": "email_password",
+                "login_account": str(entry_data.get("login_account", "")),
+            }
+            self.akuvox_api_client = AkuvoxApiClient(
+                session=async_get_clientsession(self.hass), hass=self.hass, entry=None
+            )
+            return await self.async_step_reauth_email_password()
+
         country_code = str(entry_data.get("country_code", ""))
         phone_number = _normalise_subscriber_number(entry_data.get("phone_number"))
         subdomain = str(entry_data.get("subdomain", ""))
@@ -240,6 +255,24 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             )
 
         return await self._async_finish_reauthentication()
+
+    async def async_step_reauth_email_password(self, user_input=None):
+        """Request an email OTP to reauthenticate an email-login entry."""
+        schema = vol.Schema(
+            {
+                vol.Required("login_account", default=self.data.get("login_account", "")): str,
+                vol.Required("password"): str,
+            }
+        )
+        if user_input is None:
+            return self.async_show_form(step_id="reauth_email_password", data_schema=schema)
+        return await self._async_begin_email_password_sign_in(
+            user_input, step_id="reauth_email_password", schema=schema, reauth=True
+        )
+
+    async def async_step_reauth_verify_email_code(self, user_input=None):
+        """Verify an emailed OTP while reauthenticating."""
+        return await self._async_verify_email_code(user_input, reauth=True)
 
     async def _async_finish_reauthentication(self):
         """Persist validated credentials and reload the existing config entry."""
@@ -343,6 +376,76 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             description_placeholders=user_input,
             last_step=False,
         )
+
+    async def _async_step_email_password_sign_in(self, user_input=None):
+        """Validate an email address or username and request its OTP."""
+        if self.akuvox_api_client is None:
+            self.akuvox_api_client = AkuvoxApiClient(
+                session=async_get_clientsession(self.hass), hass=self.hass, entry=None
+            )
+        schema = vol.Schema({vol.Required("login_account"): str, vol.Required("password"): str})
+        if user_input is None:
+            return self.async_show_form(step_id="email_password_sign_in", data_schema=schema)
+        return await self._async_begin_email_password_sign_in(
+            user_input, step_id="email_password_sign_in", schema=schema, reauth=False
+        )
+
+    async def _async_begin_email_password_sign_in(self, user_input, *, step_id, schema, reauth):
+        """Check password, send OTP, and retain only non-secret flow state."""
+        login_account = str(user_input.get("login_account", "")).strip()
+        password = str(user_input.get("password", ""))
+        if not login_account or not password:
+            return self.async_show_form(step_id=step_id, data_schema=schema, errors={"base": "invalid_auth"})
+        try:
+            response = await self.akuvox_api_client.async_begin_email_sign_in(login_account, password)
+            temporary_token = str((response or {}).get("two_factor_auth_temp_token", ""))
+            if not temporary_token:
+                LOGGER.warning("SmartPlus password login returned no email OTP challenge")
+                code_sent = False
+            else:
+                code_sent = await self.akuvox_api_client.async_send_email_otp(
+                    login_account, temporary_token
+                )
+                if not code_sent:
+                    LOGGER.warning("SmartPlus rejected the email OTP request")
+        except Exception as error:
+            LOGGER.warning("Unable to request SmartPlus email OTP: %s", error)
+            code_sent = False
+        if not code_sent:
+            return self.async_show_form(step_id=step_id, data_schema=schema, errors={"base": "cannot_connect"})
+        self.data.update({"login_method": "email_password", "login_account": login_account})
+        return await (
+            self.async_step_reauth_verify_email_code() if reauth else self.async_step_verify_email_code()
+        )
+
+    async def async_step_verify_email_code(self, user_input=None):
+        """Verify the emailed OTP and create the entry."""
+        return await self._async_verify_email_code(user_input, reauth=False)
+
+    async def _async_verify_email_code(self, user_input, *, reauth):
+        schema = vol.Schema({vol.Required("email_code"): str})
+        if user_input is None:
+            return self.async_show_form(
+                step_id="reauth_verify_email_code" if reauth else "verify_email_code",
+                data_schema=schema,
+            )
+        try:
+            signed_in = await self.akuvox_api_client.async_email_otp_sign_in(
+                str(self.data["login_account"]), str(user_input["email_code"]), start_polling=False
+            )
+        except Exception as error:
+            LOGGER.warning("SmartPlus email OTP sign-in failed: %s", error)
+            signed_in = False
+        if not signed_in:
+            return self.async_show_form(
+                step_id="reauth_verify_email_code" if reauth else "verify_email_code",
+                data_schema=schema, errors={"base": "invalid_auth"},
+            )
+        if reauth:
+            return await self._async_finish_reauthentication()
+        self.data.update(self.akuvox_api_client.get_devices_json())
+        self.data.update(self.akuvox_api_client.get_credentials())
+        return self.async_create_entry(title=self.akuvox_api_client.get_title(), data=self.data)
 
     async def async_step_verify_sms_code(self, user_input=None):
         """Step 2: User enters the SMS code received on their phone for verifiation.

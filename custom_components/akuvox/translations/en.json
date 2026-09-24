@@ -4,6 +4,7 @@
             "user": {
                 "menu_options": {
                     "sms_sign_in": "Sign in with SMS",
+                    "email_password_sign_in": "Sign in with email and password",
                     "shared_credentials": "Use credentials from another Home Assistant"
                 }
             },
@@ -15,6 +16,26 @@
                     "phone_number": "Phone Number (without the country code)",
                     "subdomain": "Manually set the regional API subdomain"
                 }
+            },
+            "email_password_sign_in": {
+                "title": "Email and password sign-in",
+                "description": "Enter the email address or username and password for your SmartPlus account. A verification code will be sent to the account's email address.",
+                "data": {"login_account": "Email address or username", "password": "Password"}
+            },
+            "verify_email_code": {
+                "title": "Email code verification",
+                "description": "Enter the verification code sent to your email address.",
+                "data": {"email_code": "Verification code"}
+            },
+            "reauth_email_password": {
+                "title": "Reauthenticate with email and password",
+                "description": "Enter your SmartPlus email address or username and password to receive a verification code.",
+                "data": {"login_account": "Email address or username", "password": "Password"}
+            },
+            "reauth_verify_email_code": {
+                "title": "Email code verification",
+                "description": "Enter the verification code sent to your email address.",
+                "data": {"email_code": "Verification code"}
             },
             "verify_sms_code": {
                 "title": "SMS Code Verification",
@@ -49,9 +70,9 @@
             }
         },
         "error": {
-            "cannot_connect": "Unable to request a SmartPlus SMS code. Try again shortly.",
+            "cannot_connect": "Unable to request a SmartPlus verification code. Check your account details and try again shortly.",
             "cannot_reach_source": "Unable to reach the Home Assistant that created this pairing link. Confirm its external HTTPS URL is reachable from this Home Assistant.",
-            "invalid_auth": "The SMS code was invalid or expired.",
+            "invalid_auth": "The verification code was invalid or expired.",
             "invalid_share": "This pairing link is invalid, expired, or has been revoked.",
             "external_url_required": "Set a valid HTTPS external URL in Home Assistant before creating a pairing link."
         },

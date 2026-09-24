@@ -182,7 +182,7 @@ Or:
 
 ## Adding the Akuvox Integration
 
-The integration is set up using SMS verification. You will receive a one-time code on your SmartPlus phone number to confirm your identity.
+The integration can be set up using SMS verification or an email/username and password followed by an emailed one-time code.
 
 > **Note:** Signing in via SMS will log you out of the SmartPlus app on your phone (and vice versa). If you wish to use both the integration and the app, you should sign in using a second account.
 
@@ -194,11 +194,17 @@ The integration is set up using SMS verification. You will receive a one-time co
 
 <img src="https://user-images.githubusercontent.com/1849295/269954970-15b480b7-6e41-4be3-966b-451143ab21a1.png" width="400">
 
-4. Enter your phone number and click `NEXT` to receive your SMS verification code:
+4. Choose one of the available sign-in methods:
+   - **Sign in with SMS:** enter your phone number and click `NEXT` to receive an SMS verification code.
+   - **Sign in with email and password:** enter the email address (or username) and password registered with SmartPlus, then enter the verification code sent to the account email address.
+
+   The integration does not save your password.
+
+5. For SMS sign-in, enter your phone number and click `NEXT` to receive your SMS verification code:
 
 <img src="https://user-images.githubusercontent.com/1849295/269956757-ef24502e-38ed-4ea6-9b6e-07c0d50ecdc3.png" width="500">
 
-5. Enter your code and click `SUBMIT`:
+6. Enter your code and click `SUBMIT`:
 
 <img src="https://user-images.githubusercontent.com/1849295/269956800-e5bb633b-db85-4acb-b90d-effa81c1fa05.png" width="400">
 
