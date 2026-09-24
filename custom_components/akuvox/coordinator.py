@@ -23,6 +23,7 @@ from .const import(
     account_storage_key,
 )
 from .repairs import async_report_authentication_failure
+from .sharing import is_remote_entry
 
 
 # https://developers.home-assistant.io/docs/integration_fetching_data#coordinated-single-api-poll-for-data-for-all-entities
@@ -47,6 +48,14 @@ class AkuvoxDataUpdateCoordinator(DataUpdateCoordinator):
 
     async def _async_update_data(self):
         """Update data via library."""
+        if (
+            self.client.config_entry is not None
+            and is_remote_entry(self.client.config_entry)
+        ):
+            # Remote entries are populated exclusively by their source's
+            # scoped snapshot. A generic coordinator refresh must never pull
+            # the receiver's broader SmartPlus account data over the top.
+            return
         try:
             if await self.client.async_retrieve_user_data():
                 data: dict = self.client.get_devices_json()

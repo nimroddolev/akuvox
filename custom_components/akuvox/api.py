@@ -81,6 +81,24 @@ from .const import (
 )
 
 
+def get_config_entry_device(
+    hass: HomeAssistant, entry: ConfigEntry, identifier: tuple[str, str]
+) -> Any | None:
+    """Look up a device by identifier within its owning config entry.
+
+    Home Assistant 2026.8 made identifiers unique per config entry. Keep the
+    legacy lookup only for older cores that do not yet provide the scoped API.
+    """
+    device_registry = dr.async_get(hass)
+    scoped_lookup = getattr(device_registry, "async_get_device_by_identifier", None)
+    if scoped_lookup is not None:
+        return scoped_lookup(identifier, entry.entry_id)
+    device = device_registry.async_get_device(identifiers={identifier})
+    if device is not None and entry.entry_id in device.config_entries:
+        return device
+    return None
+
+
 class AkuvoxApiClientError(Exception):
     """Exception to indicate a general API error."""
 
@@ -172,19 +190,13 @@ class AkuvoxApiClient:
         device = None
         display_name = door_name
         if self._entry is not None and hasattr(self.hass, "data"):
-            device_registry = dr.async_get(self.hass)
-            device = device_registry.async_get_device(
-                identifiers={(DOMAIN, f"{self._entry.entry_id}:{door_name}")}
+            device = get_config_entry_device(
+                self.hass, self._entry, (DOMAIN, f"{self._entry.entry_id}:{door_name}")
             )
             if device is None:
-                legacy_device = device_registry.async_get_device(
-                    identifiers={(DOMAIN, door_name)}
+                device = get_config_entry_device(
+                    self.hass, self._entry, (DOMAIN, door_name)
                 )
-                if (
-                    legacy_device is not None
-                    and self._entry.entry_id in legacy_device.config_entries
-                ):
-                    device = legacy_device
             if device is not None:
                 display_name = device.name_by_user or device.name or door_name
 
@@ -251,6 +263,9 @@ class AkuvoxApiClient:
 
     async def async_start_polling(self):
         """Start polling the personal door log API."""
+        if self._entry is not None and is_remote_entry(self._entry):
+            LOGGER.debug("Skipping SmartPlus polling for shared credential entry")
+            return
         if self._polling_task_stop_event is None:
             self._polling_task_stop_event = asyncio.Event()
         if self._polling_task is not None and not self._polling_task.done():
@@ -926,6 +941,9 @@ class AkuvoxApiClient:
 
     async def async_start_polling_personal_door_log(self):
         """Start activity polling only after Home Assistant has finished starting."""
+        if self._entry is not None and is_remote_entry(self._entry):
+            LOGGER.debug("Skipping deferred SmartPlus polling for shared credential entry")
+            return
         if self._polling_task is not None and not self._polling_task.done():
             return
         if self._polling_start_unsub is not None:
@@ -943,6 +961,9 @@ class AkuvoxApiClient:
 
     async def async_retrieve_personal_door_log(self) -> bool:
         """Fetch, parse, and publish one personal-door-log update."""
+        if self._entry is not None and is_remote_entry(self._entry):
+            LOGGER.debug("Skipping SmartPlus activity fetch for shared credential entry")
+            return False
         json_data = await self.async_get_personal_door_log()
         if json_data is None:
             return False
@@ -1361,6 +1382,9 @@ class AkuvoxApiClient:
 
     async def async_retrieve_call_history(self) -> bool:
         """Fetch and retain the latest SmartPlus call-history page for the panel."""
+        if self._entry is not None and is_remote_entry(self._entry):
+            LOGGER.debug("Skipping SmartPlus call-history fetch for shared credential entry")
+            return False
         host = API_DOOR_LOG_HOST.replace("subdomain.", f"{self._data.subdomain}.")
         url = f"https://{host}/{API_GET_CALL_LOG}&_t={int(time() * 1000)}"
         headers = {
