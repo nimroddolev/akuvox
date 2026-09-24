@@ -31,6 +31,7 @@ from .sharing import (
     async_fetch_shared_snapshot,
     async_create_share,
     async_revoke_share,
+    get_external_url,
     parse_pairing_uri,
 )
 
@@ -106,6 +107,11 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             if snapshot is None:
                 raise ValueError("The new pairing unexpectedly had no credential snapshot")
             credentials = snapshot["credentials"]
+            receiver_secret = snapshot.get("receiver_secret")
+            if receiver_secret is not None and (
+                not isinstance(receiver_secret, str) or not receiver_secret
+            ):
+                raise ValueError("The credential source returned an invalid receiver secret")
             connection = snapshot.get("connection", {})
             device_data = snapshot.get("device_data", {})
             if not credentials.get("auth_token") or not credentials.get("token"):
@@ -123,14 +129,18 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             SHARED_MODE: SHARED_MODE_REMOTE,
             "remote_source_url": source_url,
             "remote_share_id": share_id,
-            SHARED_SECRET: secret,  # Moved to private storage during first setup.
+            # The source exchanges a one-time pairing secret for this private
+            # receiver credential on the first successful request.
+            SHARED_SECRET: receiver_secret or secret,
             **{key: connection.get(key, "") for key in ("host", "subdomain", "country_code", "phone_number")},
             **{
                 key: device_data.get(key, [])
                 for key in ("camera_data", "door_relay_data", "door_keys_data")
             },
             "activity_data": snapshot.get("activity_data", []),
+            "call_data": snapshot.get("call_data", []),
             "shared_permissions": snapshot.get("permissions", {}),
+            "hub_name": str(snapshot.get("account_label") or "Akuvox SmartPlus"),
             "auth_token": credentials["auth_token"],
             "token": credentials["token"],
         }
@@ -501,7 +511,7 @@ class AkuvoxOptionsFlowHandler(config_entries.OptionsFlow):
                 pairing_link = await async_create_share(
                     self.hass,
                     self.config_entry,
-                    self.hass.config.external_url,
+                    get_external_url(self.hass),
                     receiver_name,
                     [
                         *[f"camera:{item.get('name', '')}" for item in self.config_entry.data.get("camera_data", [])],

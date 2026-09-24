@@ -60,6 +60,19 @@ async def async_get_remote_share_secret(hass: HomeAssistant, entry_id: str) -> s
     return (await async_get_credentials(hass, entry_id)).get("remote_share_secret", "")
 
 
+async def async_store_remote_share_secret(
+    hass: HomeAssistant, entry_id: str, secret: str
+) -> None:
+    """Replace the private bearer secret for a remote credential source."""
+    store = _store(hass)
+    credentials = await store.async_load() or {}
+    credentials[entry_id] = {
+        **credentials.get(entry_id, {}),
+        "remote_share_secret": secret,
+    }
+    await store.async_save(credentials)
+
+
 async def async_load_and_migrate_credentials(
     hass: HomeAssistant, entry: ConfigEntry
 ) -> dict[str, str]:

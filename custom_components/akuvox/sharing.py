@@ -18,10 +18,16 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers import storage
+from homeassistant.helpers.network import NoURLAvailableError, get_url
 from homeassistant.helpers.storage import Store
 
 from .const import DOMAIN, LOGGER, account_storage_key
-from .credentials import async_get_credentials, async_get_remote_share_secret, async_store_credentials
+from .credentials import (
+    async_get_credentials,
+    async_get_remote_share_secret,
+    async_store_credentials,
+    async_store_remote_share_secret,
+)
 from .repairs import async_update_credential_source_issue
 
 SHARED_MODE = "credential_mode"
@@ -44,8 +50,32 @@ def _digest(value: str) -> str:
     return hashlib.sha256(value.encode()).hexdigest()
 
 
+def get_external_url(hass: HomeAssistant) -> str:
+    """Return Home Assistant's current, HTTPS-reachable public URL."""
+    try:
+        return get_url(
+            hass,
+            allow_internal=False,
+            prefer_external=True,
+            require_ssl=True,
+        )
+    except NoURLAvailableError as error:
+        raise ValueError(
+            "Set a valid HTTPS external URL in Home Assistant before creating a pairing link"
+        ) from error
+
+
 def is_remote_entry(entry: ConfigEntry) -> bool:
     return entry.data.get(SHARED_MODE) == SHARED_MODE_REMOTE
+
+
+def _source_account_label(entry: ConfigEntry, source_client: Any | None) -> str:
+    """Return the source hub's display name, with a safe entry-title fallback."""
+    if source_client is not None:
+        project_name = source_client.get_panel_data().get("project_name")
+        if isinstance(project_name, str) and project_name.strip():
+            return project_name.strip()
+    return entry.title
 
 
 def _filter_shared_devices(
@@ -162,7 +192,10 @@ async def async_create_share(
     shares[share_id] = {
         "entry_id": entry.entry_id,
         "receiver_name": receiver_name.strip() or "Unnamed receiver",
-        "secret_hash": _digest(secret),
+        # The secret embedded in the link is a bootstrap credential only.
+        # Its first successful exchange creates a separate receiver secret.
+        "pairing_secret_hash": _digest(secret),
+        "receiver_secret_hash": None,
         "expires_at": (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat(),
         "activated": False,
         "revoked": False,
@@ -295,6 +328,46 @@ async def async_fetch_shared_snapshot(
         return payload, response.headers.get("ETag")
 
 
+async def async_fetch_shared_image(
+    hass: HomeAssistant, source_url: str, share_id: str, secret: str,
+    image_type: str, image_id: str,
+) -> dict[str, str]:
+    """Fetch a host-proxied image without exposing a SmartPlus URL."""
+    url = (
+        f"{source_url}/api/akuvox/credential-share/{quote(share_id, safe='')}"
+        f"/image/{quote(image_type, safe='')}/{quote(image_id, safe='')}"
+    )
+    timeout = aiohttp.ClientTimeout(total=15)
+    async with async_get_clientsession(hass).get(
+        url,
+        headers={"Authorization": f"Bearer {secret}", "Accept": "application/json"},
+        timeout=timeout,
+        allow_redirects=False,
+    ) as response:
+        if response.status in (401, 403, 404, 410):
+            raise PermissionError("The shared image is unavailable")
+        response.raise_for_status()
+        image = await response.json()
+        if not isinstance(image, dict) or not isinstance(image.get("data"), str):
+            raise TypeError("The credential source returned an invalid image")
+        return image
+
+
+async def async_apply_remote_share_link(
+    hass: HomeAssistant, entry: ConfigEntry, pairing_link: str
+) -> None:
+    """Save a replacement share link without discarding usable cached data."""
+    source_url, share_id, secret = parse_pairing_uri(pairing_link)
+    await async_store_remote_share_secret(hass, entry.entry_id, secret)
+    data = dict(entry.data)
+    data.update({"remote_source_url": source_url, "remote_share_id": share_id})
+    hass.config_entries.async_update_entry(entry, data=data)
+    async_update_credential_source_issue(hass, entry, None)
+    synchronizer = hass.data.get(RUNTIME_KEY, {}).get(entry.entry_id)
+    if synchronizer is not None:
+        synchronizer.async_replace_share_link()
+
+
 class CredentialShareView(HomeAssistantView):
     """Return a credential snapshot only to a paired receiver."""
 
@@ -304,8 +377,16 @@ class CredentialShareView(HomeAssistantView):
 
     def __init__(self, hass: HomeAssistant) -> None:
         self.hass = hass
+        self._share_locks: dict[str, asyncio.Lock] = {}
 
     async def get(self, request: web.Request, share_id: str) -> web.Response:
+        """Serialize requests for a share while its bootstrap secret is redeemed."""
+        lock = self._share_locks.setdefault(share_id, asyncio.Lock())
+        async with lock:
+            return await self._async_get(request, share_id)
+
+    async def _async_get(self, request: web.Request, share_id: str) -> web.Response:
+        """Return the current credential snapshot for one serialized request."""
         shares = await _store(self.hass).async_load() or {}
         share = shares.get(share_id)
         supplied = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
@@ -314,9 +395,31 @@ class CredentialShareView(HomeAssistantView):
             expired = datetime.fromisoformat(share.get("expires_at", "")).astimezone(timezone.utc) < datetime.now(timezone.utc)
         except (AttributeError, TypeError, ValueError):
             expired = True
-        if not share or share.get("revoked") or not supplied or not secrets.compare_digest(
-            str(share.get("secret_hash", "")), _digest(supplied)
-        ):
+        if not share or share.get("revoked") or not supplied:
+            return web.Response(status=403)
+        supplied_hash = _digest(supplied)
+        # Shares created before one-time links were introduced retain their
+        # original receiver secret. New shares exchange their pairing secret
+        # exactly once for a private receiver secret.
+        legacy_share = "pairing_secret_hash" not in share
+        using_receiver_secret = bool(share.get("receiver_secret_hash")) and (
+            secrets.compare_digest(
+                str(share.get("receiver_secret_hash", "")), supplied_hash
+            )
+        )
+        using_legacy_secret = legacy_share and secrets.compare_digest(
+            str(share.get("secret_hash", "")), supplied_hash
+        )
+        using_pairing_secret = (
+            not legacy_share
+            and secrets.compare_digest(
+                str(share.get("pairing_secret_hash", "")), supplied_hash
+            )
+        )
+        if not (using_receiver_secret or using_legacy_secret or using_pairing_secret):
+            return web.Response(status=403)
+        if using_pairing_secret and share.get("activated"):
+            # The pairing URI has already exchanged its one-time secret.
             return web.Response(status=403)
         if expired and not share.get("activated"):
             return web.Response(status=410)
@@ -342,6 +445,10 @@ class CredentialShareView(HomeAssistantView):
         source_client = getattr(
             self.hass.data.get(DOMAIN, {}).get(entry.entry_id), "client", None
         )
+        # The SmartPlus project name is the name shown by the integration hub.
+        # Preserve it in each share snapshot so a receiver can keep the right
+        # account label even while the source is temporarily unreachable.
+        account_label = _source_account_label(entry, source_client)
         device_data = (
             source_client.get_devices_json() if source_client is not None else {
                 key: entry.data.get(key, [])
@@ -362,8 +469,23 @@ class CredentialShareView(HomeAssistantView):
         # receiver receives event metadata only; its panel never exposes the
         # host's image URLs.
         activity_data = [
-            {key: value for key, value in item.items() if key not in {"PicUrl", "LocalPreview"}}
+            {
+                **{key: value for key, value in item.items() if key not in {"PicUrl", "LocalPreview"}},
+                "has_image": bool(item.get("PicUrl") or item.get("LocalPreview")),
+            }
             for item in activity_data
+        ]
+        call_data = [
+            {
+                **{key: value for key, value in item.items() if key not in {"picUrl", "smallPicUrl"}},
+                "has_image": bool(item.get("picUrl") or item.get("smallPicUrl")),
+            }
+            for item in (
+                source_client.get_panel_data().get("calls", [])
+                if source_client is not None and share.get("allow_activity", True)
+                else []
+            )
+            if isinstance(item, dict)
         ]
         revision = '"' + _digest(
             credentials["auth_token"] + "\0" + credentials["token"] + "\0"
@@ -372,11 +494,15 @@ class CredentialShareView(HomeAssistantView):
                     share.get("edit_key_relay_ids"), share.get("allow_view_keys"),
                     share.get("view_key_relay_ids"), share.get("allow_activity"),
                     share.get("activity_device_names"), share.get("access_expires_at"),
-                    device_data, activity_data))
+                    account_label, device_data, activity_data, call_data))
         ) + '"'
         # A conditional request is still a successful contact from this
         # receiver. Record it before returning 304 so the source UI reflects
         # the last time it checked in, rather than only token rotations.
+        receiver_secret: str | None = None
+        if using_pairing_secret:
+            receiver_secret = secrets.token_urlsafe(32)
+            share["receiver_secret_hash"] = _digest(receiver_secret)
         share["activated"] = True
         share["last_sync"] = datetime.now(timezone.utc).isoformat()
         await _store(self.hass).async_save(shares)
@@ -385,11 +511,15 @@ class CredentialShareView(HomeAssistantView):
         connection = {key: entry.data.get(key, "") for key in ("host", "subdomain", "country_code", "phone_number")}
         return web.json_response({
             "schema_version": 1,
-            "account_label": entry.title,
+            "account_label": account_label,
             "share_id": share_id,
+            # Sent only on the one-time bootstrap response. The receiver
+            # immediately moves this credential to private storage.
+            **({"receiver_secret": receiver_secret} if receiver_secret else {}),
             "connection": connection,
             "device_data": device_data,
             "activity_data": activity_data,
+            "call_data": call_data,
             "permissions": {
                 "allow_create_keys": share.get("allow_create_keys", True),
                 "allow_edit_keys": share.get("allow_edit_keys", True),
@@ -404,11 +534,77 @@ class CredentialShareView(HomeAssistantView):
         }, headers={"ETag": revision, "Cache-Control": "no-store"})
 
 
+class CredentialShareImageView(HomeAssistantView):
+    """Proxy authorised activity and call images for a paired receiver."""
+
+    url = "/api/akuvox/credential-share/{share_id}/image/{image_type}/{image_id}"
+    name = "api:akuvox:credential_share_image"
+    requires_auth = False
+
+    def __init__(self, hass: HomeAssistant) -> None:
+        self.hass = hass
+
+    async def get(
+        self, request: web.Request, share_id: str, image_type: str, image_id: str
+    ) -> web.Response:
+        shares = await _store(self.hass).async_load() or {}
+        share = shares.get(share_id)
+        supplied = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
+        if not share or share.get("revoked") or not supplied:
+            return web.Response(status=403)
+        supplied_hash = _digest(supplied)
+        legacy_share = "pairing_secret_hash" not in share
+        authorised = (
+            legacy_share and secrets.compare_digest(str(share.get("secret_hash", "")), supplied_hash)
+        ) or (
+            bool(share.get("receiver_secret_hash"))
+            and secrets.compare_digest(str(share.get("receiver_secret_hash", "")), supplied_hash)
+        )
+        if not authorised or not share.get("allow_activity", True):
+            return web.Response(status=403)
+        entry = self.hass.config_entries.async_get_entry(share.get("entry_id"))
+        source_client = getattr(
+            self.hass.data.get(DOMAIN, {}).get(getattr(entry, "entry_id", "")), "client", None
+        )
+        if entry is None or source_client is None:
+            return web.Response(status=404)
+        try:
+            if image_type == "activity":
+                activity = next(
+                    (
+                        item for item in source_client.get_panel_data().get("activity", [])
+                        if str(item.get("CaptureTime", "")) == image_id
+                    ),
+                    None,
+                )
+                if (
+                    activity is None
+                    or str(activity.get("Location", "")).strip()
+                    not in share.get("activity_device_names", [])
+                ):
+                    return web.Response(status=404)
+                image = await source_client.async_get_panel_activity_image(image_id)
+            elif image_type == "call":
+                if not any(
+                    str(item.get("id", "")) == image_id
+                    for item in source_client.get_panel_data().get("calls", [])
+                ):
+                    return web.Response(status=404)
+                image = await source_client.async_get_panel_call_image(image_id)
+            else:
+                return web.Response(status=404)
+        except Exception as error:
+            LOGGER.debug("Unable to retrieve shared %s image: %s", image_type, error)
+            return web.Response(status=404)
+        return web.json_response(image, headers={"Cache-Control": "no-store"})
+
+
 def async_register_share_view(hass: HomeAssistant) -> None:
     runtime = hass.data.setdefault(RUNTIME_KEY, {})
     if runtime.get("_credential_share_view_registered"):
         return
     hass.http.register_view(CredentialShareView(hass))
+    hass.http.register_view(CredentialShareImageView(hass))
     runtime["_credential_share_view_registered"] = True
 
 
@@ -454,6 +650,15 @@ class RemoteCredentialSynchronizer:
             async_update_credential_source_issue(self.hass, self.entry, None)
             return False
         credentials = snapshot["credentials"]
+        receiver_secret = snapshot.get("receiver_secret")
+        if receiver_secret is not None and (
+            not isinstance(receiver_secret, str) or not receiver_secret
+        ):
+            raise PermissionError("The credential source returned an invalid receiver secret")
+        if receiver_secret:
+            await async_store_remote_share_secret(
+                self.hass, self.entry.entry_id, receiver_secret
+            )
         await async_store_credentials(self.hass, self.entry.entry_id, credentials["auth_token"], credentials["token"])
         self.client.async_apply_shared_credentials(credentials["auth_token"], credentials["token"])
         device_data = snapshot.get("device_data")
@@ -461,7 +666,11 @@ class RemoteCredentialSynchronizer:
             data = dict(self.entry.data)
             data.update({key: device_data.get(key, []) for key in ("camera_data", "door_relay_data", "door_keys_data")})
             data["activity_data"] = snapshot.get("activity_data", [])
+            data["call_data"] = snapshot.get("call_data", [])
             data["shared_permissions"] = snapshot.get("permissions", {})
+            account_label = snapshot.get("account_label")
+            if isinstance(account_label, str) and account_label.strip():
+                data["hub_name"] = account_label.strip()
             await storage.Store(
                 self.hass, 1, account_storage_key(self.entry.entry_id, "cache")
             ).async_save(device_data)
@@ -469,6 +678,14 @@ class RemoteCredentialSynchronizer:
             self.hass.config_entries.async_update_entry(self.entry, data=data)
         async_update_credential_source_issue(self.hass, self.entry, None)
         return True
+
+    def async_replace_share_link(self) -> None:
+        """Use replacement source details on the next and subsequent syncs."""
+        self._etag = None
+        if self._task is not None and not self._task.done():
+            self._task.cancel()
+            self._task = None
+        self.async_start()
 
     def async_start(self) -> None:
         if self._task is None or self._task.done():

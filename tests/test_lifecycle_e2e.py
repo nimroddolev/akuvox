@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -27,7 +28,12 @@ from custom_components.akuvox.sharing import (
     _filter_shared_activity,
     _filter_shared_devices,
     _permission_relay_ids,
+    _source_account_label,
+    CredentialShareView,
+    _digest,
+    async_apply_remote_share_link,
     async_create_share,
+    get_external_url,
 )
 
 
@@ -377,6 +383,174 @@ class TestSharedDeviceScopingE2E(unittest.TestCase):
 
         self.assertEqual(
             _filter_shared_activity(activity, ["Lobby"]), activity[:2]
+        )
+
+
+class TestCredentialShareUrlE2E(unittest.TestCase):
+    """Verify pairing links use Home Assistant's public URL resolver."""
+
+    def test_pairing_link_uses_preferred_https_external_url(self) -> None:
+        """A current public URL is chosen instead of a saved configuration value."""
+        hass = MagicMock()
+        with patch(
+            "custom_components.akuvox.sharing.get_url",
+            return_value="https://current.example.com",
+        ) as get_url:
+            self.assertEqual(get_external_url(hass), "https://current.example.com")
+
+        get_url.assert_called_once_with(
+            hass,
+            allow_internal=False,
+            prefer_external=True,
+            require_ssl=True,
+        )
+
+
+class TestRemoteShareLinkReplacementE2E(unittest.IsolatedAsyncioTestCase):
+    """Verify a new pairing link preserves cached remote account data."""
+
+    async def test_replacement_keeps_cached_devices_and_credentials(self) -> None:
+        """Only the source pointer and secret change before the first sync."""
+        hass = MagicMock()
+        hass.data = {}
+        entry = MagicMock(entry_id="entry-id")
+        entry.data = {
+            "remote_source_url": "https://old.example.com",
+            "remote_share_id": "old-share",
+            "camera_data": [{"name": "Cached camera"}],
+            "token": "cached-token",
+        }
+
+        with patch(
+            "custom_components.akuvox.sharing.async_store_remote_share_secret",
+            new=AsyncMock(),
+        ) as store_secret, patch(
+            "custom_components.akuvox.sharing.async_update_credential_source_issue"
+        ) as clear_issue:
+            await async_apply_remote_share_link(
+                hass,
+                entry,
+                "akuvox-share://v1?url=https%3A%2F%2Fnew.example.com&id=new-share&secret=new-secret",
+            )
+
+        store_secret.assert_awaited_once_with(hass, "entry-id", "new-secret")
+        clear_issue.assert_called_once_with(hass, entry, None)
+        saved_data = hass.config_entries.async_update_entry.call_args.kwargs["data"]
+        self.assertEqual(saved_data["remote_source_url"], "https://new.example.com")
+        self.assertEqual(saved_data["remote_share_id"], "new-share")
+        self.assertEqual(saved_data["camera_data"], [{"name": "Cached camera"}])
+        self.assertEqual(saved_data["token"], "cached-token")
+
+
+class TestRemoteHubNameE2E(unittest.TestCase):
+    """Verify a receiver retains its source hub's display name."""
+
+    def test_source_hub_name_wins_over_generic_entry_title(self) -> None:
+        """Pairing snapshots use the SmartPlus project name as their label."""
+        entry = MagicMock()
+        entry.title = "Akuvox SmartPlus"
+        client = MagicMock()
+        client.get_panel_data.return_value = {"project_name": "Benny Berman 7"}
+
+        self.assertEqual(_source_account_label(entry, client), "Benny Berman 7")
+
+
+class TestOneTimePairingLinkE2E(unittest.IsolatedAsyncioTestCase):
+    """Verify a pairing URI cannot bootstrap more than one receiver."""
+
+    async def test_pairing_secret_is_replaced_after_first_valid_exchange(self) -> None:
+        """The original link is rejected while the issued receiver secret works."""
+        pairing_secret = "one-time-secret"
+        shares = {
+            "share-id": {
+                "entry_id": "entry-id",
+                "pairing_secret_hash": _digest(pairing_secret),
+                "receiver_secret_hash": None,
+                "expires_at": "2030-01-01T00:00:00+00:00",
+                "activated": False,
+                "revoked": False,
+                "device_ids": [],
+            }
+        }
+        store = MagicMock()
+        store.async_load = AsyncMock(return_value=shares)
+        store.async_save = AsyncMock()
+        entry = MagicMock(entry_id="entry-id", title="Benny Berman 7")
+        entry.data = {}
+        hass = MagicMock()
+        hass.data = {DOMAIN: {}}
+        hass.config_entries.async_get_entry.return_value = entry
+        request = MagicMock(headers={"Authorization": f"Bearer {pairing_secret}"})
+
+        with (
+            patch("custom_components.akuvox.sharing._store", return_value=store),
+            patch(
+                "custom_components.akuvox.sharing.async_get_credentials",
+                new=AsyncMock(return_value={"auth_token": "auth", "token": "token"}),
+            ),
+        ):
+            view = CredentialShareView(hass)
+            first = await view.get(request, "share-id")
+            payload = json.loads(first.body)
+            second = await view.get(request, "share-id")
+            receiver_request = MagicMock(
+                headers={"Authorization": f"Bearer {payload['receiver_secret']}"}
+            )
+            receiver = await view.get(receiver_request, "share-id")
+
+        self.assertEqual(first.status, 200)
+        self.assertIn("receiver_secret", payload)
+        self.assertEqual(second.status, 403)
+        self.assertEqual(receiver.status, 200)
+
+    async def test_concurrent_pairing_requests_redeem_only_once(self) -> None:
+        """Only one concurrent request receives a private receiver secret."""
+        pairing_secret = "one-time-secret"
+        shares = {
+            "share-id": {
+                "entry_id": "entry-id",
+                "pairing_secret_hash": _digest(pairing_secret),
+                "receiver_secret_hash": None,
+                "expires_at": "2030-01-01T00:00:00+00:00",
+                "activated": False,
+                "revoked": False,
+                "device_ids": [],
+            }
+        }
+        store = MagicMock()
+        store.async_load = AsyncMock(return_value=shares)
+        store.async_save = AsyncMock()
+        entry = MagicMock(entry_id="entry-id", title="Benny Berman 7")
+        entry.data = {}
+        hass = MagicMock()
+        hass.data = {DOMAIN: {}}
+        hass.config_entries.async_get_entry.return_value = entry
+        request = MagicMock(headers={"Authorization": f"Bearer {pairing_secret}"})
+        credentials_requested = asyncio.Event()
+        allow_credentials = asyncio.Event()
+
+        async def get_credentials(*_args: object) -> dict[str, str]:
+            credentials_requested.set()
+            await allow_credentials.wait()
+            return {"auth_token": "auth", "token": "token"}
+
+        with (
+            patch("custom_components.akuvox.sharing._store", return_value=store),
+            patch(
+                "custom_components.akuvox.sharing.async_get_credentials",
+                side_effect=get_credentials,
+            ),
+        ):
+            view = CredentialShareView(hass)
+            first = asyncio.create_task(view.get(request, "share-id"))
+            await credentials_requested.wait()
+            second = asyncio.create_task(view.get(request, "share-id"))
+            await asyncio.sleep(0)
+            allow_credentials.set()
+            first_response, second_response = await asyncio.gather(first, second)
+
+        self.assertEqual(
+            sorted((first_response.status, second_response.status)), [200, 403]
         )
 
 
