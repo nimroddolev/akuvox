@@ -77,6 +77,11 @@ def _panel_entries(hass: HomeAssistant) -> list[ConfigEntry]:
     return hass.config_entries.async_entries(DOMAIN)
 
 
+def _visible_panel_entries(hass: HomeAssistant) -> list[ConfigEntry]:
+    """Return hubs that are enabled and can be selected in the panel header."""
+    return [entry for entry in _panel_entries(hass) if entry.disabled_by is None]
+
+
 async def async_refresh_panel(hass: HomeAssistant) -> None:
     """Register the sidebar panel whenever at least one account exists."""
     entries = _panel_entries(hass)
@@ -175,7 +180,7 @@ async def websocket_panel_data(
     if not _require_admin(connection, msg):
         return
     accounts = []
-    for entry in _panel_entries(hass):
+    for entry in _visible_panel_entries(hass):
         client = _client_for_entry(hass, entry.entry_id)
         # Keep every configured hub selectable, including an entry still
         # starting up or temporarily unavailable. Its saved entry title is a

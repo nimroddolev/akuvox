@@ -854,7 +854,7 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
             </div>
           </div>
           ${
-            this._accounts.length
+            this._accounts.length > 1
               ? `<select aria-label="Akuvox account" data-account>
                   ${this._accounts
                     .map(

@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import json
 import unittest
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
@@ -453,6 +454,19 @@ class TestRemoteHubNameE2E(unittest.TestCase):
         client.get_panel_data.return_value = {"project_name": "Benny Berman 7"}
 
         self.assertEqual(_source_account_label(entry, client), "Benny Berman 7")
+
+
+class TestPanelHubSelectionE2E(unittest.TestCase):
+    """Verify the panel header only exposes enabled hubs."""
+
+    def test_disabled_hub_is_omitted_from_the_account_selector(self) -> None:
+        """A disabled config entry is not a selectable panel account."""
+        enabled = SimpleNamespace(disabled_by=None)
+        disabled = SimpleNamespace(disabled_by="user")
+        hass = MagicMock()
+        hass.config_entries.async_entries.return_value = [enabled, disabled]
+
+        self.assertEqual(panel._visible_panel_entries(hass), [enabled])
 
 
 class TestOneTimePairingLinkE2E(unittest.IsolatedAsyncioTestCase):
