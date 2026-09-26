@@ -28,7 +28,7 @@
                 "data": {"email_code": "Verification code"}
             },
             "reauth_email_password": {
-                "title": "Reauthenticate with email and password",
+                "title": "Re-authenticate with email/username and password",
                 "description": "Enter your SmartPlus email address or username and password to receive a verification code.",
                 "data": {"login_account": "Email address or username", "password": "Password"}
             },
@@ -48,14 +48,14 @@
                 }
             },
             "reauth_confirm": {
-                "title": "Reauthenticate Akuvox SmartPlus",
+                "title": "Re-authenticate Akuvox SmartPlus",
                 "description": "Enter the SMS code sent to the phone number registered with SmartPlus.",
                 "data": {
                     "sms_code": "SMS Code"
                 }
             },
             "reauth_sms": {
-                "title": "Reauthenticate with SMS",
+                "title": "Re-authenticate with SMS",
                 "description": "Request a verification code for the phone number registered with SmartPlus."
             },
             "shared_credentials": {
@@ -78,7 +78,7 @@
         },
         "abort": {
             "reauth_missing_account_data": "The saved account does not include a phone number and country code. Reconfigure the integration.",
-            "reauth_successful": "Akuvox SmartPlus was reauthenticated successfully."
+            "reauth_successful": "Akuvox SmartPlus was re-authenticated successfully."
         }
     },
     "issues": {
@@ -112,7 +112,7 @@
         },
         "credential_source_source_needs_reauth": {
             "title": "Credential source supplied invalid credentials for {entry_title}",
-            "description": "SmartPlus rejected the token supplied by the source Home Assistant. Reauthenticate Akuvox SmartPlus on the source instance, then refresh shared credentials on this receiving instance."
+            "description": "SmartPlus rejected the token supplied by the source Home Assistant. Re-authenticate Akuvox SmartPlus on the source instance, then refresh shared credentials on this receiving instance."
         }
     },
     "device_automation": {

@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 from datetime import datetime
 
+import aiohttp
 import voluptuous as vol
 from haffmpeg.tools import IMAGE_JPEG, ImageFrame
 from homeassistant.components import panel_custom, websocket_api
@@ -63,13 +64,14 @@ from .sharing import (
 
 _PANEL_MODULE = "akuvox-panel.js"
 _PANEL_ICONSET = "akuvox-iconset.js"
+_PANEL_ASSET_VERSION = "20260928-connected-node-row-margins-v149"
 DATA_CAMERA_PREVIEW_LOCK = f"{DOMAIN}_panel_camera_preview_lock"
 
 
 def _panel_module_url() -> str:
     """Return a cache-busted panel module URL for the installed asset."""
     module_path = Path(__file__).parent / "panel" / _PANEL_MODULE
-    return f"{PANEL_STATIC_URL}/{_PANEL_MODULE}?v={module_path.stat().st_mtime_ns}"
+    return f"{PANEL_STATIC_URL}/{_PANEL_MODULE}?v={module_path.stat().st_mtime_ns}&build={_PANEL_ASSET_VERSION}"
 
 
 def _panel_iconset_url() -> str:
@@ -494,13 +496,26 @@ async def websocket_panel_temp_key_qr(
     """Return a temporary key QR image to an authorised panel user."""
     if not _require_admin(connection, msg):
         return
+    entry = hass.config_entries.async_get_entry(msg["entry_id"])
     client = _client_for_entry(hass, msg["entry_id"])
-    if client is None:
+    if entry is None or client is None:
         connection.send_error(msg["id"], "not_found", "Akuvox account was not found")
         return
     try:
-        image = await client.async_get_panel_temp_key_qr(msg["key_id"])
-    except AkuvoxApiClientError as error:
+        if entry.data.get(SHARED_MODE) == SHARED_MODE_REMOTE:
+            from .credentials import async_get_remote_share_secret
+
+            image = await async_fetch_shared_image(
+                hass,
+                str(entry.data["remote_source_url"]),
+                str(entry.data["remote_share_id"]),
+                await async_get_remote_share_secret(hass, entry.entry_id),
+                "temp_key_qr",
+                msg["key_id"],
+            )
+        else:
+            image = await client.async_get_panel_temp_key_qr(msg["key_id"])
+    except (AkuvoxApiClientError, PermissionError, TypeError, aiohttp.ClientError) as error:
         connection.send_error(msg["id"], "not_found", str(error))
         return
     connection.send_result(msg["id"], image)
@@ -780,7 +795,7 @@ async def websocket_panel_apply_remote_share_link(
         return
     try:
         await async_apply_remote_share_link(hass, entry, msg["pairing_link"])
-    except ValueError as error:
+    except (ValueError, PermissionError, aiohttp.ClientError, TypeError) as error:
         connection.send_error(msg["id"], "invalid_share", str(error))
         return
     connection.send_result(msg["id"])
@@ -863,7 +878,15 @@ async def websocket_panel_revoke_credential_share(
     if not await async_revoke_share(hass, msg["share_id"]):
         connection.send_error(msg["id"], "not_found", "Paired Home Assistant was not found")
         return
-    connection.send_result(msg["id"], {})
+    revoked_share = next(
+        (
+            share
+            for share in await async_list_shares(hass, entry.entry_id)
+            if share["share_id"] == msg["share_id"]
+        ),
+        None,
+    )
+    connection.send_result(msg["id"], {"share": revoked_share})
 
 
 @websocket_api.websocket_command(

@@ -10,6 +10,14 @@ export const matchesSelectedFilter = (selected, value) => {
   return values.length === 0 || values.includes(String(value || ""));
 };
 
+const formatOptionLabel = (value) => String(value || "")
+  .replace(/([a-z\d])([A-Z])/g, "$1 $2")
+  .replace(/[_-]+/g, " ")
+  .split(/\s+/)
+  .filter(Boolean)
+  .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+  .join(" ");
+
 export const renderMultiSelectFilter = ({
   scope,
   key,
@@ -21,17 +29,23 @@ export const renderMultiSelectFilter = ({
 }) => {
   const selectedValues = selectedFilterValues(selected);
   const menuId = `${scope}-${key}`;
+  const options = values.map((option) =>
+    typeof option === "string"
+      ? { value: option, label: formatOptionLabel(option) }
+      : { value: String(option.value || ""), label: option.label || formatOptionLabel(option.value) }
+  );
+  const selectedLabel = (value) => options.find((option) => option.value === value)?.label || formatOptionLabel(value);
   const summary = selectedValues.length === 0
     ? allLabel
     : selectedValues.length === 1
-      ? selectedValues[0]
+      ? selectedLabel(selectedValues[0])
       : `${selectedValues.length} selected`;
 
   return `<details class="multi-select-filter" data-filter-menu="${escapeHtml(menuId)}" ${openMenu === menuId ? "open" : ""}>
     <summary><span>${escapeHtml(label)}</span><span class="multi-select-filter-summary">${escapeHtml(summary)}</span></summary>
     <div class="multi-select-filter-options" role="group" aria-label="${escapeHtml(label)} filter">
       <label><input type="checkbox" data-multi-filter="${escapeHtml(scope)}" data-filter-key="${escapeHtml(key)}" data-filter-all ${selectedValues.length === 0 ? "checked" : ""}> ${escapeHtml(allLabel)}</label>
-      ${values.map((value) => `<label><input type="checkbox" data-multi-filter="${escapeHtml(scope)}" data-filter-key="${escapeHtml(key)}" value="${escapeHtml(value)}" ${selectedValues.includes(value) ? "checked" : ""}> ${escapeHtml(value)}</label>`).join("")}
+      ${options.map((option) => `<label><input type="checkbox" data-multi-filter="${escapeHtml(scope)}" data-filter-key="${escapeHtml(key)}" value="${escapeHtml(option.value)}" ${selectedValues.includes(option.value) ? "checked" : ""}> ${escapeHtml(option.label)}</label>`).join("")}
     </div>
   </details>`;
 };

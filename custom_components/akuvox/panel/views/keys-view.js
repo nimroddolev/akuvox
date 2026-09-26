@@ -3,8 +3,8 @@ import {
   bindMultiSelectFilters,
   matchesSelectedFilter,
   renderMultiSelectFilter,
-} from "../utils/multi-select-filter.js?v=20260827-multi-table-filters";
-import { icons } from "../utils/icons.js?v=20260924-view-mode-toggle";
+} from "../utils/multi-select-filter.js?v=20260925-option-labels";
+import { icons } from "../utils/icons.js?v=20260928-detailed-qr-icon";
 import {
   parseDateTimeInput,
   normaliseUhfCard,
@@ -20,9 +20,9 @@ import {
 } from "../utils/formatters.js?v=20260820-table-timestamps";
 import { copyText } from "../utils/clipboard.js";
 import { showNotice, confirmModal, callWsWithBlocker } from "../components/dialogs.js";
-import { showDateRangePicker } from "../components/date-range-picker.js?v=20260823-normalise-past-validity-start";
-import { showTemporaryKeyQrDialog } from "../components/qr-dialog.js";
-import { showKeyActionsMenu, closeKeyActionsMenu } from "../components/key-menu.js?v=20260922-scoped-edit-permission";
+import { showDateRangePicker } from "../components/date-range-picker.js?v=20260927-validity-modal";
+import { showTemporaryKeyQrDialog } from "../components/qr-dialog.js?v=20260928-qr-loading-modal-v2";
+import { showKeyActionsMenu, closeKeyActionsMenu } from "../components/key-menu.js?v=20260928-disabled-edit-muted";
 import { bindListOrdering, bindTileOrdering } from "../utils/tile-ordering.js?v=20260917-list-drop-position";
 
 /**
@@ -59,6 +59,9 @@ export const updateFormFieldErrors = (form) => {
  * @returns {string}
  */
 export const renderKeysView = (host, account) => {
+  const showKeyTiles =
+    host._rowViewMode === "tiles" ||
+    window.matchMedia?.("(max-width: 600px)").matches;
   const createRelayIds = account.shared_permissions?.create_key_relay_ids;
   const hasScopedCreatePermissions = Array.isArray(createRelayIds);
   const permittedRelays = hasScopedCreatePermissions
@@ -67,6 +70,12 @@ export const renderKeysView = (host, account) => {
   const canCreateKeys = hasScopedCreatePermissions
     ? permittedRelays.length > 0
     : account.shared_permissions?.allow_create_keys !== false;
+  const accessibleRelayIds = account.shared_permissions?.view_key_relay_ids;
+  const accessibleRelays = account.credential_mode === "remote" && Array.isArray(accessibleRelayIds)
+    ? (account.relays || []).filter((relay) =>
+      accessibleRelayIds.includes(`relay:${relay.mac}:${relay.relay_id}`)
+    )
+    : (account.relays || []);
   const canEditKey = (key) => {
     if (account.credential_mode !== "remote") return true;
     const editRelayIds = account.shared_permissions?.edit_key_relay_ids;
@@ -86,9 +95,45 @@ export const renderKeysView = (host, account) => {
     .join("");
 
   const keys = account.temporary_keys || [];
+  const doorOptions = accessibleRelays
+    .map((relay) => ({
+      value: `${relay.mac}|${relay.relay_id}`,
+      label: relay.name || relay.door_name || `Door ${relay.relay_id}`,
+    }))
+    .sort((left, right) => left.label.localeCompare(right.label));
+  const formatTimeLeft = (endTime) => {
+    const match = String(endTime || "").match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?/);
+    if (!match) return "";
+    const [, year, month, day, hour, minute, second = "0"] = match;
+    const remaining = new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute), Number(second)) - Date.now();
+    if (remaining <= 0) return "Expired";
+    const minutes = Math.max(1, Math.ceil(remaining / 60_000));
+    if (minutes < 60) return `${minutes} minute${minutes === 1 ? "" : "s"} left`;
+    const hours = Math.ceil(minutes / 60);
+    if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} left`;
+    const days = Math.ceil(hours / 24);
+    return `${days} day${days === 1 ? "" : "s"} left`;
+  };
   const isManualTileOrder =
     host._keySort.key === "manual" ||
     (host._keyTileSortMode !== "sorted" && host._hasTileOrder("keys"));
+  const keySortOptions = [
+    { value: "description", label: "Name" },
+    { value: "key_code", label: "Code" },
+    { value: "validity", label: "Valid From" },
+    { value: "valid_until", label: "Valid Until" },
+    { value: "time_remaining", label: "Time Remaining" },
+    { value: "uses", label: "Uses" },
+    { value: "status", label: "Status" },
+    { value: "manual", label: "Manual" },
+  ];
+  const activeKeySort = isManualTileOrder ? "manual" : host._keySort.key;
+  const activeKeySortLabel =
+    keySortOptions.find((option) => option.value === activeKeySort)?.label || "Name";
+  const filterCount =
+    Number(Boolean(host._keyFilters.description)) +
+    host._keyFilters.status.length +
+    host._keyFilters.door.length;
   let filtered = keys
     .filter((key) => {
       const description = String(key.description || "").toLocaleLowerCase();
@@ -96,7 +141,11 @@ export const renderKeysView = (host, account) => {
       return (
         (!host._keyFilters.description ||
           description.includes(host._keyFilters.description.toLocaleLowerCase())) &&
-        matchesSelectedFilter(host._keyFilters.status, status)
+        matchesSelectedFilter(host._keyFilters.status, status) &&
+        (host._keyFilters.door.length === 0 ||
+          (key.doors || []).some((door) =>
+            host._keyFilters.door.includes(`${door.mac}|${door.relay}`)
+          ))
       );
     })
     .sort((left, right) => {
@@ -104,6 +153,9 @@ export const renderKeysView = (host, account) => {
       const getValue = (key) => {
         if (host._keySort.key === "manual") return String(key.description || "");
         if (host._keySort.key === "validity") return String(key.begin_time || "");
+        if (host._keySort.key === "valid_until" || host._keySort.key === "time_remaining") {
+          return String(key.end_time || "");
+        }
         if (host._keySort.key === "uses") {
           return `${Number(key.access_times || 0)}/${Number(key.allowed_times || 0)}`;
         }
@@ -138,9 +190,9 @@ export const renderKeysView = (host, account) => {
         ? `<td class="key-select-cell"><input type="checkbox" aria-label="Select ${escapeHtml(key.description)}" data-select-key="${escapeHtml(key.key_id)}" ${selected ? "checked" : ""}></td>`
         : "";
       const copied = host._copiedKeyCodes.has(String(key.key_id));
-      const code = copied
+      const code = !key.expired && copied
         ? `<span class="copied-code" role="status">${icons.check}Copied</span>`
-        : `<span class="key-code"><button class="copy-code" type="button" data-copy-key-id="${escapeHtml(key.key_id)}" data-copy-key-code="${escapeHtml(key.key_code)}" aria-label="Copy code to clipboard" title="Copy code to clipboard">${icons.copy}</button><code>${escapeHtml(key.key_code)}</code></span>`;
+        : `<span class="key-code">${key.expired ? "" : `<button class="copy-code" type="button" data-copy-key-id="${escapeHtml(key.key_id)}" data-copy-key-code="${escapeHtml(key.key_code)}" aria-label="Copy code to clipboard" title="Copy code to clipboard">${icons.copy}</button>`}<code>${escapeHtml(key.key_code)}</code></span>`;
       const menu = key.expired
         ? `<button class="danger key-menu-button" type="button" data-delete-key="${escapeHtml(key.key_id)}" aria-label="Delete temporary key" title="Delete temporary key">${icons.trash}</button>`
         : `<button class="action key-menu-button" type="button" data-key-menu="${escapeHtml(key.key_id)}" data-key-code="${escapeHtml(key.key_code)}" data-key-expired="false" data-key-has-qr="${Boolean(key.has_qr_code)}" data-key-can-edit="${canEditKey(key)}" aria-label="Key actions" aria-haspopup="menu">⋯</button>`;
@@ -165,30 +217,47 @@ export const renderKeysView = (host, account) => {
     .map((key) => {
       const selected = host._selectedKeyIds.has(String(key.key_id));
       const copied = host._copiedKeyCodes.has(String(key.key_id));
-      const code = copied
+      const code = !key.expired && copied
         ? `<span class="copied-code" role="status">${icons.check}Copied</span>`
-        : `<span class="key-code"><button class="copy-code" type="button" data-copy-key-id="${escapeHtml(key.key_id)}" data-copy-key-code="${escapeHtml(key.key_code)}" aria-label="Copy code to clipboard" title="Copy code to clipboard">${icons.copy}</button><code>${escapeHtml(key.key_code)}</code></span>`;
+        : `<code>${escapeHtml(key.key_code)}</code>`;
+      const copyButton = key.expired || copied
+        ? ""
+        : `<button class="copy-code" type="button" data-copy-key-id="${escapeHtml(key.key_id)}" data-copy-key-code="${escapeHtml(key.key_code)}" aria-label="Copy code to clipboard" title="Copy code to clipboard">${icons.copy}</button>`;
+      const viewQrButton = !key.expired && key.has_qr_code
+        ? `<button class="copy-code" type="button" data-view-key-qr="${escapeHtml(key.key_id)}" aria-label="View QR code" title="View QR code">${icons.qrCode}</button>`
+        : "";
       const menu = key.expired
         ? `<button class="danger key-menu-button" type="button" data-delete-key="${escapeHtml(key.key_id)}" aria-label="Delete temporary key" title="Delete temporary key">${icons.trash}</button>`
         : `<button class="action key-menu-button" type="button" data-key-menu="${escapeHtml(key.key_id)}" data-key-code="${escapeHtml(key.key_code)}" data-key-expired="false" data-key-has-qr="${Boolean(key.has_qr_code)}" data-key-can-edit="${canEditKey(key)}" aria-label="Key actions" aria-haspopup="menu">⋯</button>`;
+      const allowedUses = Math.max(0, Number(key.allowed_times) || 0);
+      const usedUses = Math.max(0, Number(key.access_times) || 0);
+      const usedPercent = allowedUses ? Math.min(100, (usedUses / allowedUses) * 100) : 0;
+      const availablePercent = allowedUses ? Math.max(0, Math.round(100 - usedPercent)) : 100;
+      const timeLeft = key.expired ? "" : formatTimeLeft(key.end_time);
       return `
         <article class="tile-card key-tile ${key.expired ? "key-tile-expired" : "key-tile-active"} ${selected ? "key-row-selected" : ""}" data-tile-order-id="${escapeHtml(key.key_id)}">
           <div class="tile-card-heading">
-            <div>
-              <div class="tile-title"><button type="button" class="tile-grab" data-tile-grab aria-label="Reorder ${escapeHtml(key.description)}" title="Drag to reorder">⠿</button><h3>${escapeHtml(key.description)}</h3></div>
-              <span class="key-status ${key.expired ? "expired" : "active"}">${key.expired ? "Expired" : "Active"}</span>
+            <div class="key-tile-title-group">
+              <button type="button" class="tile-grab" data-tile-grab aria-label="Reorder ${escapeHtml(key.description)}" title="Drag to reorder">⠿</button>
+              <div>
+                <h3>${escapeHtml(key.description)}</h3>
+                <span class="key-status ${key.expired ? "expired" : "active"}">${!key.expired ? '<i aria-hidden="true"></i>' : ""}${key.expired ? "Expired" : "Active"}${timeLeft ? `<em>${escapeHtml(timeLeft)}</em>` : ""}</span>
+              </div>
             </div>
             <div class="key-actions">
               ${host._selectingKeys ? `<input class="key-tile-select" type="checkbox" aria-label="Select ${escapeHtml(key.description)}" data-select-key="${escapeHtml(key.key_id)}" ${selected ? "checked" : ""}>` : ""}
               ${menu}
             </div>
           </div>
-          <dl class="tile-details">
-            <div><dt>Code</dt><dd>${code}</dd></div>
-            <div><dt>Valid from</dt><dd>${escapeHtml(formatTimestamp(key.begin_time))}</dd></div>
-            <div><dt>Valid to</dt><dd>${escapeHtml(formatTimestamp(key.end_time))}</dd></div>
-            <div><dt>Uses</dt><dd>${escapeHtml(key.access_times)}/${escapeHtml(key.allowed_times)}</dd></div>
+          <div class="key-tile-code"><div><span>Passcode</span><strong>${code}${copyButton}${viewQrButton}</strong></div></div>
+          <dl class="key-tile-validity">
+            <div><dt>${icons.calendar}<span>Valid from</span></dt><dd>${escapeHtml(formatTimestamp(key.begin_time))}</dd></div>
+            <div><dt>${icons.calendar}<span>Valid to</span></dt><dd>${escapeHtml(formatTimestamp(key.end_time))}</dd></div>
           </dl>
+          <div class="key-tile-usage">
+            <div><span>Usage: ${escapeHtml(key.access_times)} of ${escapeHtml(key.allowed_times)}</span><strong>${availablePercent}% available</strong></div>
+            <i aria-hidden="true"><b style="width:${usedPercent}%"></b></i>
+          </div>
         </article>
       `;
     })
@@ -197,26 +266,46 @@ export const renderKeysView = (host, account) => {
   return `
     <div class="card table-wrap">
       <div class="section-heading key-heading">
-        <h2>Temporary keys</h2>
+        <div class="key-heading-copy">
+          <h2>Temporary keys</h2>
+          <p class="muted">Create and manage your temporary access keys.</p>
+        </div>
         <div class="key-heading-actions">
           ${selectedCount ? `<button type="button" class="danger" data-delete-selected>Delete Selected (${selectedCount})</button>` : ""}
-          <button type="button" class="action" data-toggle-key-selection>${host._selectingKeys ? "Cancel selection" : "Select"}</button>
-          ${canCreateKeys ? '<button class="success add-key" data-create-key><span class="plus">+</span> Add Key</button>' : ""}
+          <button type="button" class="mobile-filter-toggle" data-mobile-filter-toggle="keys" aria-expanded="${Boolean(host._mobileFiltersOpen.keys)}">Filter${filterCount ? ` <span class="mobile-filter-count">${filterCount}</span>` : ""}</button>
+          <button type="button" class="key-select-action ${host._selectingKeys ? "is-selecting" : ""}" data-toggle-key-selection aria-pressed="${Boolean(host._selectingKeys)}">${icons.checklist}<span>${host._selectingKeys ? "Cancel" : "Select"}</span></button>
           <div class="view-mode-toggle" role="group" aria-label="Temporary keys layout">
             <button type="button" class="action ${host._rowViewMode === "tiles" ? "active" : ""}" data-row-view-mode="tiles" aria-pressed="${host._rowViewMode === "tiles"}">${icons.grid}<span>Tiles</span></button>
             <button type="button" class="action ${host._rowViewMode === "tiles" ? "" : "active"}" data-row-view-mode="table" aria-pressed="${host._rowViewMode !== "tiles"}">${icons.table}<span>Table</span></button>
           </div>
+          ${canCreateKeys ? `<button class="add-key" data-create-key>${icons.plus}<span>Add Key</span></button>` : ""}
         </div>
       </div>
-      <div class="activity-controls">
+      <div class="mobile-key-primary-controls">
+        <button type="button" class="mobile-filter-toggle" data-mobile-filter-toggle="keys" aria-expanded="${Boolean(host._mobileFiltersOpen.keys)}">Filter${filterCount ? ` <span class="mobile-filter-count">${filterCount}</span>` : ""}</button>
+        <button type="button" class="key-select-action ${host._selectingKeys ? "is-selecting" : ""}" data-toggle-key-selection aria-pressed="${Boolean(host._selectingKeys)}">${icons.checklist}<span>${host._selectingKeys ? "Cancel" : "Select"}</span></button>
+        ${selectedCount ? `<button type="button" class="danger" data-delete-selected>Delete (${selectedCount})</button>` : ""}
+        ${canCreateKeys ? `<button class="add-key" data-create-key>${icons.plus}<span>Add Key</span></button>` : ""}
+      </div>
+      <div class="activity-controls mobile-filter-panel key-filter-panel ${host._mobileFiltersOpen.keys ? "mobile-filter-panel-open" : ""}">
         <label>
           Description
           <input class="key-filter-input" type="search" placeholder="Filter by name" value="${escapeHtml(host._keyFilters.description)}" data-key-filter="description">
         </label>
-        ${renderMultiSelectFilter({ scope: "key", key: "status", label: "Status", allLabel: "All keys", values: ["active", "expired"], selected: host._keyFilters.status, openMenu: host._openFilterMenu })}
-        ${host._rowViewMode === "tiles" ? `<div class="tile-sort-control"><label>Sort by<select data-key-tile-sort><option value="manual" ${isManualTileOrder ? "selected" : ""}>Manual</option><option value="description" ${!isManualTileOrder && host._keySort.key === "description" ? "selected" : ""}>Name</option><option value="key_code" ${!isManualTileOrder && host._keySort.key === "key_code" ? "selected" : ""}>Code</option><option value="validity" ${!isManualTileOrder && host._keySort.key === "validity" ? "selected" : ""}>Valid from</option><option value="uses" ${!isManualTileOrder && host._keySort.key === "uses" ? "selected" : ""}>Uses</option><option value="status" ${!isManualTileOrder && host._keySort.key === "status" ? "selected" : ""}>Status</option></select></label><button type="button" class="tile-sort-direction" data-key-tile-sort-direction aria-label="Sort ${host._keySort.direction === "asc" ? "ascending" : "descending"}" title="Sort ${host._keySort.direction === "asc" ? "ascending" : "descending"}" ${isManualTileOrder ? "disabled" : ""}>${host._keySort.direction === "asc" ? "↑" : "↓"}</button></div>` : ""}
+        ${renderMultiSelectFilter({ scope: "key", key: "status", label: "Status", allLabel: "All Keys", values: ["active", "expired"], selected: host._keyFilters.status, openMenu: host._openFilterMenu })}
+        ${renderMultiSelectFilter({ scope: "key", key: "door", label: "Door", allLabel: "All Doors", values: doorOptions, selected: host._keyFilters.door, openMenu: host._openFilterMenu })}
+        <div class="tile-sort-control">
+          <details class="multi-select-filter" data-filter-menu="key-sort" ${host._openFilterMenu === "key-sort" ? "open" : ""}>
+            <summary><span>Sort By</span><span class="multi-select-filter-summary">${escapeHtml(activeKeySortLabel)}</span></summary>
+            <div class="multi-select-filter-options" role="radiogroup" aria-label="Sort temporary keys by">
+              ${keySortOptions.map((option) => `<label><input type="radio" name="key-tile-sort" data-key-tile-sort value="${option.value}" ${activeKeySort === option.value ? "checked" : ""}> ${option.label}</label>`).join("")}
+            </div>
+          </details>
+          <button type="button" class="tile-sort-direction" data-key-tile-sort-direction aria-label="Sort ${host._keySort.direction === "asc" ? "ascending" : "descending"}" title="Sort ${host._keySort.direction === "asc" ? "ascending" : "descending"}" ${isManualTileOrder ? "disabled" : ""}>${host._keySort.direction === "asc" ? "↑" : "↓"}</button>
+        </div>
+        <button type="button" class="mobile-clear-filters" data-clear-mobile-filters>Clear filters</button>
       </div>
-      ${host._rowViewMode === "tiles" ? `<div class="tile-grid key-tile-grid" data-tile-grid="keys">${keyTiles}</div>` : `<table>
+      ${showKeyTiles ? `<div class="tile-grid key-tile-grid" data-tile-grid="keys">${keyTiles}</div>` : `<table>
         <thead>
           <tr>
             ${selectionColumn}
@@ -232,39 +321,53 @@ export const renderKeysView = (host, account) => {
         <tbody data-list-order="keys">${rows}</tbody>
       </table>`}
 
-      <dialog data-key-dialog>
-        <h2>Create Temporary Key</h2>
-        <p class="muted">Choose the validity, usage limit, and permitted relays.</p>
-        <form data-key-form class="key-modal-form">
-          <label>
-            <span>Key name<sup class="required-asterisk">*</sup></span>
-            <input required name="description" maxlength="100" placeholder="e.g. Cleaner access">
-          </label>
-          <label>
-            <span>Validity period<sup class="required-asterisk">*</sup></span>
-            <input required name="begin_time" type="hidden">
-            <input required name="end_time" type="hidden">
-            <button type="button" class="date-range-field" data-validity-picker>
-              <span data-validity-label>Select date and time range</span>
-              ${icons.calendar}
-            </button>
-          </label>
-          <label>
-            <span>Allowed uses<sup class="required-asterisk">*</sup></span>
-            <input required name="counts" type="number" min="1" value="1">
-          </label>
-          <div class="key-relay-row">
-            <span>Permitted relays<sup class="required-asterisk">*</sup></span>
-            <div class="relay-options">
-              ${relayOptions || '<span class="muted">No relays are available.</span>'}
-            </div>
+      <dialog class="key-create-dialog" data-key-dialog>
+        <header class="key-create-dialog-header">
+          <span class="key-create-dialog-icon">${icons.idCard}</span>
+          <div><h2>Create Temporary Key</h2><p>Generate guest access PINs, set validity limits, and assign permitted door relays.</p></div>
+          <button type="button" class="key-create-dialog-close" data-close-key-dialog aria-label="Close">×</button>
+        </header>
+        <form data-key-form class="key-modal-form key-create-form">
+          <div class="key-create-dialog-body">
+            <label class="key-create-field">
+              <span>Key name<sup class="required-asterisk">*</sup></span>
+              <input required name="description" maxlength="100" placeholder="e.g. Cleaner access, Delivery guest">
+            </label>
+            <label class="key-create-field">
+              <span>Validity period<sup class="required-asterisk">*</sup></span>
+              <input required name="begin_time" type="hidden">
+              <input required name="end_time" type="hidden">
+              <button type="button" class="date-range-field" data-validity-picker>
+                ${icons.calendar}<span data-validity-label>Select date and time range</span>
+              </button>
+              <small>Key access ends automatically after this window expires.</small>
+            </label>
+            <label class="key-create-field key-create-counts">
+              <span>Allowed uses<sup class="required-asterisk">*</sup></span>
+              <span class="key-use-stepper">
+                <button type="button" data-key-count-decrement aria-label="Decrease allowed uses">−</button>
+                <input required name="counts" type="number" min="1" value="1">
+                <button type="button" data-key-count-increment aria-label="Increase allowed uses">${icons.plus}</button>
+              </span>
+              <small>Number of times this key can unlock a permitted door.</small>
+            </label>
+            <details class="key-optional-identifiers">
+              <summary>Optional identifiers</summary>
+              <div class="key-form-extra-fields" data-key-identifiers></div>
+            </details>
+            <section class="key-relay-row">
+              <div class="key-relay-heading"><span>Permitted relays<sup class="required-asterisk">*</sup></span><small>Select which doors this key can open.</small></div>
+              <div class="relay-options">
+                ${relayOptions || '<span class="muted">No relays are available.</span>'}
+              </div>
+            </section>
           </div>
-          <div class="modal-actions">
-            <button class="modal-action" type="submit" data-create-key-submit disabled>
-              <span data-create-key-label>Create</span><span class="key-create-spinner" data-create-key-spinner hidden aria-hidden="true"></span>
-            </button>
+          <footer class="modal-actions">
             <button class="modal-cancel" type="button" data-close-key-dialog>Cancel</button>
-          </div>
+            <button class="modal-action" type="submit" data-create-key-submit disabled>
+              <span data-create-key-label>Create key</span><span class="key-create-spinner" data-create-key-spinner hidden aria-hidden="true"></span>
+            </button>
+          </footer>
         </form>
       </dialog>
     </div>
@@ -308,11 +411,9 @@ const showCreateKeyDialog = (host) => {
   if (!dialog) return;
 
   const form = dialog.querySelector("form");
-  if (!form.querySelector("[data-key-identifiers]")) {
-    const identifiers = host.shadowRoot.ownerDocument.createElement("div");
-    identifiers.className = "key-form-extra-fields";
-    identifiers.dataset.keyIdentifiers = "";
-    identifiers.style.display = "contents";
+  const identifiers = form.querySelector("[data-key-identifiers]");
+  if (identifiers && !identifiers.dataset.initialized) {
+    identifiers.dataset.initialized = "true";
     identifiers.innerHTML = `
       <label><span>Access ID</span><input name="id_number" maxlength="100" autocomplete="off"></label>
       <label>
@@ -330,10 +431,9 @@ const showCreateKeyDialog = (host) => {
         </span>
       </label>
     `;
-    form.querySelector(".key-relay-row").before(identifiers);
   }
 
-  applyKeyFormRowLayout(form);
+  if (!form.classList.contains("key-create-form")) applyKeyFormRowLayout(form);
   host._keyDialogOpen = true;
   dialog.showModal();
   updateCreateKeyState(host);
@@ -369,55 +469,56 @@ export const showEditKeyDialog = (host, keyId) => {
       : "Select date and time range";
 
   const dialog = host.shadowRoot.ownerDocument.createElement("dialog");
+  dialog.className = "key-create-dialog key-edit-dialog";
   dialog.innerHTML = `
-    <h2>Edit Temporary Key</h2>
-    <p class="muted">Update optional access identifiers.</p>
-    <form>
+    <header class="key-create-dialog-header">
+      <span class="key-create-dialog-icon">${icons.idCard}</span>
+      <div><h2>Edit Temporary Key</h2><p>Update optional access identifiers for this temporary key.</p></div>
+      <button type="button" class="key-create-dialog-close" data-edit-cancel aria-label="Close">×</button>
+    </header>
+    <form class="key-modal-form key-create-form key-edit-form">
       <input required name="begin_time" type="hidden" value="${escapeHtml(beginTime)}">
       <input required name="end_time" type="hidden" value="${escapeHtml(endTime)}">
       <input name="id_number" type="hidden" value="${escapeHtml(key.id_number || "")}">
-      <div class="readonly-key-fields">
-        <div class="readonly-key-field"><span>Key name</span><strong>${escapeHtml(key.description)}</strong></div>
-        <div class="readonly-key-field"><span>Validity period</span><strong>${escapeHtml(displayPeriod)}</strong></div>
-        <div class="readonly-key-field"><span>Allowed uses</span><strong>${escapeHtml(key.allowed_times || 1)}</strong></div>
-        <div class="readonly-key-field"><span>Access ID</span><strong>${escapeHtml(key.id_number || "—")}</strong></div>
+      <div class="key-create-dialog-body">
+        <div class="key-edit-readonly-fields">
+          <div class="key-readonly-field"><span>Key name</span><strong>${escapeHtml(key.description)}</strong></div>
+          <div class="key-readonly-field"><span>Validity period</span><strong>${escapeHtml(displayPeriod)}</strong></div>
+          <div class="key-readonly-field"><span>Allowed uses</span><strong>${escapeHtml(key.allowed_times || 1)}</strong></div>
+          <div class="key-readonly-field"><span>Access ID</span><strong>${escapeHtml(key.id_number || "—")}</strong></div>
+        </div>
+        <details class="key-optional-identifiers">
+          <summary>Optional identifiers</summary>
+          <div class="key-form-extra-fields">
+            <label>
+              <span>Vehicle registration</span>
+              <span class="field-input-wrap">
+                <input name="license_plate" maxlength="16" pattern="${LICENSE_PLATE_PATTERN}" title="${LICENSE_PLATE_TITLE}" autocomplete="off" value="${escapeHtml(key.license_plate || "")}">
+                <span class="field-error" data-error-for="license_plate" hidden>${LICENSE_PLATE_ERROR_MSG}</span>
+              </span>
+            </label>
+            <label>
+              <span>UHF card</span>
+              <span class="field-input-wrap">
+                <input name="uhf_card" maxlength="24" pattern="${UHF_CARD_PATTERN}" title="${UHF_CARD_TITLE}" autocomplete="off" value="${escapeHtml(key.uhf_card || "")}">
+                <span class="field-error" data-error-for="uhf_card" hidden>${UHF_CARD_ERROR_MSG}</span>
+              </span>
+            </label>
+          </div>
+        </details>
+        <section class="key-relay-row">
+          <div class="key-relay-heading"><span>Permitted relays</span><small>Relays assigned when this key was created.</small></div>
+          <div class="relay-options">${relays || '<span class="muted">No relays are available.</span>'}</div>
+        </section>
       </div>
-      <div class="key-form-extra-fields">
-        <label>
-          <span>Vehicle registration</span>
-          <span class="field-input-wrap">
-            <input name="license_plate" maxlength="16" pattern="${LICENSE_PLATE_PATTERN}" title="${LICENSE_PLATE_TITLE}" autocomplete="off" value="${escapeHtml(key.license_plate || "")}">
-            <span class="field-error" data-error-for="license_plate" hidden>${LICENSE_PLATE_ERROR_MSG}</span>
-          </span>
-        </label>
-        <label>
-          <span>UHF card</span>
-          <span class="field-input-wrap">
-            <input name="uhf_card" maxlength="24" pattern="${UHF_CARD_PATTERN}" title="${UHF_CARD_TITLE}" autocomplete="off" value="${escapeHtml(key.uhf_card || "")}">
-            <span class="field-error" data-error-for="uhf_card" hidden>${UHF_CARD_ERROR_MSG}</span>
-          </span>
-        </label>
-      </div>
-      <div class="key-relay-row">
-        <span>Permitted relays</span>
-        <div class="relay-options">${relays || '<span class="muted">No relays are available.</span>'}</div>
-      </div>
-      <div class="modal-actions">
+      <footer class="modal-actions">
         <button class="modal-cancel" type="button" data-edit-cancel>Cancel</button>
-        <button class="modal-action" type="submit">Save</button>
-      </div>
+        <button class="modal-action" type="submit">Save changes</button>
+      </footer>
     </form>
   `;
 
   const form = dialog.querySelector("form");
-  form.className = "key-modal-form";
-  const readOnlyFields = dialog.querySelector(".readonly-key-fields");
-  if (readOnlyFields) readOnlyFields.style.display = "contents";
-
-  const identifierFields = dialog.querySelector(".key-form-extra-fields");
-  if (identifierFields) identifierFields.style.display = "contents";
-
-  applyKeyFormRowLayout(form);
   const saveButton = form.querySelector('[type="submit"]');
   saveButton.dataset.editKeySubmit = "";
 
@@ -431,7 +532,9 @@ export const showEditKeyDialog = (host, keyId) => {
       !UHF_CARD_REGEX.test(uhfCard);
   };
 
-  dialog.querySelector("[data-edit-cancel]").addEventListener("click", () => dialog.close());
+  dialog.querySelectorAll("[data-edit-cancel]").forEach((button) =>
+    button.addEventListener("click", () => dialog.close())
+  );
   form.addEventListener("input", (event) => {
     normaliseUhfCard(event.target);
     updateEditKeyState();
@@ -717,6 +820,10 @@ export const bindKeysEvents = (host) => {
     })
   );
 
+  host.shadowRoot.querySelectorAll("[data-view-key-qr]").forEach((button) =>
+    button.addEventListener("click", () => showTemporaryKeyQrDialog(host, button.dataset.viewKeyQr))
+  );
+
   // Filters
   host.shadowRoot.querySelectorAll("[data-key-filter]").forEach((input) => {
     const update = () => {
@@ -739,6 +846,21 @@ export const bindKeysEvents = (host) => {
 
   bindMultiSelectFilters(host, "key", host._keyFilters, () => host._render());
 
+  host.shadowRoot
+    .querySelectorAll("[data-mobile-filter-toggle]")
+    .forEach((button) => button.addEventListener("click", () => {
+      host._mobileFiltersOpen.keys = !host._mobileFiltersOpen.keys;
+      host._render();
+    }));
+
+  host.shadowRoot
+    .querySelector("[data-clear-mobile-filters]")
+    ?.addEventListener("click", () => {
+      host._keyFilters = { description: "", status: [], door: [] };
+      host._openFilterMenu = "";
+      host._render();
+    });
+
   // Sort
   host.shadowRoot.querySelectorAll("[data-key-sort]").forEach((button) =>
     button.addEventListener("click", () => {
@@ -755,11 +877,18 @@ export const bindKeysEvents = (host) => {
     })
   );
 
-  host.shadowRoot.querySelector("[data-key-tile-sort]")?.addEventListener("change", (event) => {
-    host._keySort = { key: event.target.value, direction: "asc" };
-    host._keyTileSortMode = event.target.value === "manual" ? "manual" : "sorted";
-    host._render();
-  });
+  host.shadowRoot.querySelectorAll("[data-key-tile-sort]").forEach((input) =>
+    input.addEventListener("change", (event) => {
+      if (!event.target.checked) return;
+      host._keySort = {
+        key: event.target.value,
+        direction: event.target.value === "time_remaining" ? "desc" : "asc",
+      };
+      host._keyTileSortMode = event.target.value === "manual" ? "manual" : "sorted";
+      host._openFilterMenu = "";
+      host._render();
+    })
+  );
 
   host.shadowRoot.querySelector("[data-key-tile-sort-direction]")?.addEventListener("click", () => {
     host._keySort = {
@@ -814,8 +943,10 @@ export const bindKeysEvents = (host) => {
 
   // Create Key Dialog
   host.shadowRoot
-    .querySelector("[data-create-key]")
-    ?.addEventListener("click", () => showCreateKeyDialog(host));
+    .querySelectorAll("[data-create-key]")
+    .forEach((button) =>
+      button.addEventListener("click", () => showCreateKeyDialog(host))
+    );
 
   host.shadowRoot
     .querySelectorAll("[data-close-key-dialog]")
@@ -842,6 +973,22 @@ export const bindKeysEvents = (host) => {
     updateCreateKeyState(host);
   });
   keyForm?.addEventListener("change", () => updateCreateKeyState(host));
+
+  host.shadowRoot.querySelector("[data-key-count-decrement]")?.addEventListener("click", () => {
+    const input = host.shadowRoot.querySelector('[data-key-form] [name="counts"]');
+    if (!(input instanceof HTMLInputElement)) return;
+    input.stepDown();
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  host.shadowRoot.querySelector("[data-key-count-increment]")?.addEventListener("click", () => {
+    const input = host.shadowRoot.querySelector('[data-key-form] [name="counts"]');
+    if (!(input instanceof HTMLInputElement)) return;
+    input.stepUp();
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  host.shadowRoot.querySelectorAll("[data-key-count-decrement], [data-key-count-increment]").forEach((button) =>
+    button.addEventListener("mousedown", (event) => event.preventDefault())
+  );
 
   // Date range picker trigger
   host.shadowRoot

@@ -3,7 +3,7 @@
  */
 
 import { findInComposedTree, escapeHtml } from "../utils/dom.js";
-import { icons } from "../utils/icons.js?v=20260830-camera-modal-unlock";
+import { icons } from "../utils/icons.js?v=20260926-device-preview-refresh";
 import { orientationTransform } from "../utils/orientation.js?v=20260820-camera-orientation";
 
 /**
@@ -73,7 +73,7 @@ export const installCameraRelayActions = (host, relays, orientation = "none", at
     button.setAttribute("type", "button");
     button.removeAttribute("disabled");
     button.setAttribute("aria-label", accessibleName);
-    button.innerHTML = `${icons.doorOpen}<span>${escapeHtml(name)}</span>`;
+    button.innerHTML = `${icons.unlock}<span>${escapeHtml(name)}</span>`;
     button.style.cssText +=
       ";min-height:36px;padding:8px 10px;border:0;border-radius:8px;color:#fff;background:linear-gradient(135deg,#ff3f3f,#ff6a4f);justify-content:center;text-align:center;";
 

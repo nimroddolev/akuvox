@@ -8,28 +8,45 @@ import { PANEL_TAG, TAB_HASHES, TAB_HASH_BY_ID, TABS } from "./utils/constants.j
 import { escapeHtml } from "./utils/dom.js";
 import { copyText } from "./utils/clipboard.js";
 import { settingsRenderSignature } from "./utils/settings-signature.js";
-import { getPanelStyles } from "./styles/index.js?v=20260924-activity-reverted";
+import { getPanelStyles } from "./styles/index.js?v=20260928-connected-node-row-margins-v32";
 import { showNotice, confirmModal, callWsWithBlocker } from "./components/dialogs.js";
-import { installCameraRelayActions } from "./components/camera-actions.js?v=20260830-camera-modal-unlock";
+import { installCameraRelayActions } from "./components/camera-actions.js?v=20260926-device-preview-refresh";
 import { closeKeyActionsMenu } from "./components/key-menu.js";
 
-import { renderDevicesView, bindDevicesEvents } from "./views/devices-view.js?v=20260924-view-mode-toggle";
+import { renderDevicesView, bindDevicesEvents } from "./views/devices-view.js?v=20260928-camera-preview-decoded-swap";
 import {
   renderActivityView,
   bindActivityEvents,
   visibleActivityEvents,
-} from "./views/activity-view.js?v=20260924-activity-age-label";
-import { renderCallsView, bindCallsEvents } from "./views/calls-view.js?v=20260922-call-status-badges";
+} from "./views/activity-view.js?v=20260926-mobile-filter-panel";
+import { renderCallsView, bindCallsEvents } from "./views/calls-view.js?v=20260926-mobile-filter-panel";
 import {
   renderKeysView,
   bindKeysEvents,
   deleteSelectedKeys,
-} from "./views/keys-view.js?v=20260924-view-mode-toggle";
-import { renderSettingsView, bindSettingsEvents, updateActivityStorageProgress, updateRemoteShareConnectionStatus } from "./views/settings-view.js?v=20260924-live-pairing-url";
+} from "./views/keys-view.js?v=20260928-key-filter-controls-row";
+import { renderSettingsView, bindSettingsEvents, updateActivityStorageProgress, updateRemoteShareConnectionStatus } from "./views/settings-view.js?v=20260928-mobile-share-matrix";
 import { renderHelpView } from "./views/help-view.js";
 
 const ROW_VIEW_MODE_STORAGE_KEY = "akuvox-panel-row-view-mode";
 const TILE_ORDER_STORAGE_PREFIX = "akuvox-panel-tile-order";
+const ACTIVE_ACCOUNT_STORAGE_KEY = "akuvox-panel-active-account";
+
+const isValidRemoteShareLink = (value) => {
+  try {
+    const pairingLink = new URL(value.trim());
+    if (pairingLink.protocol !== "akuvox-share:" || pairingLink.hostname !== "v1") return false;
+    const sourceUrl = new URL(pairingLink.searchParams.get("url") || "");
+    return (
+      sourceUrl.protocol === "https:" &&
+      Boolean(sourceUrl.hostname) &&
+      Boolean(pairingLink.searchParams.get("id")) &&
+      Boolean(pairingLink.searchParams.get("secret"))
+    );
+  } catch (_) {
+    return false;
+  }
+};
 
 class AkuvoxSmartPlusPanel extends HTMLElement {
   constructor() {
@@ -38,6 +55,11 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
 
     this._accounts = [];
     this._activeAccount = "";
+    try {
+      this._savedActiveAccount = localStorage.getItem(ACTIVE_ACCOUNT_STORAGE_KEY) || "";
+    } catch (_) {
+      this._savedActiveAccount = "";
+    }
     this._activeTab = "overview";
     this._settings = null;
     this._settingsEntryId = "";
@@ -50,6 +72,7 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
     this._panelDataSignature = null;
     this._settingsSignature = null;
     this._renderDeferredForNativeSelect = false;
+    this._renderDeferredForKeyFilter = false;
 
     this._activityFilters = { Location: [], CaptureType: [], Initiator: [] };
     this._activitySort = { key: "CaptureTime", direction: "desc" };
@@ -61,9 +84,10 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
     this._callFilters = { callerName: [], calleeName: [], status: [] };
     this._callSort = { key: "startTime", direction: "desc" };
 
-    this._keyFilters = { description: "", status: [] };
+    this._keyFilters = { description: "", status: [], door: [] };
     this._keySort = { key: "description", direction: "asc" };
     this._keyTileSortMode = null;
+    this._mobileFiltersOpen = { activity: false, calls: false, keys: false };
     // A presentation preference shared by the Devices and Temporary keys tabs.
     // Local storage is best-effort because it can be unavailable in restricted
     // browser contexts.
@@ -85,8 +109,14 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
 
     this._onHashChange = () => {
       const tab = TAB_HASHES[decodeURIComponent(window.location.hash.slice(1))];
-      if (tab && tab !== this._activeTab) {
-        this._activeTab = tab;
+      if (!tab) return;
+      const helpOnly = this._requiresHelpOnly(this._account());
+      const nextTab = helpOnly ? "help" : tab;
+      if (helpOnly && window.location.hash !== "#HelpInfo") {
+        window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}#HelpInfo`);
+      }
+      if (nextTab !== this._activeTab) {
+        this._activeTab = nextTab;
         this._render();
       }
     };
@@ -152,16 +182,25 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
       this._render();
     }, { capture: true });
 
-    // Native select menus are owned by the browser and are dismissed when the
-    // underlying element is replaced. Panel updates can arrive while one is
-    // open, so wait until focus leaves it before applying a deferred redraw.
+    // Native select menus and key-filter typing are interrupted when their
+    // underlying elements are replaced. Wait until focus leaves either control
+    // before applying a deferred background redraw.
     this.shadowRoot.addEventListener("focusout", (event) => {
-      if (!(event.target instanceof HTMLSelectElement)) return;
+      const target = event.target;
+      const isNativeSelect = target instanceof HTMLSelectElement;
+      const isKeyFilter =
+        target instanceof HTMLInputElement && target.matches("[data-key-filter]");
+      if (!isNativeSelect && !isKeyFilter) return;
       window.clearTimeout(this._selectFocusReleaseTimer);
       this._selectFocusReleaseTimer = window.setTimeout(() => {
         this._selectFocusReleaseTimer = undefined;
-        if (!this._renderDeferredForNativeSelect || this._hasFocusedNativeSelect()) return;
+        if (
+          (!this._renderDeferredForNativeSelect && !this._renderDeferredForKeyFilter) ||
+          this._hasFocusedNativeSelect() ||
+          this._hasFocusedKeyFilter()
+        ) return;
         this._renderDeferredForNativeSelect = false;
+        this._renderDeferredForKeyFilter = false;
         this._requestLoad({ forceRender: true });
       }, 0);
     }, { capture: true });
@@ -187,8 +226,10 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
 
   disconnectedCallback() {
     window.clearInterval(this._timer);
+    window.clearInterval(this._devicePreviewRefreshTimer);
     closeKeyActionsMenu(this);
     this._timer = undefined;
+    this._devicePreviewRefreshTimer = undefined;
     this._multiFilterOutsideAbort?.abort();
     this._copiedKeyCodes.forEach((timeout) => window.clearTimeout(timeout));
     this._copiedKeyCodes.clear();
@@ -254,6 +295,10 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
       this._renderDeferredForNativeSelect = true;
       return true;
     }
+    if (this._hasFocusedKeyFilter()) {
+      this._renderDeferredForKeyFilter = true;
+      return true;
+    }
     return (
       (this._settingsDirty && this._activeTab === "settings") ||
       this._settingsSaving ||
@@ -265,6 +310,13 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
 
   _hasFocusedNativeSelect() {
     return this.shadowRoot.activeElement instanceof HTMLSelectElement;
+  }
+
+  _hasFocusedKeyFilter() {
+    return (
+      this.shadowRoot.activeElement instanceof HTMLInputElement &&
+      this.shadowRoot.activeElement.matches("[data-key-filter]")
+    );
   }
 
   async _load({ forceRender = true } = {}) {
@@ -286,7 +338,12 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
         const hadError = Boolean(this._error);
         this._error = undefined;
         if (!this._accounts.some((account) => account.entry_id === this._activeAccount)) {
-          this._activeAccount = this._accounts[0]?.entry_id || "";
+          const savedAccountIsAvailable = this._accounts.some(
+            (account) => account.entry_id === this._savedActiveAccount
+          );
+          this._activeAccount = savedAccountIsAvailable
+            ? this._savedActiveAccount
+            : this._accounts[0]?.entry_id || "";
           this._settingsDirty = false;
         }
         const activeAccountChanged = previousActiveAccount !== this._activeAccount;
@@ -613,36 +670,43 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
   }
 
   _content(account) {
-    if (this._activeTab === "help") return renderHelpView();
-
     if (!account) {
       return `
-        <div class="card auth-notice">
+        <div class="card auth-notice help-attention-notice">
           <p>No active Akuvox account is available.</p>
           <a class="action" href="/config/integrations/dashboard/add?domain=akuvox">Add Akuvox account</a>
         </div>
       `;
     }
 
-    if (account.requires_reauthentication) {
-      return `
-        <div class="card auth-notice">
-          <h2>Re-authentication required</h2>
-          <p>SmartPlus no longer accepts this account’s session. Re-authenticate the integration to restore access to your cameras, doors, and temporary keys.</p>
-          <a class="action" href="/config/integrations/integration/akuvox">Re-authenticate Akuvox SmartPlus</a>
-        </div>
-      `;
-    }
+    const attentionNotice = this._attentionNotice(account);
+    if (attentionNotice) return `${attentionNotice}${renderHelpView()}`;
 
-    if (account.credential_source_problem) {
-      return this._remoteCredentialSourceNotice(account);
-    }
+    if (this._activeTab === "help") return renderHelpView();
 
     if (this._activeTab === "activity") return renderActivityView(this, account);
     if (this._activeTab === "calls") return renderCallsView(this, account);
     if (this._activeTab === "keys") return renderKeysView(this, account);
     if (this._activeTab === "settings") return renderSettingsView(this);
     return renderDevicesView(this, account);
+  }
+
+  _requiresHelpOnly(account) {
+    return Boolean(account?.requires_reauthentication || account?.credential_source_problem);
+  }
+
+  _attentionNotice(account) {
+    if (account.requires_reauthentication) {
+      return `
+        <div class="card auth-notice help-attention-notice">
+          <h2>Re-authentication Required</h2>
+          <p>SmartPlus no longer accepts this account’s session.<br>Re-authenticate the integration to restore access to your cameras, doors, and temporary keys.</p>
+          <a class="action" href="/config/integrations/integration/akuvox">Re-authenticate Akuvox SmartPlus</a>
+        </div>
+      `;
+    }
+    if (account.credential_source_problem) return this._remoteCredentialSourceNotice(account);
+    return "";
   }
 
   _remoteCredentialSourceNotice(account) {
@@ -654,7 +718,7 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
     const details = {
       unreachable: {
         title: "Cannot reach the credential source",
-        text: `This Home Assistant cannot reach the host instance that supplies this account’s SmartPlus credentials: ${sourceLink}<br />Cached credentials may continue to work until they expire.`,
+        text: `This Home Assistant cannot reach the host instance that supplies this account’s SmartPlus credentials:<br>${sourceLink}<br>Cached credentials may continue to work until they expire.`,
       },
       revoked: {
         title: "Credential sharing was revoked",
@@ -669,7 +733,7 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
       text: "The credentials supplied by the host Home Assistant could not be used. Refresh them or re-authenticate on the host.",
     };
     return `
-      <div class="card auth-notice">
+      <div class="card auth-notice help-attention-notice">
         <h2>${details.title}</h2>
         <p>${details.text}</p>
         <button class="action" type="button" data-refresh-shared-credentials>Refresh shared credentials</button>
@@ -683,21 +747,33 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
     return new Promise((resolve) => {
       const dialog = this.shadowRoot.ownerDocument.createElement("dialog");
       dialog.innerHTML = `<h2>Apply New Share Link</h2>
-        <p>Paste the replacement pairing link from the host Home Assistant.</p>
+        <p>Paste the replacement pairing link from the host Home Assistant:</p>
         <form method="dialog">
-          <label>Share link<input data-share-link required autocomplete="off"></label>
-          <p class="form-error" data-share-link-error hidden></p>
-          <div class="modal-actions"><button class="modal-cancel" value="cancel">Cancel</button><button class="modal-action" value="apply">Apply</button></div>
+          <span class="share-link-input-wrap"><input data-share-link required autocomplete="off" aria-label="Share link"><span class="share-link-validation" data-share-link-validation hidden></span></span>
+          <div class="modal-actions"><button class="modal-cancel" type="button" data-cancel-share-link>Cancel</button><button class="modal-action" value="apply" disabled>Apply</button></div>
         </form>`;
       const form = dialog.querySelector("form");
       const input = dialog.querySelector("[data-share-link]");
+      const applyButton = dialog.querySelector('[value="apply"]');
+      const validationIndicator = dialog.querySelector("[data-share-link-validation]");
+      dialog.querySelector("[data-cancel-share-link]").addEventListener("click", () => dialog.close("cancel"));
+      const updateLinkState = () => {
+        const hasValue = Boolean(input.value.trim());
+        const isValid = isValidRemoteShareLink(input.value);
+        applyButton.disabled = !isValid;
+        validationIndicator.hidden = !hasValue;
+        validationIndicator.classList.toggle("is-valid", isValid);
+        validationIndicator.textContent = isValid ? "✓" : "×";
+        validationIndicator.setAttribute("aria-label", isValid ? "Valid share link" : "Invalid share link");
+        input.setAttribute("aria-invalid", String(hasValue && !isValid));
+      };
+      input.addEventListener("input", updateLinkState);
+      updateLinkState();
       form.addEventListener("submit", (event) => {
         if (event.submitter?.value !== "apply") return;
-        if (input.value.trim()) return;
+        if (isValidRemoteShareLink(input.value)) return;
         event.preventDefault();
-        const error = dialog.querySelector("[data-share-link-error]");
-        error.textContent = "Paste a share link.";
-        error.hidden = false;
+        updateLinkState();
       });
       dialog.addEventListener("close", () => {
         const value = dialog.returnValue === "apply" ? input.value.trim() : "";
@@ -726,7 +802,7 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
       await this._load();
       showNotice(
         this,
-        "The new share link was saved. Cached devices and credentials remain available until the new source synchronizes.",
+        "The new share link was saved and the latest shared account data is ready.",
         "New Share Link Applied"
       );
     } catch (error) {
@@ -822,14 +898,24 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
       return;
     }
 
+    // Match Home Assistant's active theme rather than relying on the browser's
+    // system preference, which may differ when HA has a manually selected theme.
+    this.toggleAttribute("dark", Boolean(this._hass?.themes?.darkMode));
+
     const scrollPosition = this._captureScrollPosition();
     window.clearInterval(this._activityUpdatedTimer);
     this._activityUpdatedTimer = undefined;
     this._tabResizeObserver?.disconnect();
 
     const account = this._account();
-    const requiresReauthentication = Boolean(account?.requires_reauthentication);
-    const availableTabs = requiresReauthentication
+    const requiresAttention = this._requiresHelpOnly(account);
+    if (requiresAttention && this._activeTab !== "help") {
+      this._activeTab = "help";
+      if (window.location.hash !== "#HelpInfo") {
+        window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}#HelpInfo`);
+      }
+    }
+    const availableTabs = requiresAttention
       ? TABS.filter(([id]) => id === "help")
       : TABS;
     const tabsMarkup = availableTabs.map(
@@ -839,19 +925,13 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
 
     this.shadowRoot.innerHTML = `
       ${getPanelStyles()}
-      <main class="${requiresReauthentication ? "reauthentication-required" : ""}">
+      <main>
         <header>
           <button class="mobile-menu-toggle" type="button" data-mobile-menu aria-label="Open Home Assistant menu">
             <span></span><span></span><span></span>
           </button>
-          <div class="logo-text-container">
-            <div class="logo-text">
-              <div class="logo-title-row">
-                <img class="brand-mark" src="/api/akuvox_panel/akuvox.svg" alt="Akuvox SmartPlus">
-                <h1>Akuvox SmartPlus</h1>
-              </div>
-              <p>Access your SmartPlus account from Home Assistant</p>
-            </div>
+          <div class="panel-page-title">
+            <h1>Akuvox SmartPlus</h1>
           </div>
           ${
             this._accounts.length > 1
@@ -877,7 +957,7 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
                 <button class="tab-scroll-arrow" type="button" data-tab-scroll="right" aria-label="Show more tabs" hidden>›</button>
               </div>`
         }
-        <section class="${requiresReauthentication ? "auth-required-content" : ""}">
+        <section>
           ${this._error && this._activeTab !== "help" ? `<p class="notice">${this._error}</p>` : this._content(account)}
         </section>
       </main>
@@ -899,6 +979,12 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
     // Account selector event listener
     this.shadowRoot.querySelector("[data-account]")?.addEventListener("change", async (event) => {
       this._activeAccount = event.target.value;
+      this._savedActiveAccount = this._activeAccount;
+      try {
+        localStorage.setItem(ACTIVE_ACCOUNT_STORAGE_KEY, this._activeAccount);
+      } catch (_) {
+        // Persisting the preference is best-effort in restricted browser contexts.
+      }
       this._keyTileSortMode = null;
       this._settings = null;
       this._settingsEntryId = "";

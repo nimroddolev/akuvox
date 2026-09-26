@@ -7,7 +7,7 @@ import {
   bindMultiSelectFilters,
   matchesSelectedFilter,
   renderMultiSelectFilter,
-} from "../utils/multi-select-filter.js?v=20260827-multi-table-filters";
+} from "../utils/multi-select-filter.js?v=20260925-option-labels";
 import { tableTimestampFormatter } from "../utils/formatters.js?v=20260820-table-timestamps";
 import { icons } from "../utils/icons.js";
 import { showActivityImageDialog } from "../components/image-dialog.js?v=20260909-instant-open";
@@ -190,6 +190,18 @@ const renderThumbnail = (host, item) => {
 export const renderActivityView = (host, account) => {
   const activity = account.activity || [];
   const { filtered, visible } = visibleActivityEvents(host, activity);
+  const sortOptions = [
+    { value: "CaptureTime", label: "Time" },
+    { value: "Location", label: "Door" },
+    { value: "CaptureType", label: "Event" },
+    { value: "Initiator", label: "Initiator" },
+  ];
+  const activeSortLabel =
+    sortOptions.find((option) => option.value === host._activitySort.key)?.label || "Time";
+  const filterCount = Object.values(host._activityFilters).reduce(
+    (count, values) => count + values.length,
+    0
+  );
 
   const heading = (label, key) =>
     `<button class="sort-button ${host._activitySort.key === key ? "active" : ""}" data-activity-sort="${key}" data-direction="${host._activitySort.direction === "asc" ? "↑" : "↓"}">${label}</button>`;
@@ -205,10 +217,23 @@ export const renderActivityView = (host, account) => {
       </div>
       ${activityStorageWarning(host._settings)}
       <p class="muted">Recent SmartPlus activity is retained across Home Assistant restarts and refreshed by polling.</p>
-      <div class="activity-controls">
-        ${renderMultiSelectFilter({ scope: "activity", key: "Location", label: "Door", allLabel: "All doors", values: filterValues(activity, "Location"), selected: host._activityFilters.Location, openMenu: host._openFilterMenu })}
-        ${renderMultiSelectFilter({ scope: "activity", key: "CaptureType", label: "Event", allLabel: "All events", values: filterValues(activity, "CaptureType"), selected: host._activityFilters.CaptureType, openMenu: host._openFilterMenu })}
-        ${renderMultiSelectFilter({ scope: "activity", key: "Initiator", label: "Initiator", allLabel: "All initiators", values: filterValues(activity, "Initiator"), selected: host._activityFilters.Initiator, openMenu: host._openFilterMenu })}
+      <div class="mobile-filter-toolbar">
+        <button type="button" class="mobile-filter-toggle" data-mobile-filter-toggle="activity" aria-expanded="${Boolean(host._mobileFiltersOpen.activity)}">Filter${filterCount ? ` <span class="mobile-filter-count">${filterCount}</span>` : ""}</button>
+      </div>
+      <div class="activity-controls mobile-filter-panel ${host._mobileFiltersOpen.activity ? "mobile-filter-panel-open" : ""}">
+        ${renderMultiSelectFilter({ scope: "activity", key: "Location", label: "Door", allLabel: "All Doors", values: filterValues(activity, "Location"), selected: host._activityFilters.Location, openMenu: host._openFilterMenu })}
+        ${renderMultiSelectFilter({ scope: "activity", key: "CaptureType", label: "Event", allLabel: "All Events", values: filterValues(activity, "CaptureType"), selected: host._activityFilters.CaptureType, openMenu: host._openFilterMenu })}
+        ${renderMultiSelectFilter({ scope: "activity", key: "Initiator", label: "Initiator", allLabel: "All Initiators", values: filterValues(activity, "Initiator"), selected: host._activityFilters.Initiator, openMenu: host._openFilterMenu })}
+        <div class="tile-sort-control">
+          <details class="multi-select-filter" data-filter-menu="activity-sort" ${host._openFilterMenu === "activity-sort" ? "open" : ""}>
+            <summary><span>Sort By</span><span class="multi-select-filter-summary">${escapeHtml(activeSortLabel)}</span></summary>
+            <div class="multi-select-filter-options" role="radiogroup" aria-label="Sort latest activity by">
+              ${sortOptions.map((option) => `<label><input type="radio" name="activity-sort" data-activity-sort-menu value="${option.value}" ${host._activitySort.key === option.value ? "checked" : ""}> ${option.label}</label>`).join("")}
+            </div>
+          </details>
+          <button type="button" class="tile-sort-direction" data-activity-sort-direction aria-label="Sort ${host._activitySort.direction === "asc" ? "ascending" : "descending"}" title="Sort ${host._activitySort.direction === "asc" ? "ascending" : "descending"}">${host._activitySort.direction === "asc" ? "↑" : "↓"}</button>
+        </div>
+        <button type="button" class="mobile-clear-filters" data-clear-mobile-filters>Clear filters</button>
       </div>
       <table>
         <thead>
@@ -282,6 +307,22 @@ export const bindActivityEvents = (host) => {
   });
 
   host.shadowRoot
+    .querySelector("[data-mobile-filter-toggle]")
+    ?.addEventListener("click", () => {
+      host._mobileFiltersOpen.activity = !host._mobileFiltersOpen.activity;
+      host._render();
+    });
+
+  host.shadowRoot
+    .querySelector("[data-clear-mobile-filters]")
+    ?.addEventListener("click", () => {
+      host._activityFilters = { Location: [], CaptureType: [], Initiator: [] };
+      host._activityVisibleCount = ACTIVITY_INITIAL_PAGE_SIZE;
+      host._openFilterMenu = "";
+      host._render();
+    });
+
+  host.shadowRoot
     .querySelectorAll("[data-activity-sort]")
     .forEach((button) =>
       button.addEventListener("click", () => {
@@ -298,6 +339,32 @@ export const bindActivityEvents = (host) => {
         host._render();
       })
     );
+
+  host.shadowRoot
+    .querySelectorAll("[data-activity-sort-menu]")
+    .forEach((input) =>
+      input.addEventListener("change", (event) => {
+        if (!event.target.checked) return;
+        host._activitySort = {
+          key: event.target.value,
+          direction: event.target.value === "CaptureTime" ? "desc" : "asc",
+        };
+        host._activityVisibleCount = ACTIVITY_INITIAL_PAGE_SIZE;
+        host._openFilterMenu = "";
+        host._render();
+      })
+    );
+
+  host.shadowRoot
+    .querySelector("[data-activity-sort-direction]")
+    ?.addEventListener("click", () => {
+      host._activitySort = {
+        ...host._activitySort,
+        direction: host._activitySort.direction === "asc" ? "desc" : "asc",
+      };
+      host._activityVisibleCount = ACTIVITY_INITIAL_PAGE_SIZE;
+      host._render();
+    });
 
   const loadMore = host.shadowRoot.querySelector("[data-activity-load-more]");
   if (loadMore && typeof IntersectionObserver !== "undefined") {

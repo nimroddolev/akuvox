@@ -423,6 +423,9 @@ class TestRemoteShareLinkReplacementE2E(unittest.IsolatedAsyncioTestCase):
         }
 
         with patch(
+            "custom_components.akuvox.sharing.async_fetch_shared_snapshot",
+            new=AsyncMock(return_value=({"receiver_secret": "receiver-secret"}, None)),
+        ) as fetch_snapshot, patch(
             "custom_components.akuvox.sharing.async_store_remote_share_secret",
             new=AsyncMock(),
         ) as store_secret, patch(
@@ -434,7 +437,10 @@ class TestRemoteShareLinkReplacementE2E(unittest.IsolatedAsyncioTestCase):
                 "akuvox-share://v1?url=https%3A%2F%2Fnew.example.com&id=new-share&secret=new-secret",
             )
 
-        store_secret.assert_awaited_once_with(hass, "entry-id", "new-secret")
+        fetch_snapshot.assert_awaited_once_with(
+            hass, "https://new.example.com", "new-share", "new-secret"
+        )
+        store_secret.assert_awaited_once_with(hass, "entry-id", "receiver-secret")
         clear_issue.assert_called_once_with(hass, entry, None)
         saved_data = hass.config_entries.async_update_entry.call_args.kwargs["data"]
         self.assertEqual(saved_data["remote_source_url"], "https://new.example.com")

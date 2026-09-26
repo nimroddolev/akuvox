@@ -751,6 +751,33 @@ class AkuvoxApiClient:
         self._data.auth_token = auth_token
         self._data.token = token
 
+    def async_apply_shared_sip_accounts(self, sip_accounts: dict[str, Any]) -> None:
+        """Apply the source-approved, scoped SIP details for a remote entry."""
+        if self._data is None:
+            return
+        self._data.sip_server = ""
+        self._data.sip_transport = ""
+        self._data.sip_account = ""
+        self._data.sip_password = ""
+        self._data.sip_device_accounts = {}
+        if not isinstance(sip_accounts, dict):
+            return
+        main = sip_accounts.get("main")
+        self._data.sip_server = str(sip_accounts.get("server", "")).strip()
+        self._data.sip_transport = str(sip_accounts.get("transport", "")).strip()
+        if isinstance(main, dict):
+            self._data.sip_account = str(main.get("account", "")).strip()
+            self._data.sip_password = str(main.get("password", "")).strip()
+        devices = sip_accounts.get("devices", [])
+        if isinstance(devices, list):
+            self._data.sip_device_accounts = {
+                str(device.get("mac", "")).strip(): str(device.get("account", "")).strip()
+                for device in devices
+                if isinstance(device, dict)
+                and str(device.get("mac", "")).strip()
+                and str(device.get("account", "")).strip()
+            }
+
     def async_disable_shared_credentials(self) -> None:
         """Immediately prevent requests after the source revokes this receiver."""
         if self._data is None:

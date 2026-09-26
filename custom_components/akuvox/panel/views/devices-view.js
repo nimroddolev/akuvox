@@ -3,7 +3,7 @@
  */
 
 import { escapeHtml } from "../utils/dom.js";
-import { icons } from "../utils/icons.js?v=20260924-view-mode-toggle";
+import { icons } from "../utils/icons.js?v=20260926-device-preview-refresh";
 import { bindListOrdering, bindTileOrdering } from "../utils/tile-ordering.js?v=20260917-list-drop-position";
 
 const unlockButton = (relays, relay) => {
@@ -11,7 +11,7 @@ const unlockButton = (relays, relay) => {
     relays.length > 1
       ? `Unlock ${relay.source_door_name || relay.door_name || `Relay ${relay.relay_id}`}`
       : "Unlock";
-  return `<button class="action device-action device-unlock-action" data-relay="${escapeHtml(relay.relay_id)}" data-mac="${escapeHtml(relay.mac)}">${icons.doorOpen}<span>${escapeHtml(label)}</span></button>`;
+  return `<button class="action device-action device-unlock-action" data-relay="${escapeHtml(relay.relay_id)}" data-mac="${escapeHtml(relay.mac)}">${icons.unlock}<span>${escapeHtml(label)}</span></button>`;
 };
 
 /**
@@ -88,7 +88,7 @@ export const renderDevicesView = (host, account) => {
         <td>
           ${
             device.deviceId
-              ? `<a class="info-link" href="/config/devices/device/${encodeURIComponent(device.deviceId)}">${icons.externalLink}Device</a>`
+              ? `<a class="info-link" href="/config/devices/device/${encodeURIComponent(device.deviceId)}">${icons.externalLink}<span>Device</span></a>`
               : '<span class="muted">Unavailable</span>'
           }
         </td>
@@ -112,7 +112,7 @@ export const renderDevicesView = (host, account) => {
           <div class="device-preview ${status.className}" aria-label="${device.camera ? `Camera preview from ${escapeHtml(device.name)}` : "No camera preview available"}">
             <span class="device-preview-placeholder" aria-hidden="true">${icons.webcam}</span>
             <p class="device-status ${status.className}" data-camera-status>${status.label}</p>
-            ${device.camera?.preview_url ? `<img data-camera-key="${escapeHtml(cameraKey)}" src="${escapeHtml(device.camera.preview_url)}" alt="" loading="eager">` : ""}
+            ${device.camera?.preview_url ? `<img data-camera-key="${escapeHtml(cameraKey)}" data-camera-preview-url="${escapeHtml(device.camera.preview_url)}" src="${escapeHtml(device.camera.preview_url)}" alt="" loading="eager">` : ""}
             ${device.camera ? `<button type="button" class="device-preview-play device-monitor-action" data-stream="${escapeHtml(device.camera.source_name || device.camera.name)}" data-mode="open" aria-label="Monitor ${escapeHtml(device.name)}">${icons.play}</button>` : ""}
           </div>
           <div class="tile-actions">
@@ -158,6 +158,7 @@ export const renderDevicesView = (host, account) => {
  * @param {HTMLElement} host
  */
 export const bindDevicesEvents = (host) => {
+  window.clearInterval(host._devicePreviewRefreshTimer);
   bindTileOrdering(host, "devices");
   bindListOrdering(host, "devices");
   host._cameraPreviewStates ||= new Map();
@@ -209,4 +210,57 @@ export const bindDevicesEvents = (host) => {
       host._relay(button.dataset.mac, button.dataset.relay)
     )
   );
+
+  const refreshCameraPreviews = () => {
+    const allPreviews = host.shadowRoot.querySelectorAll(
+      ".device-preview img[data-camera-preview-url]"
+    );
+    if (!allPreviews.length) {
+      window.clearInterval(host._devicePreviewRefreshTimer);
+      host._devicePreviewRefreshTimer = undefined;
+      return;
+    }
+    [...allPreviews]
+      .filter((image) => image.closest(".device-preview")?.classList.contains("ready"))
+      .forEach((image) => {
+      if (image.dataset.cameraPreviewRefreshing === "true") return;
+      const url = image.dataset.cameraPreviewUrl;
+      if (!url) return;
+      const snapshotUrl = new URL(url, window.location.href);
+      snapshotUrl.searchParams.set("_", String(Date.now()));
+      image.dataset.cameraPreviewRefreshing = "true";
+      const preview = image.closest(".device-preview");
+      if (!preview) return;
+      const nextSnapshot = document.createElement("img");
+      nextSnapshot.className = "device-preview-refresh";
+      nextSnapshot.dataset.cameraKey = image.dataset.cameraKey || "";
+      nextSnapshot.dataset.cameraPreviewUrl = url;
+      nextSnapshot.alt = image.alt;
+      nextSnapshot.loading = "eager";
+      const finishRefresh = () => {
+        delete image.dataset.cameraPreviewRefreshing;
+      };
+      nextSnapshot.addEventListener("load", async () => {
+        try {
+          await nextSnapshot.decode?.();
+        } catch (_) {
+          // The load event is the fallback for browsers that cannot expose a
+          // separate decode completion signal.
+        }
+        nextSnapshot.classList.add("is-ready");
+        window.requestAnimationFrame(() => {
+          image.remove();
+          finishRefresh();
+        });
+      }, { once: true });
+      nextSnapshot.addEventListener("error", () => {
+        nextSnapshot.remove();
+        finishRefresh();
+      }, { once: true });
+      preview.append(nextSnapshot);
+      nextSnapshot.src = snapshotUrl.href;
+    });
+  };
+  refreshCameraPreviews();
+  host._devicePreviewRefreshTimer = window.setInterval(refreshCameraPreviews, 5000);
 };

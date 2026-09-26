@@ -2,7 +2,7 @@
  * Floating context action menu for temporary keys.
  */
 
-import { icons } from "../utils/icons.js";
+import { icons } from "../utils/icons.js?v=20260928-qr-menu-eye";
 
 /**
  * Close any currently active key actions menu and clean up event listeners.
@@ -49,7 +49,7 @@ export const showKeyActionsMenu = (host, trigger, event, { onQr, onEdit, onDelet
   menu.style.cssText = `position:fixed;z-index:10001;top:${bounds.bottom + 8}px;left:12px;width:max-content;max-width:calc(100vw - 24px);padding:8px;border:1px solid var(--divider-color,#d1d5db);border-radius:14px;background:var(--card-background-color,#fff);box-shadow:0 14px 32px #0003;`;
 
   menu.innerHTML = `
-    ${!expired && hasQrCode ? `<button type="button" role="menuitem" data-menu-qr>${icons.qrCode}<span>QR Code</span></button>` : ""}
+    ${!expired && hasQrCode ? `<button type="button" role="menuitem" data-menu-qr>${icons.eye}<span>QR Code</span></button>` : ""}
     ${!expired ? `<button type="button" role="menuitem" data-menu-edit ${canEdit ? "" : "disabled title=\"Editing requires permission for every relay in this key\""}>${icons.edit}<span>Edit</span></button>` : ""}
     <button type="button" role="menuitem" data-menu-delete class="delete-action">${icons.trash}<span>Delete</span></button>
   `;
@@ -57,6 +57,11 @@ export const showKeyActionsMenu = (host, trigger, event, { onQr, onEdit, onDelet
   menu.querySelectorAll("button").forEach((button) => {
     button.style.cssText =
       "display:flex;align-items:center;gap:10px;width:100%;border:0;border-radius:9px;padding:11px 12px;color:inherit;background:transparent;font:600 14px/1.3 inherit;text-align:left;white-space:nowrap;";
+    if (button.disabled) {
+      button.style.color = "var(--disabled-text-color, #8b8b8b)";
+      button.style.cursor = "not-allowed";
+      button.style.opacity = "1";
+    }
     button.addEventListener("mouseenter", () => {
       if (button.disabled) return;
       button.style.background = button.classList.contains("delete-action")

@@ -3,7 +3,7 @@
  */
 
 import { escapeHtml } from "../utils/dom.js";
-import { icons } from "../utils/icons.js?v=20260829-camera-copy-visible";
+import { icons } from "../utils/icons.js?v=20260928-standard-key-icon-v4";
 import { callWsWithBlocker, confirmModal, showNotice, showPairingLinkNotice } from "../components/dialogs.js?v=20260923-pairing-link-copy-feedback";
 import { CAMERA_ORIENTATION_OPTIONS } from "../utils/orientation.js?v=20260830-combined-directional-labels";
 
@@ -32,7 +32,7 @@ const cameraOptionsTable = (host) => {
             <td title="${escapeHtml(camera.name)}">${escapeHtml(camera.name)}</td>
             <td><select name="camera_stream_orientation" data-stream-orientation="${escapeHtml(camera.sourceName)}" aria-label="${escapeHtml(camera.name)} stream orientation">${CAMERA_ORIENTATION_OPTIONS.map(([value, label]) => `<option value="${value}" ${streamOrientations[camera.sourceName] === value ? "selected" : ""}>${label}</option>`).join("")}</select></td>
             <td><select name="activity_image_orientation" data-activity-orientation="${escapeHtml(camera.sourceName)}" aria-label="${escapeHtml(camera.name)} activity image orientation">${CAMERA_ORIENTATION_OPTIONS.map(([value, label]) => `<option value="${value}" ${activityOrientations[camera.sourceName] === value ? "selected" : ""}>${label}</option>`).join("")}</select></td>
-            <td><button class="action camera-copy-rtsp" type="button" data-stream="${escapeHtml(camera.sourceName)}" data-mode="copy" aria-label="Copy RTSP link" title="Copy RTSP link">${icons.copy}</button></td>
+            <td><button class="camera-copy-rtsp" type="button" data-stream="${escapeHtml(camera.sourceName)}" data-mode="copy" aria-label="Copy RTSP link" title="Copy RTSP link">${icons.copy}<span>Copy RTSP</span></button></td>
           </tr>`).join("") || '<tr><td colspan="4" class="muted">No cameras are currently available for this account.</td></tr>'}
         </tbody>
       </table>
@@ -52,14 +52,18 @@ const eventOptions = (host) => {
   const settings = host._settings || {};
   const cameras = panelCameras(host);
   const overrides = settings.event_image_wait_overrides || {};
-  return `<fieldset>
-    <legend>Events</legend>
-    <label class="check"><input name="wait_for_event_image" type="checkbox" ${settings.wait_for_event_image !== false ? "checked" : ""}> Wait for an image URL before firing a door event</label>
-    <label class="check"><input name="custom_event_image_wait" type="checkbox" ${settings.custom_event_image_wait ? "checked" : ""}> Configure image waiting for each device</label>
-    <div data-event-image-overrides ${settings.custom_event_image_wait ? "" : "hidden"}>
-      ${cameras.map((camera) => `<label class="check"><input type="checkbox" data-event-image-wait="${escapeHtml(camera.sourceName)}" ${overrides[camera.sourceName] !== undefined ? (overrides[camera.sourceName] ? "checked" : "") : (settings.wait_for_event_image !== false ? "checked" : "")}> ${escapeHtml(camera.name)}</label>`).join("") || '<p class="muted">No devices are currently available.</p>'}
-    </div>
-  </fieldset>`;
+  const eventImageWaiting = settings.wait_for_event_image !== false;
+  return `<div class="settings-row">
+    <div><strong>Wait for event images</strong><p>Wait for an image URL before sending a door event.</p></div>
+    <label class="settings-switch" aria-label="Wait for event images"><input name="wait_for_event_image" type="checkbox" ${eventImageWaiting ? "checked" : ""}><span></span></label>
+  </div>
+  <div class="settings-row" data-event-image-override-controls ${eventImageWaiting ? "" : "hidden"}>
+    <div><strong>Apply per-device</strong><p>Set image waiting separately for each camera.</p></div>
+    <label class="settings-switch" aria-label="Apply event image waiting per device"><input name="custom_event_image_wait" type="checkbox" ${settings.custom_event_image_wait ? "checked" : ""}><span></span></label>
+  </div>
+  <div class="settings-device-options" data-event-image-overrides ${eventImageWaiting && settings.custom_event_image_wait ? "" : "hidden"}>
+    ${cameras.map((camera) => `<label class="settings-device-option"><span>${escapeHtml(camera.name)}</span><span class="settings-switch"><input type="checkbox" data-event-image-wait="${escapeHtml(camera.sourceName)}" aria-label="Wait for an event image from ${escapeHtml(camera.name)}" ${overrides[camera.sourceName] !== undefined ? (overrides[camera.sourceName] ? "checked" : "") : (settings.wait_for_event_image !== false ? "checked" : "")}><span></span></span></label>`).join("") || '<p class="muted">No cameras are currently available.</p>'}
+  </div>`;
 };
 
 const formatStorageAmount = (bytes) => {
@@ -121,20 +125,19 @@ export const updateRemoteShareConnectionStatus = (host, lastSync) => {
 
 const pairedReceiversSection = (shares = []) => {
   if (!shares.length) return "";
-  return `<div class="credential-share-receivers">
-    <h3>Paired Home Assistants</h3>
+  return `<div class="credential-share-receivers settings-subsection">
+    <p class="settings-list-label">Connected nodes</p>
     ${shares.map((share) => {
       const expiresAt = Date.parse(share.expires_at || "");
       const pendingExpired = !share.activated && (!Number.isFinite(expiresAt) || expiresAt <= Date.now());
       const status = pendingExpired ? "Pairing link expired" : share.revoked ? "Revoked" : !share.activated ? "Waiting to pair" : receiverIsConnected(share) ? "Connected" : "Disconnected";
       const statusClass = status === "Connected" ? "connected" : status === "Waiting to pair" ? "waiting" : "disconnected";
-      const statusIndicator = status === "Connected" ? "🟢" : status === "Waiting to pair" ? "🟡" : status === "Pairing link expired" || status === "Revoked" ? "❌" : "🔴";
       const detail = status === "Waiting to pair"
-        ? ` · Pairing link expires in <span data-pairing-expiry="${expiresAt}">${formatPairingTimeRemaining(expiresAt - Date.now())}</span>`
-        : share.last_sync ? ` · ${relativeContactTime(share.last_sync)}` : "";
-      return `<div class="credential-share-receiver-row">
-        <span class="credential-share-status ${statusClass}"><span class="credential-share-indicator">${statusIndicator}</span><strong>${escapeHtml(share.receiver_name)}</strong><small>${escapeHtml(status)}${detail}</small></span>
-        <span class="credential-share-actions"><button class="action" type="button" data-view-credential-share="${escapeHtml(share.share_id)}">View</button>${share.revoked
+        ? `Pairing link expires in <span data-pairing-expiry="${expiresAt}">${formatPairingTimeRemaining(expiresAt - Date.now())}</span>`
+        : share.last_sync ? relativeContactTime(share.last_sync) : "Waiting for the first connection";
+      return `<div class="credential-share-receiver-row ${statusClass}">
+        <span class="credential-share-status"><span class="remote-node-indicator" aria-hidden="true"></span><span><strong>${escapeHtml(share.receiver_name)}</strong><small><em>${escapeHtml(status)}</em>${detail ? `<span class="credential-share-separator" aria-hidden="true">·</span><span>${detail}</span>` : ""}</small></span></span>
+        <span class="credential-share-actions"><button class="action credential-share-view-button" type="button" data-view-credential-share="${escapeHtml(share.share_id)}" aria-label="View paired Home Assistant" title="View paired Home Assistant">${icons.eye}</button>${share.revoked
           ? `<button class="danger key-menu-button" type="button" data-delete-credential-share="${escapeHtml(share.share_id)}" aria-label="Delete paired Home Assistant" title="Delete paired Home Assistant">${icons.trash}</button>`
           : `<button class="action" type="button" data-revoke-credential-share="${escapeHtml(share.share_id)}">Revoke</button>`}</span>
       </div>`;
@@ -153,13 +156,16 @@ const requestShareAccess = (host, viewedShare = null) => new Promise((resolve) =
   const cameras = new Map((account.cameras || []).map((item) => [item.source_name || item.name, item]));
   const relays = account.relays || [];
   const names = [...new Set([...cameras.keys(), ...relays.map((item) => item.source_name || item.name)])].sort();
-  const selectedDeviceIds = new Set(viewedShare?.device_ids || []);
-  const createRelayIds = new Set(viewedShare?.create_key_relay_ids || []);
-  const editRelayIds = new Set(viewedShare?.edit_key_relay_ids || []);
-  const viewRelayIds = new Set(viewedShare?.view_key_relay_ids || []);
-  const activityDeviceNames = new Set(viewedShare?.activity_device_names || []);
-  const checked = (value, enabled = true) => (!readOnly || (enabled && value)) ? "checked" : "";
-  const disabled = readOnly ? "disabled" : "";
+  const availableDeviceIds = [
+    ...cameras.values()].map((camera) => `camera:${camera.source_name || camera.name}`)
+    .concat(relays.map((relay) => `relay:${relay.mac}:${relay.relay_id}`));
+  const availableRelayIds = relays.map((relay) => `relay:${relay.mac}:${relay.relay_id}`);
+  const selectedDeviceIds = new Set(viewedShare?.device_ids || (readOnly ? [] : availableDeviceIds));
+  const createRelayIds = new Set(viewedShare?.create_key_relay_ids || (readOnly ? [] : availableRelayIds));
+  const editRelayIds = new Set(viewedShare?.edit_key_relay_ids || (readOnly ? [] : availableRelayIds));
+  const viewRelayIds = new Set(viewedShare?.view_key_relay_ids || (readOnly ? [] : availableRelayIds));
+  const activityDeviceNames = new Set(viewedShare?.activity_device_names || (readOnly ? [] : names));
+  const checked = (value) => value ? "checked" : "";
   const readOnlyCheck = (enabled) => `<span class="share-readonly-check${enabled ? " enabled" : ""}">${enabled ? "✓" : ""}</span>`;
   const checkbox = (attribute, value, inputValue = "") => readOnly
     ? readOnlyCheck(value)
@@ -168,7 +174,7 @@ const requestShareAccess = (host, viewedShare = null) => new Promise((resolve) =
   dialog.className = "share-access-dialog";
   dialog.classList.toggle("theme-dark", Boolean(host._hass?.themes?.darkMode));
   const hasMultipleRelays = relays.some((relay) => relays.filter((item) => (item.source_name || item.name) === (relay.source_name || relay.name)).length > 1);
-  const relayIds = relays.map((relay) => `relay:${relay.mac}:${relay.relay_id}`);
+  const relayIds = availableRelayIds;
   const allCameras = cameras.size > 0 && [...cameras.values()].every((camera) => selectedDeviceIds.has(`camera:${camera.source_name || camera.name}`));
   const allRelays = relayIds.length > 0 && relayIds.every((id) => selectedDeviceIds.has(id));
   const allActivity = names.length > 0 && names.every((name) => activityDeviceNames.has(name));
@@ -192,17 +198,32 @@ const requestShareAccess = (host, viewedShare = null) => new Promise((resolve) =
       : '<span class="share-empty-cell">—</span>';
     return `<tr><td>${escapeHtml(displayName)}</td><td>${camera ? checkbox("data-share-device", selectedDeviceIds.has(cameraId), cameraId) : '<span class="share-empty-cell">—</span>'}</td><td>${relayCell || '<span class="share-empty-cell">—</span>'}</td><td>${checkbox("data-share-activity", activityDeviceNames.has(name), name)}</td><td>${keyPermissionCell("data-view-keys", permitsView)}</td><td>${keyPermissionCell("data-create-keys", permitsCreate)}</td><td>${keyPermissionCell("data-edit-keys", permitsEdit)}</td></tr>`;
   }).join("");
-  const selectAllRow = `<tr class="share-select-all-row"><td>Select all</td><td>${checkbox("data-all-camera", allCameras)}</td><td>${checkbox("data-all-relay", allRelays)}</td><td>${checkbox("data-all-activity", allActivity)}</td><td>${checkbox("data-all-view", allView)}</td><td>${checkbox("data-all-create", allCreate)}</td><td>${checkbox("data-all-edit", allEdit)}</td></tr>`;
+  const selectAllRow = `<tr class="share-select-all-row"><td><span class="share-select-all-label">${icons.checklist}<span>Select all</span></span></td><td>${checkbox("data-all-camera", allCameras)}</td><td>${checkbox("data-all-relay", allRelays)}</td><td>${checkbox("data-all-activity", allActivity)}</td><td>${checkbox("data-all-view", allView)}</td><td>${checkbox("data-all-create", allCreate)}</td><td>${checkbox("data-all-edit", allEdit)}</td></tr>`;
   const accessExpiresAt = viewedShare?.access_expires_at;
+  const earliestExpiry = (() => {
+    const now = new Date();
+    now.setSeconds(0, 0);
+    return new Date(now.getTime() - now.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+  })();
+  const formattedExpiry = accessExpiresAt ? new Date(accessExpiresAt).toLocaleString() : "Never expires";
+  const createdAt = viewedShare?.created_at || (() => {
+    const pairingExpiry = Date.parse(viewedShare?.expires_at || "");
+    return Number.isFinite(pairingExpiry) ? new Date(pairingExpiry - 10 * 60 * 1000).toISOString() : null;
+  })();
+  const status = viewedShare?.revoked ? "Revoked" : viewedShare?.activated ? "Connected" : "Waiting to pair";
   const basics = readOnly
-    ? `<fieldset class="share-basics"><legend>Pairing Details</legend><span>${accessExpiresAt ? `Expires at ${escapeHtml(new Date(accessExpiresAt).toLocaleString())}` : "Never expire"}</span></fieldset>`
-    : `<fieldset class="share-basics"><legend>Pairing Details</legend><label>Name<input data-receiver-name maxlength="100" required></label><label class="check"><input data-never-expire name="access-duration" type="radio" checked> Never expire</label><label class="check" data-access-expiry-row><input data-expiring name="access-duration" type="radio"> Expires at<input data-access-expiry type="datetime-local" disabled></label></fieldset>`;
-  dialog.innerHTML = `<h2>${readOnly ? escapeHtml(viewedShare.receiver_name) : "Create Pairing Link"}</h2>${basics}<p class="notice share-error" data-share-error hidden></p><fieldset><legend>Share access</legend><div class="table-wrap"><table class="share-access-table"><thead><tr><th colspan="4">Device</th><th colspan="3">Temporary Keys</th></tr><tr><th>Name</th><th>Camera</th><th>${hasMultipleRelays ? "Relays" : "Relay"}</th><th>Activity</th><th>View</th><th>Create</th><th>Edit</th></tr></thead><tbody>${selectAllRow}${deviceRows}</tbody></table></div></fieldset><div class="modal-actions"><button class="modal-cancel" data-cancel type="button">${readOnly ? "Close" : "Cancel"}</button>${readOnly ? "" : '<button class="modal-action" data-confirm type="button">Create</button>'}</div>`;
+    ? `<section class="share-details-card"><div class="share-detail"><span class="share-detail-icon">${icons.calendar}</span><span><small>Validity</small><strong>${escapeHtml(formattedExpiry)}</strong></span></div><div class="share-detail"><span class="share-detail-icon">${icons.calendar}</span><span><small>Registered on</small><strong>${escapeHtml(createdAt ? new Date(createdAt).toLocaleString() : "—")}</strong></span></div></section>`
+    : `<section class="share-details-card share-generation-details"><label class="share-detail share-name-field"><span class="share-detail-icon">${icons.idCard}</span><span><small>Remote instance name</small><input data-receiver-name maxlength="100" required placeholder="e.g. Holiday home" autofocus></span></label><div class="share-detail share-expiry-field"><span class="share-detail-icon">${icons.calendar}</span><span><small>Validity</small><label class="check"><input data-never-expire name="access-duration" type="radio" checked> Never expires</label><label class="check" data-access-expiry-row><span><input data-expiring name="access-duration" type="radio"> Expires at</span><input data-access-expiry type="datetime-local" min="${earliestExpiry}" disabled></label></span></div></section>`;
+  const heading = readOnly
+    ? `<h2>${escapeHtml(viewedShare.receiver_name)} <span class="share-status-badge ${status.toLocaleLowerCase().replaceAll(" ", "-")}"><i></i>${escapeHtml(status)}</span></h2><p>Review the access permissions granted to this Home Assistant instance.</p>`
+    : `<h2>Create pairing link</h2><p>Choose the devices and permissions available to the remote Home Assistant instance.</p>`;
+  dialog.innerHTML = `<button class="share-access-close" type="button" data-cancel aria-label="Close">×</button><div class="remote-instance-dialog-header">${heading}</div>${basics}<p class="notice share-error" data-share-error hidden></p><section class="share-permissions"><div class="table-wrap"><table class="share-access-table"><thead><tr><th></th><th colspan="3"><span class="share-table-section-heading">${icons.cameraDoor}<span>Devices</span></span></th><th colspan="3"><span class="share-table-section-heading">${icons.key}<span>Temporary keys</span></span></th></tr><tr><th>Name</th><th><span class="share-permission-label">Camera</span></th><th><span class="share-permission-label">${hasMultipleRelays ? "Relays" : "Relay"}</span></th><th><span class="share-permission-label">Activity</span></th><th><span class="share-permission-label">View</span></th><th><span class="share-permission-label">Create</span></th><th><span class="share-permission-label">Edit</span></th></tr></thead><tbody>${readOnly ? "" : selectAllRow}${deviceRows}</tbody></table></div></section><div class="modal-actions"><button class="modal-cancel" data-cancel type="button">${readOnly ? "Close" : "Cancel"}</button>${readOnly ? "" : '<button class="modal-action" data-confirm type="button">Create pairing link</button>'}</div>`;
   const devices = [...dialog.querySelectorAll("[data-share-device], [data-share-relay]")];
   const activity = [...dialog.querySelectorAll("[data-share-activity]")];
   const neverExpire = dialog.querySelector("[data-never-expire]");
   const expires = dialog.querySelector("[data-expiring]");
   const expiry = dialog.querySelector("[data-access-expiry]");
+  const receiverName = dialog.querySelector("[data-receiver-name]");
   const syncSelectAll = (master, inputs) => {
     if (!master || !inputs.length) return;
     const selected = inputs.filter((item) => item.checked).length;
@@ -225,17 +246,31 @@ const requestShareAccess = (host, viewedShare = null) => new Promise((resolve) =
   wireSelectAll("[data-all-view]", "[data-view-keys]");
   wireSelectAll("[data-all-create]", "[data-create-keys]");
   wireSelectAll("[data-all-edit]", "[data-edit-keys]");
+  const confirmButton = dialog.querySelector("[data-confirm]");
+  const permissionInputs = [...dialog.querySelectorAll("[data-share-device], [data-share-relay], [data-share-activity], [data-view-keys], [data-create-keys], [data-edit-keys]")];
+  const updateConfirmState = () => {
+    if (!confirmButton) return;
+    const hasSelectedPermission = permissionInputs.some((input) => input.checked);
+    const expiryTime = Date.parse(expiry?.value || "");
+    const hasValidExpiry = !expires?.checked || (Number.isFinite(expiryTime) && expiryTime >= Date.now());
+    confirmButton.disabled = !receiverName?.value.trim() || !hasSelectedPermission || !hasValidExpiry;
+  };
+  dialog.addEventListener("change", updateConfirmState);
+  expiry?.addEventListener("input", updateConfirmState);
+  receiverName?.addEventListener("input", updateConfirmState);
+  updateConfirmState();
   const updateExpiryState = () => {
     if (expiry) expiry.disabled = !expires?.checked;
   };
   neverExpire?.addEventListener("change", updateExpiryState);
   expires?.addEventListener("change", updateExpiryState);
-  dialog.querySelector("[data-cancel]").addEventListener("click", () => dialog.close());
+  dialog.querySelectorAll("[data-cancel]").forEach((button) => button.addEventListener("click", () => dialog.close()));
   dialog.querySelector("[data-confirm]")?.addEventListener("click", () => {
     const name = dialog.querySelector("[data-receiver-name]").value.trim();
     const error = dialog.querySelector("[data-share-error]");
-    if (!name || (!neverExpire.checked && !expiry.value)) {
-      error.textContent = !name ? "Enter a name." : "Choose an access expiry date.";
+    const expiryTime = Date.parse(expiry.value || "");
+    if (!name || (!neverExpire.checked && (!Number.isFinite(expiryTime) || expiryTime < Date.now()))) {
+      error.textContent = !name ? "Enter a name." : "Choose a future access expiry date.";
       error.hidden = false;
       return;
     }
@@ -299,23 +334,36 @@ const activityStorageProgress = (settings) => {
   </div>`;
 };
 
+const activityStorageQuota = (settings) => {
+  const limitMb = Number(settings.activity_history_max_storage_mb) || 0;
+  const usedBytes = Math.max(0, Number(settings.activity_history_storage_bytes) || 0);
+  if (limitMb <= 0) return "Unlimited local storage";
+  const percentage = Math.min(100, (usedBytes / (limitMb * 1_000_000)) * 100);
+  return `${formatStorageAmount(usedBytes)} / ${limitMb.toFixed(2)} MB (${percentage.toFixed(0)}%)`;
+};
+
 const sipAccountsSection = (sipAccounts = {}) => {
   const main = sipAccounts.main || {};
   const devices = Array.isArray(sipAccounts.devices) ? sipAccounts.devices : [];
   if (!main.account) {
-    return `<fieldset><legend>SIP Accounts</legend><p class="muted">SIP account details are not available yet. Refresh the SmartPlus account and try again.</p></fieldset>`;
+    return `<fieldset class="settings-section sip-section"><legend>${icons.phone}<span>SIP Accounts & Extension Mapping</span></legend><p class="settings-section-description">SIP account details are not available yet. Refresh the SmartPlus account and try again.</p></fieldset>`;
   }
-  return `<fieldset>
-    <legend>SIP Accounts</legend>
-    <p class="sip-warning">These credentials are sensitive. Do not share them with anyone else.</p>
-    <div class="sip-account-grid">
-      <span>SIP server</span><code>${escapeHtml(sipAccounts.server)}</code>
-      <span>Transport</span><code>${escapeHtml(sipAccounts.transport)}</code>
-      <span>Main account</span><code>${escapeHtml(main.account)}</code>
-      <span>Main password</span><code>${escapeHtml(main.password)}</code>
-      ${devices.map((device) => `<span>${escapeHtml(device.name || device.mac || "Device")} (${escapeHtml(device.mac)})</span><code>${escapeHtml(device.account)} / ${escapeHtml(device.password)}</code>`).join("")}
+  return `<fieldset class="settings-section sip-section">
+    <legend>${icons.phone}<span>SIP Accounts & Extension Mapping</span></legend>
+    <p class="settings-section-description">Intercom credentials assigned by Akuvox Cloud for SIP telephony and door access.</p>
+    <button class="action settings-inline-action sip-export" type="button" data-export-sip-accounts>${icons.idCard}<span>Export SIP accounts PDF</span></button>
+    <p class="sip-warning">Security notice: These credentials allow direct two-way audio/video dialing and door access. Do not share or publish these tokens.</p>
+    <div class="sip-details-grid">
+      <section><h3>Core server parameters</h3><dl>
+        <div><dt>SIP server</dt><dd>${escapeHtml(sipAccounts.server)}</dd></div>
+        <div><dt>Transport protocol</dt><dd>${escapeHtml(sipAccounts.transport)}</dd></div>
+        <div><dt>Primary account ID</dt><dd>${escapeHtml(main.account)}</dd></div>
+        <div><dt>Master SIP key</dt><dd>${escapeHtml(main.password)}</dd></div>
+      </dl></section>
+      <section><h3>Device extensions & tokens</h3><dl>
+        ${devices.map((device) => `<div><dt>${escapeHtml(device.name || device.mac || "Device")}<small>${escapeHtml(device.mac)}</small></dt><dd><span class="sip-device-extension">${escapeHtml(device.account)}</span><span class="sip-device-token">${escapeHtml(device.password || "—")}</span></dd></div>`).join("")}
+      </dl></section>
     </div>
-    <button class="action" type="button" data-export-sip-accounts>Export SIP accounts PDF</button>
   </fieldset>`;
 };
 
@@ -327,9 +375,10 @@ const requestSipPdfPassword = (host) => new Promise((resolve) => {
       <label>Password<input required minlength="8" type="password" autocomplete="new-password" data-sip-pdf-password></label>
       <label>Confirm password<input required minlength="8" type="password" autocomplete="new-password" data-sip-pdf-confirm></label>
       <p class="form-error" data-sip-pdf-error hidden></p>
-      <div class="modal-actions"><button class="modal-cancel" value="cancel">Cancel</button><button class="modal-action" value="export">Export PDF</button></div>
+      <div class="modal-actions"><button class="modal-cancel" data-sip-pdf-cancel type="button">Cancel</button><button class="modal-action" value="export">Export PDF</button></div>
     </form>`;
   const form = dialog.querySelector("[data-sip-pdf-form]");
+  dialog.querySelector("[data-sip-pdf-cancel]").addEventListener("click", () => dialog.close("cancel"));
   form.addEventListener("submit", (event) => {
     if (event.submitter?.value !== "export") return;
     const password = form.querySelector("[data-sip-pdf-password]").value;
@@ -365,6 +414,7 @@ export const updateActivityStorageProgress = (host, usageBytes) => {
   host._settings.activity_history_storage_bytes = Math.max(0, Number(usageBytes) || 0);
   const warning = host.shadowRoot.querySelector("[data-activity-storage-limit-warning]");
   const progress = host.shadowRoot.querySelector("[data-activity-storage-progress]");
+  const quota = host.shadowRoot.querySelector("[data-activity-storage-quota]");
   if (!progress) return;
   const liveLimitInput = host.shadowRoot.querySelector(
     '[name="activity_history_max_storage_mb"]'
@@ -377,6 +427,7 @@ export const updateActivityStorageProgress = (host, usageBytes) => {
   };
   if (warning) warning.innerHTML = activityStorageLimitWarning(settings);
   progress.innerHTML = activityStorageProgress(settings);
+  if (quota) quota.textContent = activityStorageQuota(settings);
 };
 
 /**
@@ -397,60 +448,82 @@ export const renderSettingsView = (host) => {
   const settings = host._settings;
   const storageLimitValue = String(settings.activity_history_max_storage_mb || 0);
   return `
-    <div class="card">
+    <div class="card settings-page">
       <form data-settings-form>
         <div class="section-heading settings-heading">
-          <h2>Settings</h2>
-          <button class="action settings-save" type="submit" ${host._settingsDirty && !host._settingsSaving ? "" : "disabled"}>${icons.save}<span>Save</span></button>
+          <div>
+            <h2>Settings</h2>
+            <p class="settings-intro">Manage how Akuvox SmartPlus works in Home Assistant.</p>
+          </div>
+          <div class="settings-actions">
+            <button class="settings-discard" type="button" data-discard-settings ${host._settingsDirty && !host._settingsSaving ? "" : "disabled"}>${icons.restart}<span>Discard</span></button>
+            <button class="action settings-save" type="submit" ${host._settingsDirty && !host._settingsSaving ? "" : "disabled"}>${icons.check}<span>Save changes</span></button>
+          </div>
         </div>
-        <fieldset>
-          <legend>Camera Options</legend>
+        <fieldset class="settings-section">
+          <legend>${icons.webcam}<span>Camera Options</span></legend>
+          <p class="settings-section-description">Set the orientation used for live streams and activity snapshots.</p>
           ${cameraOptionsTable(host)}
+        </fieldset>
+
+        <div class="settings-two-column">
+        <fieldset class="settings-section door-events-section">
+          <legend>${icons.door}<span>Door events</span></legend>
+          <p class="settings-section-description">Automations and image delivery behavior.</p>
           ${eventOptions(host)}
         </fieldset>
 
-        <fieldset>
-          <legend>Panel Options</legend>
-          <label class="check">
+        <fieldset class="settings-section storage-section">
+          <legend>${icons.database}<span>Storage & Data Management</span></legend>
+          <p class="settings-section-description">Keep a rolling buffer of activity history and preview images on this Home Assistant.</p>
+          <div class="settings-row">
+            <div><strong>Store activity history</strong><p>Keep a rolling buffer of activity records and preview images.</p></div>
+            <label class="settings-switch" aria-label="Store activity history locally">
             <input name="store_activity_history" type="checkbox" ${settings.store_activity_history ? "checked" : ""}>
-            Store activity history and preview images locally
-          </label>
+            <span></span>
+            </label>
+          </div>
           <div data-activity-storage-limit-controls ${settings.store_activity_history ? "" : "hidden"}>
             <div data-activity-storage-limit-warning>${activityStorageLimitWarning(settings)}</div>
-            <label class="activity-storage-limit-row">
-              <span class="activity-storage-limit">
-                <input name="activity_history_max_storage_mb" type="number" min="0" value="${escapeHtml(storageLimitValue)}" style="--storage-limit-digits: ${Math.max(1, storageLimitValue.length)}" aria-label="Local activity storage limit in MB">
-                <span class="activity-storage-limit-unit" data-activity-storage-limit-unit ${Number(storageLimitValue) >= 1 ? "" : "hidden"}>MB</span>
-                <span class="activity-storage-limit-description" data-activity-storage-limit-description ${Number(settings.activity_history_max_storage_mb) > 0 ? "hidden" : ""}>Local activity storage limit in MB (0 = unlimited)</span>
-                <span data-activity-storage-progress>${activityStorageProgress(settings)}</span>
-                <button class="activity-storage-action activity-storage-clear" type="button" data-clear-activity-storage>${icons.trash}<span>Clear Data</span></button>
-                <span class="activity-storage-transfer-actions">
-                  <button class="activity-storage-action activity-storage-download" type="button" data-export-activity-storage>${icons.download}<span>Export Data</span></button>
-                  <button class="activity-storage-action activity-storage-import" type="button" data-import-activity-storage>${icons.upload}<span>Import Data</span></button>
-                </span>
-                <input data-import-activity-file type="file" accept=".zip,application/zip" hidden>
-              </span>
+            <label class="storage-limit-input"><span>Max cache limit</span>
+              <input name="activity_history_max_storage_mb" type="number" min="0" value="${escapeHtml(storageLimitValue)}" style="--storage-limit-digits: ${Math.max(1, storageLimitValue.length)}" aria-label="Local activity storage limit in MB">
+              <span class="activity-storage-limit-unit" data-activity-storage-limit-unit ${Number(storageLimitValue) >= 1 ? "" : "hidden"}>MB</span>
+              <span class="activity-storage-limit-description" data-activity-storage-limit-description ${Number(settings.activity_history_max_storage_mb) > 0 ? "hidden" : ""}>Local activity storage limit in MB (0 = unlimited)</span>
             </label>
+            <div class="storage-quota-card">
+              <div class="storage-quota-heading"><span>Allocated quota</span><strong data-activity-storage-quota>${activityStorageQuota(settings)}</strong></div>
+              <span data-activity-storage-progress>${activityStorageProgress(settings)}</span>
+            </div>
+            <div class="storage-actions"><button class="activity-storage-action activity-storage-clear" type="button" data-clear-activity-storage>${icons.trash}<span>Delete</span></button><span class="activity-storage-transfer-actions"><button class="activity-storage-action activity-storage-download" type="button" data-export-activity-storage>${icons.download}<span>Export</span></button><button class="activity-storage-action activity-storage-import" type="button" data-import-activity-storage>${icons.upload}<span>Import</span></button></span><input data-import-activity-file type="file" accept=".zip,application/zip" hidden></div>
+          </div>
+        </fieldset>
+        </div>
+
+        <fieldset class="settings-section">
+          <legend>${icons.bug}<span>Debug</span></legend>
+          <div class="settings-row">
+            <div><strong>Enable debug logging</strong><p>Record detailed integration activity to help troubleshoot issues.</p></div>
+            <label class="settings-switch" aria-label="Enable debug logging">
+              <input name="debug_logging" type="checkbox" ${settings.debug_logging ? "checked" : ""}>
+              <span></span>
+            </label>
+          </div>
+          <div class="settings-row settings-link-row">
+            <div><strong>View Home Assistant logs</strong><p>Open the log viewer with Akuvox already selected as the search term.</p></div>
+            <a class="settings-native-link" href="/config/logs?search=Akuvox">Open logs${icons.externalLink}</a>
           </div>
         </fieldset>
 
-        <fieldset>
-          <legend>Debug</legend>
-          <label class="check">
-            <input name="debug_logging" type="checkbox" ${settings.debug_logging ? "checked" : ""}> Enable debug logging
-          </label>
-        </fieldset>
-
         ${settings.credential_mode === "remote" ? `
-        <fieldset>
-          <legend>Share Access</legend>
-          <p class="muted">This Home Assistant receives credentials from another instance. Manage pairing on the source instance.</p>
+        <fieldset class="settings-section remote-instances-section">
+          <legend>${icons.hub}<span>Remote instance</span></legend>
+          <p class="settings-section-description">This Home Assistant receives credentials from another instance.</p>
           ${remoteShareConnectionSection(settings.remote_last_sync)}
         </fieldset>` : `
-        <fieldset>
-          <legend>Share Access</legend>
-          <p class="muted">Generate a pairing link to securely share your Akuvox SmartPlus devices with another Home Assistant instance running the integration.<br>You can select which devices to share and whether temporary keys can be created or edited.</p>
-          <button class="action" type="button" data-create-credential-share>Create Pairing Link</button>
+        <fieldset class="settings-section remote-instances-section">
+          <legend>${icons.hub}<span>Share Access & Multi-Instance Pairing</span></legend>
+          <p class="settings-section-description">Securely bridge intercom events and temporary keys with other Home Assistant instances.</p>
+          <button class="action settings-inline-action" type="button" data-create-credential-share>${icons.externalLink}<span>Create pairing link</span></button>
           ${pairedReceiversSection(settings.credential_shares)}
         </fieldset>`}
 
@@ -549,10 +622,17 @@ export const bindSettingsEvents = (host) => {
     host._settingsDirty =
       formSignature(settingsForm) !== settingsForm.dataset.settingsSignature;
     const saveButton = settingsForm.querySelector("[type='submit']");
+    const discardButton = settingsForm.querySelector("[data-discard-settings]");
     if (saveButton) saveButton.disabled = !host._settingsDirty || host._settingsSaving;
+    if (discardButton) discardButton.disabled = !host._settingsDirty || host._settingsSaving;
   };
   settingsForm.addEventListener("input", markSettingsDirty);
   settingsForm.addEventListener("change", markSettingsDirty);
+  settingsForm.querySelector("[data-discard-settings]")?.addEventListener("click", () => {
+    if (!host._settingsDirty || host._settingsSaving) return;
+    host._settingsDirty = false;
+    host._requestLoad?.({ forceRender: true });
+  });
 
   const storageHistoryToggle = settingsForm.querySelector(
     '[name="store_activity_history"]'
@@ -563,11 +643,17 @@ export const bindSettingsEvents = (host) => {
   storageHistoryToggle?.addEventListener("change", () => {
     if (storageLimitControls) storageLimitControls.hidden = !storageHistoryToggle.checked;
   });
+  const eventImageToggle = settingsForm.querySelector('[name="wait_for_event_image"]');
   const eventOverrideToggle = settingsForm.querySelector('[name="custom_event_image_wait"]');
+  const eventOverrideControls = settingsForm.querySelector("[data-event-image-override-controls]");
   const eventOverrides = settingsForm.querySelector("[data-event-image-overrides]");
-  eventOverrideToggle?.addEventListener("change", () => {
-    if (eventOverrides) eventOverrides.hidden = !eventOverrideToggle.checked;
-  });
+  const syncEventImageOptions = () => {
+    const enabled = eventImageToggle?.checked ?? true;
+    if (eventOverrideControls) eventOverrideControls.hidden = !enabled;
+    if (eventOverrides) eventOverrides.hidden = !enabled || !eventOverrideToggle?.checked;
+  };
+  eventImageToggle?.addEventListener("change", syncEventImageOptions);
+  eventOverrideToggle?.addEventListener("change", syncEventImageOptions);
 
   const storageLimitInput = settingsForm.querySelector(
     '[name="activity_history_max_storage_mb"]'
@@ -592,8 +678,10 @@ export const bindSettingsEvents = (host) => {
     };
     const warning = settingsForm.querySelector("[data-activity-storage-limit-warning]");
     const progress = settingsForm.querySelector("[data-activity-storage-progress]");
+    const quota = settingsForm.querySelector("[data-activity-storage-quota]");
     if (warning) warning.innerHTML = activityStorageLimitWarning(currentSettings);
     if (progress) progress.innerHTML = activityStorageProgress(currentSettings);
+    if (quota) quota.textContent = activityStorageQuota(currentSettings);
   });
 
   settingsForm.querySelector("[data-export-sip-accounts]")?.addEventListener("click", async () => {
@@ -741,18 +829,28 @@ export const bindSettingsEvents = (host) => {
     button.addEventListener("click", async () => {
       const confirmed = await confirmModal(
         host,
-        "This immediately prevents this Home Assistant from receiving future Akuvox credentials.",
+        "This will prevent the remote Home Assistant instance from receiving new Akuvox credentials.",
         "Revoke paired Home Assistant?",
         "Revoke"
       );
       if (!confirmed) return;
       try {
-        await callWsWithBlocker(host, {
+        const response = await callWsWithBlocker(host, {
           type: "akuvox/panel_revoke_credential_share",
           entry_id: host._activeAccount,
           share_id: button.dataset.revokeCredentialShare,
         });
-        await host._load();
+        if (response?.share?.revoked && host._settings?.credential_shares) {
+          host._settings = {
+            ...host._settings,
+            credential_shares: host._settings.credential_shares.map((share) =>
+              share.share_id === response.share.share_id ? response.share : share
+            ),
+          };
+          host._render();
+        } else {
+          await host._load();
+        }
       } catch (error) {
         showNotice(host, error?.message || "Could not revoke the paired Home Assistant.", "Revoke failed");
       }
