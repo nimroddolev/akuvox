@@ -67,6 +67,19 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
     this._settingsSaving = false;
     this._blockingRequest = false;
     this._modalCount = 0;
+    this._modalScrollLocked = false;
+    this._modalScrollLockStyles = null;
+    this._onModalWheel = (event) => this._preventBackgroundModalScroll(event);
+    this._onModalTouchMove = (event) => this._preventBackgroundModalScroll(event);
+    this._modalScrollLockObserver = new MutationObserver(() => this._syncModalScrollLock());
+    this._modalScrollLockObserver.observe(this.shadowRoot, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ["open"],
+    });
+    this.ownerDocument.addEventListener("wheel", this._onModalWheel, { capture: true, passive: false });
+    this.ownerDocument.addEventListener("touchmove", this._onModalTouchMove, { capture: true, passive: false });
     this._loading = false;
     this._loadQueued = false;
     this._panelDataSignature = null;
@@ -206,6 +219,42 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
     }, { capture: true });
   }
 
+  _openModal() {
+    return this.shadowRoot.querySelector("dialog[open]");
+  }
+
+  _syncModalScrollLock() {
+    const documentElement = this.ownerDocument.documentElement;
+    const body = this.ownerDocument.body;
+    const hasOpenModal = Boolean(this._openModal());
+    if (hasOpenModal === this._modalScrollLocked) return;
+    this._modalScrollLocked = hasOpenModal;
+    if (hasOpenModal) {
+      this._modalScrollLockStyles = {
+        documentElementOverflow: documentElement.style.overflow,
+        bodyOverflow: body.style.overflow,
+      };
+      documentElement.style.overflow = "hidden";
+      body.style.overflow = "hidden";
+      return;
+    }
+    documentElement.style.overflow = this._modalScrollLockStyles?.documentElementOverflow || "";
+    body.style.overflow = this._modalScrollLockStyles?.bodyOverflow || "";
+    this._modalScrollLockStyles = null;
+  }
+
+  _preventBackgroundModalScroll(event) {
+    const dialog = this._openModal();
+    if (!dialog) return;
+    const scrollableModalContent = event.composedPath().some((item) => (
+      item instanceof HTMLElement
+      && dialog.contains(item)
+      && item.scrollHeight > item.clientHeight
+      && ["auto", "scroll"].includes(getComputedStyle(item).overflowY)
+    ));
+    if (!scrollableModalContent) event.preventDefault();
+  }
+
   set hass(value) {
     this._hass = value;
     if (!this._hashListenerRegistered) {
@@ -225,6 +274,15 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
   }
 
   disconnectedCallback() {
+    this._modalScrollLockObserver.disconnect();
+    this.ownerDocument.removeEventListener("wheel", this._onModalWheel, true);
+    this.ownerDocument.removeEventListener("touchmove", this._onModalTouchMove, true);
+    const documentElement = this.ownerDocument.documentElement;
+    const body = this.ownerDocument.body;
+    documentElement.style.overflow = this._modalScrollLockStyles?.documentElementOverflow || "";
+    body.style.overflow = this._modalScrollLockStyles?.bodyOverflow || "";
+    this._modalScrollLockStyles = null;
+    this._modalScrollLocked = false;
     window.clearInterval(this._timer);
     window.clearInterval(this._devicePreviewRefreshTimer);
     closeKeyActionsMenu(this);
