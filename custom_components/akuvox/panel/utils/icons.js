@@ -16,6 +16,7 @@ export const icons = {
   devices: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3" width="16" height="12" rx="2"/><path d="M8 21h8M12 15v6M7 7h10M7 11h6"/></svg>',
   cameraDoor: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="7.25" cy="8" r="3.25"/><circle cx="7.25" cy="8" r="1.2"/><path d="M7.25 11.25v2.1M4.5 17h5.5M5.1 13.35h4.3l1.4 3.65H3.7l1.4-3.65ZM13.5 4h5.25a.75.75 0 0 1 .75.75V19.5M13.5 20h7M16.9 12h.1"/></svg>',
   phone: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.6 3.8 9.2 3l1.6 4.7-2.1 1.5a16.4 16.4 0 0 0 6.1 6.1l1.5-2.1L21 14.8l-.8 2.6c-.3 1-1.3 1.6-2.3 1.4C9.6 17.5 6.5 14.4 5.2 6.1 5 5.1 5.6 4.1 6.6 3.8Z"/></svg>',
+  bell: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg>',
   link: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.1.1l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1"/><path d="M14 11a5 5 0 0 0-7.1-.1l-2 2A5 5 0 0 0 12 20l1.1-1.1"/></svg>',
   key: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="7" cy="12" r="3.5"/><path d="M10.5 12H21M17 12v3M20 12v2"/></svg>',
   idCard: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8" cy="12" r="2"/><path d="M12 10h5M12 14h5M6 16c.7-1.3 3.3-1.3 4 0"/></svg>',

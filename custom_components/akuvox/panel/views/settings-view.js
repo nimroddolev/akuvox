@@ -3,7 +3,7 @@
  */
 
 import { escapeHtml } from "../utils/dom.js";
-import { icons } from "../utils/icons.js?v=20260928-standard-key-icon-v4";
+import { icons } from "../utils/icons.js?v=20260930-notification-bell-v5";
 import { callWsWithBlocker, confirmModal, showNotice, showPairingLinkNotice } from "../components/dialogs.js?v=20260923-pairing-link-copy-feedback";
 import { CAMERA_ORIENTATION_OPTIONS } from "../utils/orientation.js?v=20260830-combined-directional-labels";
 
@@ -214,10 +214,45 @@ const requestDoorNotificationAutomation = async (host) => {
     } else if (step === 2) {
       result = await requestDoorNotificationStep(host, {
         title: "Notify Via", description: "Choose one or more Home Assistant notification services.", backLabel: "Back", nextLabel: "Next",
-        content: `<fieldset><legend>Notification services</legend>${services.map((item) => `<label class="door-notification-option"><input type="checkbox" name="service" value="${escapeHtml(item.service)}" ${selection.services.includes(item.service) ? "checked" : ""}><span>${escapeHtml(item.name)}</span></label>`).join("") || '<p class="muted">No notification services are available.</p>'}</fieldset>`,
-        submit: (form, error) => {
-          const selectedServices = [...form.querySelectorAll('[name="service"]:checked')].map((input) => input.value);
-          if (selectedServices.length) return { services: selectedServices };
+        content: services.length
+          ? `<div class="door-picker-control notification-service-picker-control"><label class="door-picker-search"><input type="search" data-service-search aria-label="Search notification services" placeholder="Type to filter notification services" autocomplete="off"></label><div class="door-picker" data-service-picker hidden><div class="door-picker-results" data-service-picker-results role="listbox"></div></div></div><div class="door-picker-badges" data-notification-service-badges aria-label="Selected notification services"></div>`
+          : '<p class="muted">No notification services are available.</p>',
+        bind: (dialog) => {
+          const search = dialog.querySelector("[data-service-search]");
+          const picker = dialog.querySelector("[data-service-picker]");
+          const results = dialog.querySelector("[data-service-picker-results]");
+          const badges = dialog.querySelector("[data-notification-service-badges]");
+          const serviceById = new Map(services.map((service) => [service.service, service]));
+          if (!search || !picker || !results || !badges) return;
+          const render = () => {
+            const query = search.value.trim().toLocaleLowerCase();
+            const available = services.filter((service) => !selection.services.includes(service.service));
+            const matching = available.filter((service) => service.name.toLocaleLowerCase().includes(query));
+            badges.innerHTML = selection.services.map((serviceId) => {
+              const service = serviceById.get(serviceId);
+              return service ? `<button class="door-selection-badge" type="button" data-remove-service="${escapeHtml(serviceId)}"><span>${escapeHtml(service.name)}</span><span aria-hidden="true">×</span><span class="sr-only">Remove ${escapeHtml(service.name)}</span></button>` : "";
+            }).join("");
+            results.innerHTML = matching.map((service) => `<button class="door-picker-option notification-service-action-option" type="button" role="option" data-add-service="${escapeHtml(service.service)}"><span class="notification-service-action-icon">${icons.bell}</span><span class="notification-service-action-copy"><span>Send a notification with ${escapeHtml(service.name)}</span><small>Sends a notification message using the ${escapeHtml(service.name)} service.</small></span><span class="notification-service-action-domain">notify</span></button>`).join("") || `<p class="muted">${available.length ? "No matching notification services." : "All available notification services are selected."}</p>`;
+            results.querySelectorAll("[data-add-service]").forEach((button) => button.addEventListener("mousedown", (event) => event.preventDefault()));
+            badges.querySelectorAll("[data-remove-service]").forEach((button) => button.addEventListener("click", () => {
+              selection.services = selection.services.filter((service) => service !== button.dataset.removeService);
+              render();
+            }));
+            results.querySelectorAll("[data-add-service]").forEach((button) => button.addEventListener("click", () => {
+              selection.services = [...selection.services, button.dataset.addService];
+              search.value = "";
+              render();
+              picker.hidden = true;
+              search.blur();
+            }));
+          };
+          search.addEventListener("focus", () => { picker.hidden = false; });
+          search.addEventListener("input", () => { picker.hidden = false; render(); });
+          search.addEventListener("blur", () => window.setTimeout(() => { picker.hidden = true; }, 100));
+          render();
+        },
+        submit: (_form, error) => {
+          if (selection.services.length) return { services: selection.services };
           error.textContent = "Select at least one notification service."; error.hidden = false; return null;
         },
       });

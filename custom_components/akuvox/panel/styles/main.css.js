@@ -549,6 +549,13 @@ export const mainStyles = `
   .door-picker-option:last-child { border-bottom: 0; }
   .door-picker-option:hover, .door-picker-option:focus-visible { background: color-mix(in srgb, var(--aqua) 14%, transparent); outline: none; }
   .door-picker .muted { margin: 0; padding: 12px; }
+  .notification-service-picker-control .door-picker { max-height: 360px; }
+  .notification-service-action-option { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; align-items: center; gap: 12px; min-height: 78px; padding: 12px; }
+  .notification-service-action-icon { display: grid; width: 28px; height: 28px; place-items: center; color: var(--panel-muted); }
+  .notification-service-action-icon svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .notification-service-action-copy { display: grid; min-width: 0; gap: 4px; font-weight: 500; }
+  .notification-service-action-copy small { color: var(--panel-muted); font-size: 12px; font-weight: 400; line-height: 1.35; }
+  .notification-service-action-domain { color: var(--panel-muted); font-size: 13px; }
   .door-picker-badges { display: flex; flex-wrap: wrap; gap: 7px; min-height: 0; }
   .door-selection-badge { display: inline-flex; align-items: center; gap: 7px; max-width: 100%; padding: 5px 8px; border: 0; border-radius: 999px; color: var(--panel-text); background: color-mix(in srgb, var(--aqua) 18%, var(--panel-card)); font: inherit; cursor: pointer; }
   .door-selection-badge > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
