@@ -526,6 +526,35 @@ export const mainStyles = `
   .settings-device-option .settings-switch { width: 38px; height: 22px; }
   .settings-device-option .settings-switch span::after { width: 16px; height: 16px; }
   .settings-device-option .settings-switch input:checked + span::after { transform: translateX(16px); }
+  .door-notification-row { align-items: center; }
+  .door-notification-dialog { position: relative; width: min(100% - 32px, 460px); overflow: visible; }
+  .door-notification-dialog > p { margin: 0 0 16px; color: var(--panel-muted); }
+  .door-notification-close { position: absolute; top: 12px; right: 12px; display: grid; width: 32px; height: 32px; place-items: center; padding: 0; border: 0; border-radius: 50%; color: var(--panel-muted); background: transparent; font: inherit; font-size: 26px; line-height: 1; cursor: pointer; }
+  .door-notification-close:hover, .door-notification-close:focus-visible { color: var(--panel-text); background: color-mix(in srgb, currentColor 10%, transparent); outline: 2px solid var(--aqua); outline-offset: 2px; }
+  .door-notification-dialog form { gap: 14px; }
+  dialog.door-notification-dialog fieldset { width: min(100%, 420px); gap: 0; padding: 0; overflow: hidden; border-color: var(--panel-outline); text-align: left; justify-content: center; justify-items: start; }
+  .door-notification-dialog legend { margin-left: 10px; padding: 0 4px; font-weight: 700; }
+  .door-notification-option { display: flex; align-items: center; gap: 10px; padding: 10px 12px; font-weight: 500; cursor: pointer; }
+  .door-notification-option + .door-notification-option { border-top: 1px solid var(--panel-outline); }
+  .door-notification-option input { flex: 0 0 auto; width: auto; margin: 0; }
+  .door-notification-dialog .modal-actions { justify-content: flex-end; margin: 4px 0 0; }
+  .door-notification-dialog a.modal-action { display: inline-flex; align-items: center; text-decoration: none; }
+  .door-notification-complete .modal-actions { justify-content: center; }
+  .door-picker-control { position: relative; width: 100%; }
+  .door-picker-search { display: grid; gap: 4px; width: 100%; font-weight: 600; }
+  .door-picker { position: absolute; z-index: 2; top: 100%; left: 0; box-sizing: border-box; width: 100%; max-height: 190px; overflow: auto; border: 1px solid var(--panel-outline); border-radius: 8px; background: var(--panel-card); box-shadow: 0 8px 18px #0003; }
+  .door-picker[hidden] { display: none; }
+  .door-picker-results { display: grid; }
+  .door-picker-option { padding: 10px 12px; border: 0; border-bottom: 1px solid var(--panel-outline); color: inherit; background: transparent; text-align: left; font: inherit; cursor: pointer; }
+  .door-picker-option:last-child { border-bottom: 0; }
+  .door-picker-option:hover, .door-picker-option:focus-visible { background: color-mix(in srgb, var(--aqua) 14%, transparent); outline: none; }
+  .door-picker .muted { margin: 0; padding: 12px; }
+  .door-picker-badges { display: flex; flex-wrap: wrap; gap: 7px; min-height: 0; }
+  .door-selection-badge { display: inline-flex; align-items: center; gap: 7px; max-width: 100%; padding: 5px 8px; border: 0; border-radius: 999px; color: var(--panel-text); background: color-mix(in srgb, var(--aqua) 18%, var(--panel-card)); font: inherit; cursor: pointer; }
+  .door-selection-badge > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .door-selection-badge > span:nth-child(2) { font-size: 18px; font-weight: 700; line-height: .7; }
+  .door-selection-badge:hover, .door-selection-badge:focus-visible { background: color-mix(in srgb, var(--aqua) 30%, var(--panel-card)); outline: 2px solid var(--aqua); outline-offset: 2px; }
+  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
   .storage-quota-card { display: grid; gap: 9px; margin-top: 12px; padding: 13px; border-radius: 8px; background: #f4f4f4; }
   .storage-quota-heading { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; }
   .storage-quota-heading strong { font-size: 12px; }
@@ -539,9 +568,9 @@ export const mainStyles = `
     transition: width 160ms ease;
   }
   .storage-limit-input .activity-storage-limit-description { margin-left: auto; }
-  .storage-section .storage-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 14px; }
+  .storage-section .storage-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-rows: 44px; gap: 8px; margin-top: 14px; }
   .storage-section .storage-actions .activity-storage-transfer-actions { display: contents; }
-  .storage-section .storage-actions .activity-storage-action { width: 100%; min-width: 0; padding: 0 8px; }
+  .storage-section .storage-actions .activity-storage-action { box-sizing: border-box; width: 100%; height: 100%; min-width: 0; padding: 0 8px; }
   .credential-share-receiver-row { padding: 12px; border: 0; border-radius: 7px; background: #f4f4f4; }
   .credential-share-receiver-row .credential-share-status { white-space: normal; }
   .credential-share-receiver-row .credential-share-status > span:last-child { display: grid; gap: 2px; margin-left: 4px; }
@@ -617,6 +646,14 @@ export const mainStyles = `
   .check input {
     width: auto;
     margin-right: 7px;
+  }
+
+  /* Keep the keyboard focus treatment consistent for editable controls.
+     Checkboxes, radios, switches, and range sliders retain their native cues. */
+  input:is(:not([type]), [type="text"], [type="search"], [type="number"], [type="password"], [type="email"], [type="tel"], [type="url"], [type="date"], [type="time"], [type="datetime-local"]):focus {
+    outline: 2px solid color-mix(in srgb, var(--aqua, #03a9f4) 35%, transparent);
+    outline-offset: 1px;
+    border-color: var(--aqua, #03a9f4);
   }
 
   .combobox {
@@ -771,11 +808,13 @@ export const mainStyles = `
   .share-detail strong { color: var(--primary-text-color, #111); font-size: 20px; }
   .share-generation-details { align-items: stretch; }
   .share-name-field > span:last-child, .share-expiry-field > span:last-child { flex: 1; }
-  .share-name-field input { width: 100%; min-height: 42px; box-sizing: border-box; padding-inline: 12px; }
+  .share-name-field input { box-sizing: border-box; width: 100%; min-height: 42px; padding: 9px 12px; border: 1px solid var(--panel-outline, var(--divider-color, #cbd5e1)); border-radius: 8px; color: var(--panel-text, inherit); background: var(--card-background-color, #fff); font: inherit; text-align: left; }
+  .share-name-field input:focus { outline: 2px solid color-mix(in srgb, var(--aqua, #03a9f4) 35%, transparent); outline-offset: 1px; border-color: var(--aqua, #03a9f4); }
   .share-expiry-field .check { display: flex; align-items: center; gap: 7px; min-height: 24px; }
   .share-expiry-field [data-access-expiry-row] { align-items: center; flex-flow: row wrap; gap: 4px 10px; }
   .share-expiry-field [data-access-expiry-row] > span { display: inline-flex; align-items: center; gap: 7px; }
-  .share-expiry-field [data-access-expiry] { width: min(210px, 100%); margin-left: 0; }
+  .share-expiry-field [data-access-expiry] { box-sizing: border-box; width: min(210px, 100%); min-height: 42px; margin-left: 0; padding: 9px 12px; border: 1px solid var(--panel-outline, var(--divider-color, #cbd5e1)); border-radius: 8px; color: var(--panel-text, inherit); background: var(--card-background-color, #fff); font: inherit; text-align: left; }
+  .share-expiry-field [data-access-expiry]:focus { outline: 2px solid color-mix(in srgb, var(--aqua, #03a9f4) 35%, transparent); outline-offset: 1px; border-color: var(--aqua, #03a9f4); }
   .share-permissions { margin: 0 48px 24px; overflow: hidden; border: 1px solid var(--divider-color, #d9e1eb); border-radius: 18px; }
   .share-access-dialog .modal-actions { justify-content: flex-end; gap: 12px; margin: 0; padding: 20px 48px; border-top: 1px solid var(--divider-color, #d9e1eb); }
   .share-access-table { width: 100%; border-collapse: collapse; }
@@ -811,6 +850,11 @@ export const mainStyles = `
   .share-access-table .share-readonly-check.enabled { color: #16803c; }
   .share-access-dialog .share-readonly-check { display: inline-flex; min-width: 18px; min-height: 18px; align-items: center; justify-content: center; color: transparent; font-size: 18px; font-weight: 800; line-height: 1; }
   .share-access-dialog .share-readonly-check.enabled { color: #16803c; }
+  .share-access-table .share-permission-control { display: inline-grid; width: 20px; height: 20px; place-items: center; vertical-align: middle; }
+  .share-access-table td > .share-permission-control { display: grid; margin: 0 auto; }
+  .share-access-table .share-permission-control input[type="checkbox"] { box-sizing: border-box; width: 20px; height: 20px; min-width: 20px; min-height: 20px; margin: 0; accent-color: var(--aqua, #03a9f4); }
+  .share-access-table .share-permission-control.share-readonly-check { color: transparent; font-size: 18px; font-weight: 800; line-height: 1; }
+  .share-access-table .share-permission-control.share-readonly-check.enabled { color: #16803c; }
   .share-access-table th:first-child, .share-access-table td:first-child { text-align: left; }
   .share-access-table thead tr:first-child th:nth-child(3),
   .share-access-table thead tr:last-child th:nth-child(5),

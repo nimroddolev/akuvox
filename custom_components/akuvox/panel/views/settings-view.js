@@ -48,6 +48,219 @@ const panelCameras = (host) => [...new Map(
     })
 ).values()].sort((left, right) => left.name.localeCompare(right.name));
 
+const notificationDoors = (host) => {
+  const doors = new Map();
+  const addDoor = (item) => {
+    const deviceId = item?.device_id;
+    if (!deviceId || doors.has(deviceId)) return;
+    doors.set(deviceId, { name: item.name || item.door_name || "Unnamed door", deviceId });
+  };
+  const account = host._account?.() || {};
+  (account.cameras || []).forEach(addDoor);
+  (account.relays || []).forEach(addDoor);
+  return [...doors.values()].sort((left, right) => left.name.localeCompare(right.name));
+};
+
+const notificationServices = (host) => Object.keys(host._hass?.services?.notify || {})
+  .sort()
+  .map((service) => ({
+    service: `notify.${service}`,
+    name: service.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase()),
+  }));
+
+const notificationAction = (service, withImage) => ({
+  action: service,
+  data: {
+    title: "{{ trigger.event.data.Location }} {% if trigger.event.data.CaptureType == 'Call' %}doorbell{% else %}opened{% endif %}",
+    message: "{{ 'Someone is calling from the ' ~ trigger.event.data.Location ~ ' door' if trigger.event.data.CaptureType == 'Call' else 'The ' ~ trigger.event.data.Location ~ ' door was opened by ' ~ (trigger.event.data.Initiator | default('Unknown', true)) }}",
+    ...(withImage ? { data: { image: "{{ trigger.event.data.PicUrl }}" } } : {}),
+  },
+});
+
+const suggestedAutomationName = (doors) => doors.length === 1
+  ? `Notify when ${doors[0].name} opens`
+  : "Notify when selected Akuvox doors open";
+
+const buildDoorNotificationAutomation = ({ name, doors, services, includeOpened, includeCalls }) => {
+  const captureTypes = [
+    ...(includeOpened ? ["Face Unlock", "Unlock on SmartPlus"] : []),
+    ...(includeCalls ? ["Call"] : []),
+  ];
+  return {
+    alias: name,
+    description: "Created by Akuvox SmartPlus door-event notifications.",
+    mode: "parallel",
+    max: 10,
+    triggers: doors.map((door) => ({
+      trigger: "device",
+      domain: "akuvox",
+      device_id: door.deviceId,
+      type: "door_unlocked",
+    })),
+    conditions: [{
+      condition: "template",
+      value_template: `{{ trigger.event.data.CaptureType in ${JSON.stringify(captureTypes)} }}`,
+    }],
+    actions: [{
+      choose: [{
+        conditions: [{
+          condition: "template",
+          value_template: "{{ trigger.event.data.PicUrl | default('', true) != '' }}",
+        }],
+        sequence: services.map((service) => notificationAction(service, true)),
+      }],
+      default: services.map((service) => notificationAction(service, false)),
+    }],
+  };
+};
+
+const requestDoorNotificationStep = (host, { title, description, content, backLabel, nextLabel, submit, bind, focusCancel = false }) => new Promise((resolve) => {
+  const dialog = host.shadowRoot.ownerDocument.createElement("dialog");
+  dialog.className = "door-notification-dialog";
+  dialog.innerHTML = `<button class="door-notification-close" type="button" data-cancel aria-label="Close" title="Close" ${focusCancel ? "autofocus" : ""}>×</button><h2>${escapeHtml(title)}</h2>
+    <p>${escapeHtml(description)}</p>
+    <form data-door-notification-form>
+      ${content}
+      <p class="form-error" data-door-notification-error hidden></p>
+      <div class="modal-actions">${backLabel ? `<button class="modal-cancel" type="button" data-back>${escapeHtml(backLabel)}</button>` : ""}<button class="modal-action" type="submit" data-next>${escapeHtml(nextLabel)}</button></div>
+    </form>`;
+  const form = dialog.querySelector("[data-door-notification-form]");
+  const error = dialog.querySelector("[data-door-notification-error]");
+  let result = null;
+  dialog.querySelector("[data-cancel]").addEventListener("click", () => dialog.close());
+  dialog.querySelector("[data-back]")?.addEventListener("click", () => {
+    result = { direction: "back" };
+    dialog.close();
+  });
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const value = submit(form, error);
+    if (!value) return;
+    result = { direction: "next", value };
+    dialog.close();
+  });
+  dialog.addEventListener("close", () => {
+    host._modalCount = Math.max(0, (host._modalCount || 1) - 1);
+    dialog.remove();
+    resolve(result);
+  }, { once: true });
+  host._modalCount = (host._modalCount || 0) + 1;
+  host.shadowRoot.append(dialog);
+  bind?.(dialog, form);
+  dialog.showModal();
+});
+
+const requestDoorNotificationAutomation = async (host) => {
+  const doors = notificationDoors(host);
+  const services = notificationServices(host);
+  const selection = { doorIds: [], includeOpened: true, includeCalls: false, services: [], name: "" };
+  let step = 0;
+  while (step >= 0 && step < 4) {
+    let result;
+    if (step === 0) {
+      result = await requestDoorNotificationStep(host, {
+        title: "Select Doors", description: "Choose the doors that should send notifications.", nextLabel: "Next", focusCancel: true,
+        content: `<div class="door-picker-control"><label class="door-picker-search"><input type="search" data-door-search aria-label="Search doors" placeholder="Type to filter doors" autocomplete="off"></label><div class="door-picker" data-door-picker hidden><div class="door-picker-results" data-door-picker-results role="listbox"></div></div></div><div class="door-picker-badges" data-door-picker-badges aria-label="Selected doors"></div>`,
+        bind: (dialog) => {
+          const search = dialog.querySelector("[data-door-search]");
+          const picker = dialog.querySelector("[data-door-picker]");
+          const results = dialog.querySelector("[data-door-picker-results]");
+          const badges = dialog.querySelector("[data-door-picker-badges]");
+          const nextButton = dialog.querySelector("[data-next]");
+          const render = () => {
+            nextButton.disabled = selection.doorIds.length === 0;
+            const query = search.value.trim().toLocaleLowerCase();
+            const available = doors.filter((door) => !selection.doorIds.includes(door.deviceId));
+            const matching = available.filter((door) => door.name.toLocaleLowerCase().includes(query));
+            badges.innerHTML = selection.doorIds.map((deviceId) => {
+              const door = doors.find((item) => item.deviceId === deviceId);
+              return door ? `<button class="door-selection-badge" type="button" data-remove-door="${escapeHtml(deviceId)}"><span>${escapeHtml(door.name)}</span><span aria-hidden="true">×</span><span class="sr-only">Remove ${escapeHtml(door.name)}</span></button>` : "";
+            }).join("");
+            results.innerHTML = matching.map((door) => `<button class="door-picker-option" type="button" role="option" data-add-door="${escapeHtml(door.deviceId)}">${escapeHtml(door.name)}</button>`).join("") || `<p class="muted">${available.length ? "No matching doors." : "All available doors are selected."}</p>`;
+            results.querySelectorAll("[data-add-door]").forEach((button) => button.addEventListener("mousedown", (event) => event.preventDefault()));
+            badges.querySelectorAll("[data-remove-door]").forEach((button) => button.addEventListener("click", () => {
+              selection.doorIds = selection.doorIds.filter((deviceId) => deviceId !== button.dataset.removeDoor);
+              render();
+            }));
+            results.querySelectorAll("[data-add-door]").forEach((button) => button.addEventListener("click", () => {
+              selection.doorIds = [...selection.doorIds, button.dataset.addDoor];
+              search.value = "";
+              render();
+              picker.hidden = true;
+              search.blur();
+            }));
+          };
+          search.addEventListener("focus", () => { picker.hidden = false; });
+          search.addEventListener("input", () => { picker.hidden = false; render(); });
+          search.addEventListener("blur", () => window.setTimeout(() => { picker.hidden = true; }, 100));
+          render();
+        },
+        submit: (_form, error) => {
+          if (selection.doorIds.length) return { doorIds: selection.doorIds };
+          error.textContent = "Select at least one door."; error.hidden = false; return null;
+        },
+      });
+    } else if (step === 1) {
+      result = await requestDoorNotificationStep(host, {
+        title: "Select Event Types", description: "Choose which door events should create a notification.", backLabel: "Back", nextLabel: "Next",
+        content: `<fieldset><legend>Event types</legend><label class="door-notification-option"><input type="checkbox" name="opened" ${selection.includeOpened ? "checked" : ""}><span>Door opened / unlocked</span></label><label class="door-notification-option"><input type="checkbox" name="call" ${selection.includeCalls ? "checked" : ""}><span>Doorbell call</span></label></fieldset>`,
+        submit: (form, error) => {
+          const includeOpened = form.querySelector('[name="opened"]').checked;
+          const includeCalls = form.querySelector('[name="call"]').checked;
+          if (includeOpened || includeCalls) return { includeOpened, includeCalls };
+          error.textContent = "Select at least one event type."; error.hidden = false; return null;
+        },
+      });
+    } else if (step === 2) {
+      result = await requestDoorNotificationStep(host, {
+        title: "Notify Via", description: "Choose one or more Home Assistant notification services.", backLabel: "Back", nextLabel: "Next",
+        content: `<fieldset><legend>Notification services</legend>${services.map((item) => `<label class="door-notification-option"><input type="checkbox" name="service" value="${escapeHtml(item.service)}" ${selection.services.includes(item.service) ? "checked" : ""}><span>${escapeHtml(item.name)}</span></label>`).join("") || '<p class="muted">No notification services are available.</p>'}</fieldset>`,
+        submit: (form, error) => {
+          const selectedServices = [...form.querySelectorAll('[name="service"]:checked')].map((input) => input.value);
+          if (selectedServices.length) return { services: selectedServices };
+          error.textContent = "Select at least one notification service."; error.hidden = false; return null;
+        },
+      });
+    } else {
+      const selectedDoors = doors.filter((door) => selection.doorIds.includes(door.deviceId));
+      const defaultName = suggestedAutomationName(selectedDoors);
+      result = await requestDoorNotificationStep(host, {
+        title: "Confirm Automation", description: "Review the automation name, then create and enable it.", backLabel: "Back", nextLabel: "Create automation",
+        content: `<label>Automation name<input name="automation-name" type="text" value="${escapeHtml(selection.name || defaultName)}" required></label>`,
+        submit: (form, error) => {
+          const name = form.querySelector('[name="automation-name"]').value.trim();
+          if (name) return { name };
+          error.textContent = "Enter an automation name."; error.hidden = false; return null;
+        },
+      });
+    }
+    if (!result) return null;
+    if (result.direction === "back") { step -= 1; continue; }
+    Object.assign(selection, result.value);
+    step += 1;
+  }
+  return {
+    ...selection,
+    doors: doors.filter((door) => selection.doorIds.includes(door.deviceId)),
+  };
+};
+
+const showDoorNotificationCreated = (host, automationId) => {
+  const dialog = host.shadowRoot.ownerDocument.createElement("dialog");
+  dialog.className = "door-notification-dialog door-notification-complete";
+  dialog.innerHTML = `<h2>Notification Automation Created</h2>
+    <p>Your door-event notification is enabled and ready to use.</p>
+    <div class="modal-actions"><button class="modal-cancel" type="button" data-close>Done</button><a class="modal-action" href="/config/automation/edit/${encodeURIComponent(automationId)}">Review in Automations</a></div>`;
+  dialog.querySelector("[data-close]").addEventListener("click", () => dialog.close());
+  dialog.addEventListener("close", () => {
+    host._modalCount = Math.max(0, (host._modalCount || 1) - 1);
+    dialog.remove();
+  }, { once: true });
+  host._modalCount = (host._modalCount || 0) + 1;
+  host.shadowRoot.append(dialog);
+  dialog.showModal();
+};
+
 const eventOptions = (host) => {
   const settings = host._settings || {};
   const cameras = panelCameras(host);
@@ -63,6 +276,10 @@ const eventOptions = (host) => {
   </div>
   <div class="settings-device-options" data-event-image-overrides ${eventImageWaiting && settings.custom_event_image_wait ? "" : "hidden"}>
     ${cameras.map((camera) => `<label class="settings-device-option"><span>${escapeHtml(camera.name)}</span><span class="settings-switch"><input type="checkbox" data-event-image-wait="${escapeHtml(camera.sourceName)}" aria-label="Wait for an event image from ${escapeHtml(camera.name)}" ${overrides[camera.sourceName] !== undefined ? (overrides[camera.sourceName] ? "checked" : "") : (settings.wait_for_event_image !== false ? "checked" : "")}><span></span></span></label>`).join("") || '<p class="muted">No cameras are currently available.</p>'}
+  </div>
+  <div class="settings-row door-notification-row">
+    <div><strong>Door-open notifications</strong><p>Create an enabled notification automation for selected doors and event types.</p></div>
+    <button class="action settings-inline-action" type="button" data-create-door-notification>${icons.plus}<span>Create automation</span></button>
   </div>`;
 };
 
@@ -166,10 +383,10 @@ const requestShareAccess = (host, viewedShare = null) => new Promise((resolve) =
   const viewRelayIds = new Set(viewedShare?.view_key_relay_ids || (readOnly ? [] : availableRelayIds));
   const activityDeviceNames = new Set(viewedShare?.activity_device_names || (readOnly ? [] : names));
   const checked = (value) => value ? "checked" : "";
-  const readOnlyCheck = (enabled) => `<span class="share-readonly-check${enabled ? " enabled" : ""}">${enabled ? "✓" : ""}</span>`;
+  const readOnlyCheck = (enabled) => `<span class="share-permission-control share-readonly-check${enabled ? " enabled" : ""}">${enabled ? "✓" : ""}</span>`;
   const checkbox = (attribute, value, inputValue = "") => readOnly
     ? readOnlyCheck(value)
-    : `<input ${attribute} type="checkbox" value="${escapeHtml(inputValue)}" ${checked(value)}>`;
+    : `<span class="share-permission-control"><input ${attribute} type="checkbox" value="${escapeHtml(inputValue)}" ${checked(value)}></span>`;
   const dialog = host.shadowRoot.ownerDocument.createElement("dialog");
   dialog.className = "share-access-dialog";
   dialog.classList.toggle("theme-dark", Boolean(host._hass?.themes?.darkMode));
@@ -213,7 +430,7 @@ const requestShareAccess = (host, viewedShare = null) => new Promise((resolve) =
   const status = viewedShare?.revoked ? "Revoked" : viewedShare?.activated ? "Connected" : "Waiting to pair";
   const basics = readOnly
     ? `<section class="share-details-card"><div class="share-detail"><span class="share-detail-icon">${icons.calendar}</span><span><small>Validity</small><strong>${escapeHtml(formattedExpiry)}</strong></span></div><div class="share-detail"><span class="share-detail-icon">${icons.calendar}</span><span><small>Registered on</small><strong>${escapeHtml(createdAt ? new Date(createdAt).toLocaleString() : "—")}</strong></span></div></section>`
-    : `<section class="share-details-card share-generation-details"><label class="share-detail share-name-field"><span class="share-detail-icon">${icons.idCard}</span><span><small>Remote instance name</small><input data-receiver-name maxlength="100" required placeholder="e.g. Holiday home" autofocus></span></label><div class="share-detail share-expiry-field"><span class="share-detail-icon">${icons.calendar}</span><span><small>Validity</small><label class="check"><input data-never-expire name="access-duration" type="radio" checked> Never expires</label><label class="check" data-access-expiry-row><span><input data-expiring name="access-duration" type="radio"> Expires at</span><input data-access-expiry type="datetime-local" min="${earliestExpiry}" disabled></label></span></div></section>`;
+    : `<section class="share-details-card share-generation-details"><label class="share-detail share-name-field"><span class="share-detail-icon">${icons.idCard}</span><span><small>Remote instance name</small><input data-receiver-name maxlength="100" required placeholder="e.g. Holiday home" autofocus></span></label><div class="share-detail share-expiry-field"><span class="share-detail-icon">${icons.calendar}</span><span><small>Validity</small><label class="check"><input data-never-expire name="access-duration" type="radio" checked> Never expires</label><label class="check" data-access-expiry-row><span><input data-expiring name="access-duration" type="radio"> Set expiry date &amp; time</span><input data-access-expiry type="datetime-local" min="${earliestExpiry}" disabled hidden></label></span></div></section>`;
   const heading = readOnly
     ? `<h2>${escapeHtml(viewedShare.receiver_name)} <span class="share-status-badge ${status.toLocaleLowerCase().replaceAll(" ", "-")}"><i></i>${escapeHtml(status)}</span></h2><p>Review the access permissions granted to this Home Assistant instance.</p>`
     : `<h2>Create pairing link</h2><p>Choose the devices and permissions available to the remote Home Assistant instance.</p>`;
@@ -260,10 +477,14 @@ const requestShareAccess = (host, viewedShare = null) => new Promise((resolve) =
   receiverName?.addEventListener("input", updateConfirmState);
   updateConfirmState();
   const updateExpiryState = () => {
-    if (expiry) expiry.disabled = !expires?.checked;
+    if (!expiry) return;
+    const expirySelected = Boolean(expires?.checked);
+    expiry.disabled = !expirySelected;
+    expiry.hidden = !expirySelected;
   };
   neverExpire?.addEventListener("change", updateExpiryState);
   expires?.addEventListener("change", updateExpiryState);
+  updateExpiryState();
   dialog.querySelectorAll("[data-cancel]").forEach((button) => button.addEventListener("click", () => dialog.close()));
   dialog.querySelector("[data-confirm]")?.addEventListener("click", () => {
     const name = dialog.querySelector("[data-receiver-name]").value.trim();
@@ -654,6 +875,26 @@ export const bindSettingsEvents = (host) => {
   };
   eventImageToggle?.addEventListener("change", syncEventImageOptions);
   eventOverrideToggle?.addEventListener("change", syncEventImageOptions);
+
+  settingsForm.querySelector("[data-create-door-notification]")?.addEventListener("click", async () => {
+    const selection = await requestDoorNotificationAutomation(host);
+    if (!selection) return;
+    const automationId = String(Date.now());
+    try {
+      await host._hass.callApi(
+        "POST",
+        `config/automation/config/${encodeURIComponent(automationId)}`,
+        buildDoorNotificationAutomation(selection)
+      );
+      showDoorNotificationCreated(host, automationId);
+    } catch (error) {
+      showNotice(
+        host,
+        error?.message || "Could not create the notification automation.",
+        "Automation creation failed"
+      );
+    }
+  });
 
   const storageLimitInput = settingsForm.querySelector(
     '[name="activity_history_max_storage_mb"]'
