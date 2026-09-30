@@ -5,6 +5,8 @@ https://github.com/nimroddolev/akuvox
 """
 from __future__ import annotations
 
+from copy import deepcopy
+
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, callback
@@ -68,6 +70,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
     await async_update_configuration(hass=hass, entry=entry)
     LOGGER.debug("Akuvox setup: configuration applied")
+    # Home Assistant invokes an entry's update listener for a title change as
+    # well as for a settings change.  Keep the settings snapshot separate so a
+    # user renaming their hub does not unnecessarily restart its cloud session.
+    _remember_entry_configuration(coordinator.client, entry)
     if is_remote_entry(entry):
         remote_sync = async_register_remote_synchronizer(hass, entry, coordinator.client)
         entry.async_on_unload(remote_sync.async_stop)
@@ -149,12 +155,36 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Reload config entry."""
+    """Reload an entry when its functional configuration changed."""
     coordinator: AkuvoxDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
     if coordinator.client.consume_entry_reload_skip():
         LOGGER.debug("Skipping reload after routine SmartPlus token refresh")
+        _remember_entry_configuration(coordinator.client, entry)
+        return
+    if not _entry_configuration_changed(coordinator.client, entry):
+        LOGGER.debug("Skipping reload after SmartPlus hub title update")
         return
     await hass.config_entries.async_reload(entry.entry_id)
+
+
+def _entry_configuration_snapshot(entry: ConfigEntry) -> tuple[dict, dict]:
+    """Return the entry fields that require an integration restart when changed."""
+    return deepcopy(dict(entry.data)), deepcopy(dict(entry.options))
+
+
+def _remember_entry_configuration(client: AkuvoxApiClient, entry: ConfigEntry) -> None:
+    """Record the entry's current functional configuration for its listener."""
+    client._entry_configuration_snapshot = _entry_configuration_snapshot(entry)
+
+
+def _entry_configuration_changed(client: AkuvoxApiClient, entry: ConfigEntry) -> bool:
+    """Return whether data or options changed, excluding the presentation title."""
+    snapshot = _entry_configuration_snapshot(entry)
+    previous_snapshot = getattr(client, "_entry_configuration_snapshot", None)
+    client._entry_configuration_snapshot = snapshot
+    # Be conservative for clients created before this guard: reload once to
+    # preserve the existing behavior for any genuine update.
+    return previous_snapshot is None or previous_snapshot != snapshot
 
 # Polling
 

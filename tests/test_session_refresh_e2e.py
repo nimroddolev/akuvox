@@ -98,6 +98,12 @@ class TestSmartPlusSessionRefreshE2E(unittest.IsolatedAsyncioTestCase):
         self.session = _Session(responses)
         return AkuvoxApiClient(self.session, _Hass(), self.entry)
 
+    def test_new_session_without_refresh_history_is_not_refreshed_immediately(self) -> None:
+        """A newly authenticated email session waits for its first interval."""
+        client = self._client([])
+
+        self.assertFalse(client._is_token_refresh_due())
+
     @patch("custom_components.akuvox.api.async_store_credentials", new_callable=AsyncMock)
     async def test_expired_request_refreshed_and_retried(self, store_credentials) -> None:
         """A rejected authenticated request renewed and retried once."""

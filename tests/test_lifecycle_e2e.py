@@ -99,6 +99,7 @@ class _Entry:
     entry_id = "entry-id"
     data = {"token": "token"}
     options = {}
+    title = "Original hub"
 
     def __init__(self) -> None:
         self.unload_callbacks = []
@@ -214,6 +215,7 @@ class TestIntegrationLifecycleE2E(unittest.IsolatedAsyncioTestCase):
         await async_reload_entry(hass, entry)
         hass.config_entries.reloaded.assert_not_awaited()
 
+        entry.options = {"debug_logging": True}
         await async_reload_entry(hass, entry)
         hass.config_entries.reloaded.assert_awaited_once_with(entry.entry_id)
 
@@ -221,6 +223,27 @@ class TestIntegrationLifecycleE2E(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(await async_unload_entry(hass, entry))
         self.assertTrue(coordinator.client.stopped)
         self.assertNotIn(entry.entry_id, hass.data[DOMAIN])
+
+    async def test_renaming_hub_did_not_reload_or_reauthenticate(self) -> None:
+        """A presentation-only config-entry update leaves the session running."""
+        hass = _Hass()
+        entry = _Entry()
+        with (
+            patch("custom_components.akuvox.async_load_and_migrate_credentials", new=AsyncMock(return_value={"auth_token": "auth", "token": "token"})),
+            patch("custom_components.akuvox.AkuvoxApiClient", _Client),
+            patch("custom_components.akuvox.AkuvoxDataUpdateCoordinator", _Coordinator),
+            patch("custom_components.akuvox.async_get_clientsession", return_value=object()),
+            patch("custom_components.akuvox.async_register_websocket_api"),
+            patch("custom_components.akuvox.async_refresh_panel", new=AsyncMock()),
+            patch("custom_components.akuvox.async_clear_authentication_failure"),
+            patch("custom_components.akuvox.async_at_started", return_value=MagicMock()),
+        ):
+            self.assertTrue(await async_setup_entry(hass, entry))
+
+        entry.title = "Renamed hub"
+        await async_reload_entry(hass, entry)
+
+        hass.config_entries.reloaded.assert_not_awaited()
 
     async def test_stopping_one_account_left_other_activity_pollers_running(self) -> None:
         """Activity polling belongs to the selected config entry only."""

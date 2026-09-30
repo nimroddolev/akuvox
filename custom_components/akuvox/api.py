@@ -723,13 +723,19 @@ class AkuvoxApiClient:
         source = self._entry.options if self._entry.options.get("override", False) else self._entry.data
         refreshed_at = source.get(TOKEN_REFRESHED_AT)
         if not isinstance(refreshed_at, str):
-            return True
+            # A just-authenticated entry has a newly issued session but no
+            # persisted refresh history yet. Refreshing it immediately can be
+            # rejected by the email-login endpoint even though the session is
+            # valid, which incorrectly starts Home Assistant reauthentication.
+            # Let the first scheduled interval (or an actual rejected API
+            # request) drive the refresh instead.
+            return False
         try:
             last_refresh = datetime.fromisoformat(refreshed_at)
             if last_refresh.tzinfo is None:
-                return True
+                return False
         except ValueError:
-            return True
+            return False
         return datetime.now(timezone.utc) - last_refresh >= TOKEN_REFRESH_INTERVAL
 
     async def _async_proactive_token_refresh(self, _now) -> None:
@@ -1210,8 +1216,21 @@ class AkuvoxApiClient:
                     for index, item in enumerate(self._activity_history)
                 }
                 changed = True
-            elif self._activity_history[existing_index] != event:
-                self._activity_history[existing_index] = dict(event)
+            else:
+                updated_event = dict(event)
+                # SmartPlus refreshes the signed image URL on every poll. Once
+                # we have its local preview, retaining that URL only makes the
+                # persisted record (and therefore its reported storage usage)
+                # fluctuate without adding useful cached data.
+                local_preview = self._activity_history[existing_index].get(
+                    "LocalPreview"
+                )
+                if local_preview:
+                    updated_event["LocalPreview"] = local_preview
+                    self._remove_cloud_image_urls(updated_event)
+                if self._activity_history[existing_index] == updated_event:
+                    continue
+                self._activity_history[existing_index] = updated_event
                 changed = True
         if self._activity_storage_enabled():
             changed = await self._async_store_activity_previews() or changed
