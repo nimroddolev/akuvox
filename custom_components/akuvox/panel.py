@@ -64,7 +64,7 @@ from .sharing import (
 
 _PANEL_MODULE = "akuvox-panel.js"
 _PANEL_ICONSET = "akuvox-iconset.js"
-_PANEL_ASSET_VERSION = "20260928-connected-node-row-margins-v149"
+_PANEL_ASSET_VERSION = "20260928-camera-stream-loader-v151"
 DATA_CAMERA_PREVIEW_LOCK = f"{DOMAIN}_panel_camera_preview_lock"
 
 

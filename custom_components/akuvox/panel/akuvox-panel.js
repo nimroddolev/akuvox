@@ -8,12 +8,12 @@ import { PANEL_TAG, TAB_HASHES, TAB_HASH_BY_ID, TABS } from "./utils/constants.j
 import { escapeHtml } from "./utils/dom.js";
 import { copyText } from "./utils/clipboard.js";
 import { settingsRenderSignature } from "./utils/settings-signature.js";
-import { getPanelStyles } from "./styles/index.js?v=20260928-connected-node-row-margins-v32";
+import { getPanelStyles } from "./styles/index.js?v=20260928-camera-stream-loader-v34";
 import { showNotice, confirmModal, callWsWithBlocker } from "./components/dialogs.js";
-import { installCameraRelayActions } from "./components/camera-actions.js?v=20260926-device-preview-refresh";
+import { installCameraRelayActions } from "./components/camera-actions.js?v=20260928-camera-stream-loader-v4";
 import { closeKeyActionsMenu } from "./components/key-menu.js";
 
-import { renderDevicesView, bindDevicesEvents } from "./views/devices-view.js?v=20260928-camera-preview-decoded-swap";
+import { renderDevicesView, bindDevicesEvents } from "./views/devices-view.js?v=20260928-camera-preview-painted-swap";
 import {
   renderActivityView,
   bindActivityEvents,
@@ -637,11 +637,7 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
       new CustomEvent("hass-more-info", { detail: { entityId }, bubbles: true, composed: true })
     );
 
-    if (relays.length) {
-      installCameraRelayActions(this, relays, orientation);
-    } else if (orientation !== "none") {
-      installCameraRelayActions(this, [], orientation);
-    }
+    installCameraRelayActions(this, relays, orientation);
   }
 
   async _relay(mac, relayId) {

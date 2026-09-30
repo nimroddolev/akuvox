@@ -247,10 +247,20 @@ export const bindDevicesEvents = (host) => {
           // The load event is the fallback for browsers that cannot expose a
           // separate decode completion signal.
         }
+        // A decoded image is not necessarily painted in the same frame.  Keep
+        // the existing still beneath it through a complete paint so a slow
+        // compositor can never expose the preview background between frames.
+        if (!nextSnapshot.naturalWidth || !nextSnapshot.naturalHeight) {
+          nextSnapshot.remove();
+          finishRefresh();
+          return;
+        }
         nextSnapshot.classList.add("is-ready");
         window.requestAnimationFrame(() => {
-          image.remove();
-          finishRefresh();
+          window.requestAnimationFrame(() => {
+            if (nextSnapshot.isConnected) image.remove();
+            finishRefresh();
+          });
         });
       }, { once: true });
       nextSnapshot.addEventListener("error", () => {

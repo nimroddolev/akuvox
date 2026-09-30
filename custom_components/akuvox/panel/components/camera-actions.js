@@ -6,6 +6,89 @@ import { findInComposedTree, escapeHtml } from "../utils/dom.js";
 import { icons } from "../utils/icons.js?v=20260926-device-preview-refresh";
 import { orientationTransform } from "../utils/orientation.js?v=20260820-camera-orientation";
 
+const installCameraStreamLoader = (host, cameraDialog, orientation, attempt = 0) => {
+  const stream = findInComposedTree(cameraDialog.shadowRoot, "ha-camera-stream");
+  if (!stream?.shadowRoot) {
+    if (attempt < 24) {
+      window.setTimeout(
+        () => installCameraStreamLoader(host, cameraDialog, orientation, attempt + 1),
+        50
+      );
+    }
+    return;
+  }
+
+  const streamRoot = stream.shadowRoot;
+  if (!streamRoot.querySelector("[data-akuvox-stream-loader-styles]")) {
+    const style = host.shadowRoot.ownerDocument.createElement("style");
+    style.dataset.akuvoxStreamLoaderStyles = "";
+    style.textContent = `
+      :host { position: relative; display: block; aspect-ratio: 4 / 3; min-height: 0; }
+      .akuvox-stream-loader { position: absolute; inset: 0; z-index: 20; display: grid; place-items: center; pointer-events: none; background: var(--card-background-color, #fff); }
+      .akuvox-stream-loader[hidden] { display: none; }
+      .akuvox-stream-loader__spinner { width: 36px; height: 36px; box-sizing: border-box; border: 4px solid color-mix(in srgb, var(--primary-color, #03a9f4) 25%, transparent); border-top-color: var(--primary-color, #03a9f4); border-radius: 50%; animation: akuvox-stream-loader-spin .8s linear infinite; }
+      @keyframes akuvox-stream-loader-spin { to { transform: rotate(360deg); } }
+    `;
+    streamRoot.append(style);
+  }
+
+  let loader = streamRoot.querySelector(".akuvox-stream-loader");
+  if (!loader) {
+    loader = host.shadowRoot.ownerDocument.createElement("div");
+    loader.className = "akuvox-stream-loader";
+    loader.setAttribute("role", "status");
+    loader.setAttribute("aria-label", "Loading camera stream");
+    loader.innerHTML = '<span class="akuvox-stream-loader__spinner" aria-hidden="true"></span>';
+    streamRoot.append(loader);
+  }
+
+  const media = findInComposedTree(stream.shadowRoot, "video, img");
+  if (!media) {
+    if (attempt < 24) {
+      window.setTimeout(
+        () => installCameraStreamLoader(host, cameraDialog, orientation, attempt + 1),
+        50
+      );
+    }
+    return;
+  }
+
+  const revealStream = () => {
+    loader.hidden = true;
+  };
+  const checkStreamReady = (checkAttempt = 0) => {
+    if (!stream.isConnected || loader.hidden) return;
+    // Home Assistant's HLS player can replace its internal <video> while it
+    // starts. Re-query it here instead of depending solely on listeners that
+    // may have been attached to the element it replaced.
+    const currentMedia = findInComposedTree(stream.shadowRoot, "video, img");
+    if (currentMedia?.tagName === "VIDEO") {
+      currentMedia.style.transform = orientationTransform(orientation);
+      if (currentMedia.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+        revealStream();
+        return;
+      }
+    } else if (currentMedia?.complete && currentMedia.naturalWidth > 0) {
+      revealStream();
+      return;
+    }
+    if (checkAttempt < 300) {
+      window.setTimeout(() => checkStreamReady(checkAttempt + 1), 50);
+    }
+  };
+
+  media.style.transform = orientationTransform(orientation);
+  if (media.tagName === "VIDEO") {
+    if (media.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) revealStream();
+    else ["loadeddata", "canplay", "playing"].forEach((eventName) => media.addEventListener(eventName, revealStream, { once: true }));
+  } else if (media.complete && media.naturalWidth > 0) {
+    revealStream();
+  } else {
+    media.addEventListener("load", revealStream, { once: true });
+  }
+  checkStreamReady();
+};
+
 /**
  * Locate Home Assistant's camera modal and inject door relay action buttons.
  * @param {HTMLElement} host
@@ -15,6 +98,7 @@ import { orientationTransform } from "../utils/orientation.js?v=20260820-camera-
 export const installCameraRelayActions = (host, relays, orientation = "none", attempt = 0) => {
   const documentRef = host.shadowRoot.ownerDocument;
   const cameraDialog = findInComposedTree(documentRef, "more-info-camera");
+  if (cameraDialog) installCameraStreamLoader(host, cameraDialog, orientation);
   const actions = cameraDialog?.shadowRoot?.querySelector(".actions");
 
   if (!actions) {
@@ -26,10 +110,6 @@ export const installCameraRelayActions = (host, relays, orientation = "none", at
     }
     return;
   }
-
-  const stream = findInComposedTree(cameraDialog, "ha-camera-stream");
-  const media = stream && findInComposedTree(stream, "video, img");
-  if (media) media.style.transform = orientationTransform(orientation);
 
   const nativeSnapshotAction = [
     ...actions.querySelectorAll("button, ha-button, mwc-button, a"),
@@ -48,6 +128,8 @@ export const installCameraRelayActions = (host, relays, orientation = "none", at
       );
     }
   }
+
+  if (!relays.length) return;
 
   const group = documentRef.createElement("div");
   group.className = "akuvox-camera-relay-actions";

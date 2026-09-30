@@ -602,7 +602,6 @@ export const viewStyles = `
     }
     .mobile-key-primary-controls .add-key { min-width: 0; }
     .mobile-key-primary-controls .danger { grid-column: 1 / -1; }
-    .mobile-filter-toolbar { display: none !important; }
     .key-filter-toolbar { display: none; }
 
     .remote-instances-section .credential-share-receiver-row {
