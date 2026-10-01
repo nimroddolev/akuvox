@@ -109,7 +109,7 @@ export const renderDevicesView = (host, account) => {
             </div>
             ${device.deviceId ? `<a class="info-link" href="/config/devices/device/${encodeURIComponent(device.deviceId)}">${icons.externalLink}Device</a>` : ""}
           </div>
-          <div class="device-preview ${status.className}" aria-label="${device.camera ? `Camera preview from ${escapeHtml(device.name)}` : "No camera preview available"}">
+          <div class="device-preview ${status.className}" ${device.camera ? `data-camera-preview-stream="${escapeHtml(device.camera.source_name || device.camera.name)}"` : ""} aria-label="${device.camera ? `Camera preview from ${escapeHtml(device.name)}` : "No camera preview available"}">
             <span class="device-preview-placeholder" aria-hidden="true">${icons.webcam}</span>
             <p class="device-status ${status.className}" data-camera-status>${status.label}</p>
             ${device.camera?.preview_url ? `<img data-camera-key="${escapeHtml(cameraKey)}" data-camera-preview-url="${escapeHtml(device.camera.preview_url)}" src="${escapeHtml(device.camera.preview_url)}" alt="" loading="eager">` : ""}
@@ -203,6 +203,14 @@ export const bindDevicesEvents = (host) => {
     button.addEventListener("click", () =>
       host._stream(button.dataset.stream, button.dataset.mode)
     )
+  );
+
+  host.shadowRoot.querySelectorAll("[data-camera-preview-stream]").forEach((preview) =>
+    preview.addEventListener("click", (event) => {
+      // The play button has its own handler. Let it handle the click once.
+      if (event.target.closest("button, a")) return;
+      host._stream(preview.dataset.cameraPreviewStream, "open");
+    })
   );
 
   host.shadowRoot.querySelectorAll("[data-relay]").forEach((button) =>

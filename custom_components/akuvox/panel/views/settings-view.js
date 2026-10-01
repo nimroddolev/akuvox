@@ -83,9 +83,27 @@ const notificationAction = (service, withImage) => ({
   },
 });
 
-const suggestedAutomationName = (doors) => doors.length === 1
-  ? `Notify when ${doors[0].name} opens`
-  : "Notify when selected Akuvox doors open";
+const suggestedAutomationName = ({ doors, callerRules, includeOpened, includeCalls }) => {
+  const doorName = doors.length === 1 ? doors[0].name : "selected Akuvox doors";
+  const callerNames = callerRules.map((rule) => rule.name);
+  if (!callerNames.length) {
+    if (includeOpened && !includeCalls) return `Notify when ${doorName} opens`;
+    if (!includeOpened && includeCalls) return `Notify when ${doorName} is called`;
+    return `Notify when ${doorName} is called or opened`;
+  }
+
+  const excludedCallers = callerRules.every((rule) => rule.operator === "is_not");
+  const names = joinCallerNames(callerNames, excludedCallers ? "and" : "or");
+  const subject = excludedCallers ? `someone other than ${names}` : names;
+  const plural = !excludedCallers && callerNames.length > 1;
+  if (includeOpened && !includeCalls) {
+    return `Notify when ${subject} ${plural ? "open or unlock" : "opens or unlocks"} ${doorName}`;
+  }
+  if (!includeOpened && includeCalls) {
+    return `Notify when ${subject} ${plural ? "call" : "calls"} ${doorName}`;
+  }
+  return `Notify when ${subject} ${plural ? "call or open" : "calls or opens"} ${doorName}`;
+};
 
 const joinCallerNames = (names, conjunction) => {
   if (names.length < 2) return names[0] || "";
@@ -212,7 +230,7 @@ const requestDoorNotificationAutomation = async (host) => {
   const doors = notificationDoors(host);
   const members = familyMembers(host);
   const services = notificationServices(host);
-  const selection = { doorIds: [], includeOpened: true, includeCalls: false, callerRules: [], callerOperator: "is", services: [], name: "" };
+  const selection = { doorIds: [], includeOpened: false, includeCalls: false, callerRules: [], callerOperator: "is", services: [], name: "" };
   let step = 0;
   let progressFromStage = 0;
   while (step >= 0 && step < 5) {
@@ -413,7 +431,12 @@ const requestDoorNotificationAutomation = async (host) => {
       });
     } else {
       const selectedDoors = doors.filter((door) => selection.doorIds.includes(door.deviceId));
-      const defaultName = suggestedAutomationName(selectedDoors);
+      const defaultName = suggestedAutomationName({
+        doors: selectedDoors,
+        callerRules: selection.callerRules,
+        includeOpened: selection.includeOpened,
+        includeCalls: selection.includeCalls,
+      });
       result = await requestDoorNotificationStep(host, {
         stage: 5, progressFromStage, progressToStage: (selection.name || defaultName).trim() ? 5 : 4, description: "Enter the automation name.", backLabel: "Back", nextLabel: "Create automation",
         content: `<input name="automation-name" type="text" value="${escapeHtml(selection.name || defaultName)}" aria-label="Automation name" required>`,
@@ -469,7 +492,7 @@ const eventOptions = (host) => {
   const overrides = settings.event_image_wait_overrides || {};
   const eventImageWaiting = settings.wait_for_event_image !== false;
   return `<div class="settings-row door-notification-row">
-    <div><strong>Door-open notifications</strong><p>Create an automation to fire a notification when doors are opened.</p></div>
+    <div><strong>Automation Wizard</strong><p>Create automations to notify when doors are called / opened.</p></div>
     <button class="action settings-inline-action" type="button" data-create-door-notification>${icons.automation}<span>Create</span></button>
   </div>
   <div class="settings-row">
@@ -942,7 +965,7 @@ export const renderSettingsView = (host) => {
             <h2>Settings</h2>
             <p class="settings-intro">Manage how Akuvox SmartPlus works in Home Assistant.</p>
           </div>
-          <div class="settings-actions">
+          <div class="settings-actions"${host._settingsDirty && !host._settingsSaving ? "" : " hidden"}>
             <button class="settings-discard" type="button" data-discard-settings ${host._settingsDirty && !host._settingsSaving ? "" : "disabled"}>${icons.restart}<span>Discard</span></button>
             <button class="action settings-save" type="submit" ${host._settingsDirty && !host._settingsSaving ? "" : "disabled"}>${icons.check}<span>Save changes</span></button>
           </div>
@@ -1030,6 +1053,7 @@ export const handleSaveSettings = async (host, event) => {
   const settingsForm = event.currentTarget;
   const form = new FormData(settingsForm);
   host._settingsSaving = true;
+  settingsForm.querySelector(".settings-actions").hidden = true;
   try {
     const saved = {
       store_activity_history: form.get("store_activity_history") === "on",
@@ -1073,6 +1097,8 @@ export const handleSaveSettings = async (host, event) => {
     );
   } finally {
     host._settingsSaving = false;
+    const actions = settingsForm.querySelector(".settings-actions");
+    if (actions) actions.hidden = !host._settingsDirty;
   }
 };
 
@@ -1107,8 +1133,10 @@ export const bindSettingsEvents = (host) => {
       formSignature(settingsForm) !== settingsForm.dataset.settingsSignature;
     const saveButton = settingsForm.querySelector("[type='submit']");
     const discardButton = settingsForm.querySelector("[data-discard-settings]");
+    const actions = settingsForm.querySelector(".settings-actions");
     if (saveButton) saveButton.disabled = !host._settingsDirty || host._settingsSaving;
     if (discardButton) discardButton.disabled = !host._settingsDirty || host._settingsSaving;
+    if (actions) actions.hidden = !host._settingsDirty || host._settingsSaving;
   };
   settingsForm.addEventListener("input", markSettingsDirty);
   settingsForm.addEventListener("change", markSettingsDirty);

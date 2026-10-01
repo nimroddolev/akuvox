@@ -113,7 +113,9 @@ export const tableStyles = `
   .tile-card:hover {
     border-color: color-mix(in srgb, var(--aqua) 45%, var(--panel-outline, #dbe2e8));
     box-shadow: 0 8px 18px rgb(27 28 28 / 8%);
-    transform: translateY(-1px);
+    /* Moving the hover target makes a pointer at its lower edge repeatedly
+       leave and re-enter it, causing the device preview to visibly jitter. */
+    transform: none;
   }
 
   .tile-card-heading {
@@ -262,6 +264,8 @@ export const tableStyles = `
     border-radius: 8px;
     background: #e9eef1;
   }
+
+  .device-preview[data-camera-preview-stream] { cursor: pointer; }
 
   .device-preview img {
     position: absolute;

@@ -238,11 +238,22 @@ export const mainStyles = `
   }
 
   .settings-actions {
+    position: fixed;
+    z-index: 10;
+    right: max(24px, env(safe-area-inset-right));
+    bottom: max(24px, env(safe-area-inset-bottom));
     display: flex;
     flex-wrap: wrap;
     justify-content: flex-end;
     gap: 10px;
+    padding: 10px;
+    border: 1px solid var(--panel-outline);
+    border-radius: 10px;
+    background: var(--panel-card);
+    box-shadow: 0 10px 24px rgb(0 0 0 / 20%);
   }
+
+  .settings-actions[hidden] { display: none; }
 
   .settings-discard {
     min-height: 38px;
@@ -577,7 +588,7 @@ export const mainStyles = `
   .caller-picker-add[hidden] { display: none; }
   .caller-picker-add-button { display: grid; width: 34px; height: 34px; place-items: center; padding: 0; border: 0; border-radius: 999px; color: #fff; background: var(--success-color, #16803c); font: inherit; font-size: 25px; font-weight: 500; line-height: 1; cursor: pointer; }
   .caller-picker-add-button:hover, .caller-picker-add-button:focus-visible { background: color-mix(in srgb, var(--success-color, #16803c) 82%, #000); outline: 2px solid var(--aqua); outline-offset: 2px; }
-  .caller-picker-add-menu { position: absolute; z-index: 3; top: calc(100% + 6px); right: 0; display: grid; min-width: 180px; max-height: 190px; overflow: auto; border: 1px solid var(--panel-outline); border-radius: 8px; background: var(--panel-card); box-shadow: 0 8px 18px #0003; overscroll-behavior: contain; }
+  .caller-picker-add-menu { position: absolute; z-index: 3; top: calc(100% + 6px); left: 50%; display: grid; min-width: 180px; max-height: 190px; overflow: auto; border: 1px solid var(--panel-outline); border-radius: 8px; background: var(--panel-card); box-shadow: 0 8px 18px #0003; transform: translateX(-50%); overscroll-behavior: contain; }
   .caller-picker-add.opens-upward .caller-picker-add-menu { top: auto; bottom: calc(100% + 6px); }
   .caller-picker-add-menu[hidden] { display: none; }
   .caller-picker-add-menu button { padding: 9px 12px; border: 0; border-bottom: 1px solid var(--panel-outline); color: var(--panel-text); background: transparent; font: inherit; text-align: left; cursor: pointer; }
@@ -672,7 +683,7 @@ export const mainStyles = `
   @media (max-width: 620px) {
     .settings-page { padding: 18px; }
     .settings-heading { display: grid; gap: 16px; }
-    .settings-actions { justify-content: stretch; }
+    .settings-actions { right: max(16px, env(safe-area-inset-right)); bottom: max(16px, env(safe-area-inset-bottom)); justify-content: stretch; }
     .settings-actions > button { flex: 1; justify-content: center; }
     .settings-row { align-items: flex-start; gap: 16px; }
     .settings-switch { margin-top: 3px; }

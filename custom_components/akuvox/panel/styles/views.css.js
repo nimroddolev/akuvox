@@ -812,7 +812,9 @@ export const viewStyles = `
     padding: 10px 12px;
     border: 1px solid #d49a19;
     border-radius: 8px;
-    color: var(--primary-text-color, #342500);
+    /* This alert deliberately uses a light warning surface in both themes.
+       Do not inherit Home Assistant's light dark-theme foreground color. */
+    color: #342500;
     background: #fff4cf;
     font-size: 14px;
     line-height: 1.45;
