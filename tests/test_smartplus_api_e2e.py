@@ -280,7 +280,7 @@ class TestSmartPlusApiE2E(unittest.IsolatedAsyncioTestCase):
                         ],
                     },
                 ),
-                _Response(200, {"code": 0, "data": {"list": []}}),
+                _Response(200, {"code": 0, "data": [{"Name": "Liv", "Active": "1"}]}),
             ]
         )
         client.async_start_polling_personal_door_log = AsyncMock()
@@ -303,7 +303,8 @@ class TestSmartPlusApiE2E(unittest.IsolatedAsyncioTestCase):
         )
         self.assertFalse(devices["door_keys_data"][0]["expired"])
         self.assertEqual(devices["door_keys_data"][0]["qr_code_url"], "")
-        self.assertEqual(len(self.session.requests), 3)
+        self.assertEqual(len(self.session.requests), 4)
+        self.assertEqual(client.get_panel_data()["family_members"], ["Liv"])
 
     async def test_temporary_key_expiry_followed_the_smartplus_flag(self) -> None:
         """Akuvox's numeric Expired flag was not inverted in the panel data."""
@@ -330,6 +331,7 @@ class TestSmartPlusApiE2E(unittest.IsolatedAsyncioTestCase):
         client.async_make_servers_list_request = AsyncMock(return_value=True)
         client.async_retrieve_device_data = AsyncMock(return_value=True)
         client.async_retrieve_temp_keys_data = AsyncMock(return_value=True)
+        client.async_retrieve_family_members = AsyncMock(return_value=True)
 
         self.assertTrue(await client.async_retrieve_user_data(start_polling=False))
 
@@ -460,7 +462,7 @@ class TestSmartPlusApiE2E(unittest.IsolatedAsyncioTestCase):
         received_events = []
         client.async_subscribe_to_door_unlocks("Lobby", received_events.append)
         registry = MagicMock()
-        registry.async_get_device.side_effect = [
+        devices = [
             None,
             SimpleNamespace(
                 id="device-id",
@@ -469,6 +471,8 @@ class TestSmartPlusApiE2E(unittest.IsolatedAsyncioTestCase):
                 config_entries={self.entry.entry_id},
             ),
         ]
+        registry.async_get_device.side_effect = devices
+        registry.async_get_device_by_identifier.side_effect = devices
 
         api_module = sys.modules[AkuvoxApiClient.__module__]
         with patch.object(api_module.dr, "async_get", return_value=registry):
@@ -488,6 +492,7 @@ class TestSmartPlusApiE2E(unittest.IsolatedAsyncioTestCase):
                 "Initiator": "Resident",
                 "PicUrl": "",
                 "RelayName": "",
+                "device_id": "device-id",
             },
         )
 

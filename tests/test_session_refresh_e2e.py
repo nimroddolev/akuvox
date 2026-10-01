@@ -259,12 +259,13 @@ class TestSmartPlusSessionRefreshE2E(unittest.IsolatedAsyncioTestCase):
         store_credentials.assert_awaited_once()
         self.assertEqual(len(self.session.requests), 1)
 
-    async def test_failed_proactive_refresh_started_reauthentication(self) -> None:
-        """A rejected renewal prompted Home Assistant reauthentication once."""
+    async def test_failed_proactive_refresh_kept_the_current_session_active(self) -> None:
+        """A rejected renewal alone does not force a usable session to reauthenticate."""
         client = self._client([_Response(401, {})])
 
-        with patch("custom_components.akuvox.api.async_report_authentication_failure"):
+        with patch("custom_components.akuvox.api.async_report_authentication_failure") as report_failure:
             await client._async_proactive_token_refresh(None)
 
-        self.assertTrue(self.entry.reauth_started)
+        report_failure.assert_not_called()
+        self.assertFalse(self.entry.reauth_started)
         self.assertEqual(len(self.session.requests), 1)

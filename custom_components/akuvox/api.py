@@ -21,6 +21,7 @@ from datetime import datetime, timezone
 from time import time
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
+from homeassistant.const import ATTR_DEVICE_ID
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers import device_registry as dr
@@ -72,6 +73,7 @@ from .const import (
     API_OPENDOOR,
     API_APP_HOST,
     API_GET_PERSONAL_TEMP_KEY_LIST,
+    API_GET_SUB_LIST,
     API_CREATE_TEMP_KEY,
     API_EDIT_TEMP_KEY,
     API_DELETE_TEMP_KEY,
@@ -213,6 +215,11 @@ class AkuvoxApiClient:
             "PicUrl": str(source_data.get("PicUrl", "")),
             "RelayName": relay_name,
         }
+        # Device automations filter this event by the Home Assistant device ID.
+        # Include it whenever the source door has a registered HA device so the
+        # generated Door Opened trigger can match the event it receives.
+        if device is not None:
+            event_data[ATTR_DEVICE_ID] = device.id
         listeners = self._door_unlock_listeners.get(door_name, set())
         LOGGER.debug(
             "Publishing door event: akuvox_door=%s ha_device=%s capture_time=%s "
@@ -739,14 +746,16 @@ class AkuvoxApiClient:
         return datetime.now(timezone.utc) - last_refresh >= TOKEN_REFRESH_INTERVAL
 
     async def _async_proactive_token_refresh(self, _now) -> None:
-        """Refresh the session before expiry and surface a non-recoverable failure."""
+        """Refresh the session before expiry without invalidating a usable session."""
         if self._data is None or not self._data.token:
             return
         try:
             await self.async_refresh_token(self._data.token)
         except AkuvoxApiClientAuthenticationError:
-            LOGGER.error("SmartPlus token refresh failed; reauthentication is required")
-            self._report_authentication_failure()
+            # SmartPlus can reject a proactive renewal while the current token
+            # still works. Leave the session active; a normal request will
+            # start reauthentication only if it cannot be recovered.
+            LOGGER.warning("Scheduled SmartPlus token refresh was rejected; keeping the current session active")
         except AkuvoxApiClientError as error:
             LOGGER.warning("Scheduled SmartPlus token refresh failed: %s", error)
 
@@ -803,6 +812,7 @@ class AkuvoxApiClient:
                 return await self.async_retrieve_user_data(start_polling=start_polling)
             device_data_loaded = await self.async_retrieve_device_data()
             await self.async_retrieve_temp_keys_data()
+            await self.async_retrieve_family_members()
             if device_data_loaded and start_polling:
                 await self.async_start_polling_personal_door_log()
             return device_data_loaded
@@ -919,6 +929,7 @@ class AkuvoxApiClient:
             return await self.async_retrieve_user_data(start_polling=start_polling)
         device_data_loaded = await self.async_retrieve_device_data()
         await self.async_retrieve_temp_keys_data()
+        await self.async_retrieve_family_members()
         if device_data_loaded and start_polling:
             await self.async_start_polling_personal_door_log()
         return device_data_loaded
@@ -952,6 +963,7 @@ class AkuvoxApiClient:
         if not self._data.phone_number:
             device_data_loaded = await self.async_retrieve_device_data()
             temp_keys_loaded = await self.async_retrieve_temp_keys_data()
+            await self.async_retrieve_family_members()
             if device_data_loaded and start_polling:
                 await self.async_start_polling_personal_door_log()
             if not temp_keys_loaded:
@@ -967,6 +979,7 @@ class AkuvoxApiClient:
         ):
             device_data_loaded = await self.async_retrieve_device_data()
             temp_keys_loaded = await self.async_retrieve_temp_keys_data()
+            await self.async_retrieve_family_members()
             if device_data_loaded and start_polling:
                 await self.async_start_polling_personal_door_log()
             if not temp_keys_loaded:
@@ -1069,6 +1082,45 @@ class AkuvoxApiClient:
                 self._notify_panel_data_updated()
             return True
         return False
+
+    async def async_retrieve_family_members(self) -> bool:
+        """Retrieve active associated family members for the automation wizard."""
+        try:
+            json_data = await self.async_get_family_members()
+        except AkuvoxApiClientError as error:
+            LOGGER.debug("Could not retrieve associated family members: %s", error)
+            return False
+        if json_data is None or self._data is None:
+            return False
+        previous_members = self.get_panel_data().get("family_members", [])
+        self._data.parse_family_members_data(json_data)
+        if self.get_panel_data().get("family_members", []) != previous_members:
+            self._notify_panel_data_updated()
+        return True
+
+    async def async_get_family_members(self) -> list[dict[str, Any]] | None:
+        """Request the SmartPlus associated-member list."""
+        if self._data is None:
+            return None
+        host = f"backend.{self._data.subdomain}.akuvox.com"
+        url = f"https://{host}/{API_GET_SUB_LIST}?_t={int(time() * 1000)}"
+        headers = {
+            "x-cloud-version": "6.4",
+            "accept": "application/json, text/plain, */*",
+            "accept-language": "en-AU,en;q=0.9",
+            "x-cloud-lang": "en",
+            "origin": f"https://{self._data.subdomain}.akuvox.com",
+            "referer": f"https://{self._data.subdomain}.akuvox.com/",
+            "user-agent": SMARTPLUS_USER_AGENT,
+            "x-auth-token": self._data.token,
+        }
+        response = await self._async_api_wrapper(
+            method="get", url=url, headers=headers, data={}
+        )
+        if isinstance(response, list):
+            return [member for member in response if isinstance(member, dict)]
+        LOGGER.debug("No associated family members returned by SmartPlus")
+        return None
 
     async def async_get_temp_key_list(self):
         """Request the user's configuration data."""
@@ -1689,6 +1741,7 @@ class AkuvoxApiClient:
                 for relay in relays
             ],
             "temporary_keys": [dict(key) for key in temporary_keys],
+            "family_members": list(self._data.family_members),
             "activity": [dict(activity) for activity in self._activity_history],
             "activity_updated_at": self._activity_last_updated,
             "calls": [dict(call) for call in self._call_history],
@@ -2249,7 +2302,12 @@ class AkuvoxApiClient:
             ) from exception
         except AkuvoxApiClientAuthenticationError:
             if not allow_token_refresh or not failed_token:
-                self._report_authentication_failure()
+                # A rejected renewal does not prove that the current session
+                # is unusable. The failed request that triggered a refresh
+                # attempt will report reauthentication after the refresh
+                # fails; scheduled refreshes simply keep the active session.
+                if not urlsplit(url).path.endswith(API_REFRESH_TOKEN):
+                    self._report_authentication_failure()
                 raise
             try:
                 await self.async_refresh_token(failed_token)
