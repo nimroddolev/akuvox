@@ -600,8 +600,8 @@ export const mainStyles = `
   .door-selection-badge > span:nth-child(2) { font-size: 18px; font-weight: 700; line-height: .7; }
   .door-selection-badge:hover, .door-selection-badge:focus-visible { background: color-mix(in srgb, var(--aqua) 30%, var(--panel-card)); outline: 2px solid var(--aqua); outline-offset: 2px; }
   .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
-  .storage-quota-card { display: grid; gap: 9px; margin-top: 12px; padding: 13px; border-radius: 8px; background: #f4f4f4; }
-  .storage-quota-card .activity-storage-progress { width: 100%; max-width: none; margin: 0; }
+  [data-activity-storage-progress] { display: block; width: 100%; margin-top: 12px; }
+  [data-activity-storage-progress] .activity-storage-progress { width: 100%; max-width: none; margin: 0; }
   .storage-limit-input { display: flex; align-items: center; justify-content: space-between; gap: 24px; min-height: 48px; padding: 13px 0; border-top: 1px solid var(--panel-outline); color: var(--panel-muted); font-size: 12px; }
   .storage-limit-value { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 10px; }
   .storage-limit-input input {

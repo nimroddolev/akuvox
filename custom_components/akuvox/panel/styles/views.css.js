@@ -1034,7 +1034,6 @@ export const viewStyles = `
   }
 
   :host([dark]) th,
-  :host([dark]) .storage-quota-card,
   :host([dark]) .credential-share-receiver-row,
   :host([dark]) .sip-details-grid section,
   :host([dark]) .key-tile,
