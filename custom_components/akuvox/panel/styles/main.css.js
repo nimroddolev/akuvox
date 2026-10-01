@@ -822,11 +822,13 @@ export const mainStyles = `
     }
   }
   .share-access-dialog {
+    display: flex;
+    flex-direction: column;
     width: min(1100px, calc(100vw - 48px));
+    height: min(690px, calc(100vh - 48px));
     max-height: calc(100vh - 48px);
     padding: 0;
-    overflow-x: hidden;
-    overflow-y: auto;
+    overflow: hidden;
     text-align: left;
     background: var(--card-background-color, #fff);
     color: var(--primary-text-color, #111);
@@ -836,7 +838,7 @@ export const mainStyles = `
   .remote-instance-dialog-header p { margin: 8px 0 0; color: var(--panel-muted); font-size: 17px; }
   .door-notification-dialog .remote-instance-dialog-header > p { margin-top: 16px; }
   .share-stage-progress { height: 5px; border-radius: 10px; margin: 0 48px 16px; overflow: hidden; background: color-mix(in srgb, var(--aqua, #03a9f4) 18%, transparent); }
-  .share-stage-progress span { display: block; width: 33.333%; height: 100%; background: var(--aqua, #03a9f4); transition: width 220ms ease; }
+  .share-stage-progress span { display: block; width: 0; height: 100%; background: var(--aqua, #03a9f4); transition: width 220ms ease; }
   .remote-instance-dialog-header .share-stage-progress { margin: 14px 0 12px; }
   .share-access-close { position: absolute; top: 24px; right: 28px; width: 40px; height: 40px; padding: 0; border: 0; color: var(--secondary-text-color, #66758a); background: transparent; font-size: 36px; line-height: 1; cursor: pointer; }
   .share-access-close:hover { color: var(--primary-text-color, #111); }
@@ -864,6 +866,8 @@ export const mainStyles = `
   .share-expiry-field [data-access-expiry]:focus { outline: 2px solid color-mix(in srgb, var(--aqua, #03a9f4) 35%, transparent); outline-offset: 1px; border-color: var(--aqua, #03a9f4); }
   .share-permissions { margin: 0 48px 24px; overflow: hidden; border: 1px solid var(--divider-color, #d9e1eb); border-radius: 18px; }
   .share-access-dialog .modal-actions { justify-content: center; gap: 12px; margin: 0; padding: 20px 48px; }
+  .share-stage-content { display: flex; flex: 1 1 auto; flex-direction: column; justify-content: center; min-height: 0; overflow: auto; overscroll-behavior: contain; }
+  .share-access-dialog .modal-actions { flex: 0 0 auto; }
   .share-access-table { width: 100%; border-collapse: collapse; }
   .share-access-table th, .share-access-table td { padding: 11px 12px; text-align: center; vertical-align: middle; border-bottom: 1px solid var(--divider-color, #e4eaf0); }
 .share-access-table thead tr:first-child th { padding: 8px 12px; background: color-mix(in srgb, var(--card-background-color, #fff) 82%, #edf4f9); color: var(--secondary-text-color, #56677d); font-size: 13px; letter-spacing: .05em; text-transform: uppercase; }
@@ -925,7 +929,7 @@ export const mainStyles = `
   .share-status-badge.waiting-to-pair { border-color: #f3ca67; color: #8a6100; background: #fff8e4; }
   .share-status-badge.revoked { border-color: #f3aaaa; color: #b42318; background: #fff0ef; }
   @media (max-width: 680px) {
-    .share-access-dialog { width: calc(100vw - 24px); max-height: calc(100vh - 24px); }
+    .share-access-dialog { width: calc(100vw - 24px); height: calc(100vh - 24px); max-height: calc(100vh - 24px); }
     .door-notification-dialog { height: calc(100vh - 24px); }
     .remote-instance-dialog-header { padding: 26px 24px 22px; }
     .remote-instance-dialog-header h2 { font-size: 24px; padding-right: 28px; }

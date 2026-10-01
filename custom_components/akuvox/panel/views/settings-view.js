@@ -157,7 +157,7 @@ const requestDoorNotificationStep = (host, { description, headerContent = "", st
   const dialog = host.shadowRoot.ownerDocument.createElement("dialog");
   dialog.className = "door-notification-dialog";
   dialog.innerHTML = `<button class="door-notification-close" type="button" data-cancel aria-label="Close" title="Close" ${focusCancel ? "autofocus" : ""}>×</button><div class="remote-instance-dialog-header"><h2>Create Automation</h2>
-    <div class="share-stage-progress" role="progressbar" aria-label="Automation setup progress" aria-valuemin="1" aria-valuemax="5" aria-valuenow="${progressFromStage}"><span data-door-notification-progress style="width:${(progressFromStage / 5) * 100}%"></span></div>
+    <div class="share-stage-progress" role="progressbar" aria-label="Automation setup progress" aria-valuemin="0" aria-valuemax="5" aria-valuenow="${progressFromStage}"><span data-door-notification-progress style="width:${(progressFromStage / 5) * 100}%"></span></div>
     ${headerContent ? `<div class="door-notification-heading-row"><p data-door-notification-description>${escapeHtml(description)}</p>${headerContent}</div>` : `<p data-door-notification-description>${escapeHtml(description)}</p>`}</div>
     <form data-door-notification-form>
       <div class="door-notification-step-content">${content}<p class="form-error" data-door-notification-error hidden></p></div>
@@ -188,15 +188,24 @@ const requestDoorNotificationStep = (host, { description, headerContent = "", st
   host.shadowRoot.append(dialog);
   bind?.(dialog, form);
   dialog.showModal();
-  window.requestAnimationFrame(() => {
-    const stepContent = dialog.querySelector(".door-notification-step-content");
-    if (stepContent) stepContent.scrollTop = 0;
-    const progress = dialog.querySelector("[data-door-notification-progress]");
-    if (progress) {
-      progress.style.width = `${(progressToStage / 5) * 100}%`;
-      progress.parentElement?.setAttribute("aria-valuenow", String(progressToStage));
-    }
-  });
+  const stepContent = dialog.querySelector(".door-notification-step-content");
+  if (stepContent) stepContent.scrollTop = 0;
+  const progress = dialog.querySelector("[data-door-notification-progress]");
+  if (progress) {
+    // Some stage bindings update the progress before the dialog is painted.
+    // Reset and flush the prior value so every forward transition is visible.
+    progress.style.transition = "none";
+    progress.style.width = `${(progressFromStage / 5) * 100}%`;
+    progress.parentElement?.setAttribute("aria-valuenow", String(progressFromStage));
+    void progress.offsetWidth;
+    window.requestAnimationFrame(() => {
+      progress.style.transition = "";
+      window.requestAnimationFrame(() => {
+        progress.style.width = `${(progressToStage / 5) * 100}%`;
+        progress.parentElement?.setAttribute("aria-valuenow", String(progressToStage));
+      });
+    });
+  }
 });
 
 const requestDoorNotificationAutomation = async (host) => {
@@ -634,14 +643,14 @@ const requestShareAccess = (host, viewedShare = null) => new Promise((resolve) =
   const basics = readOnly
     ? `<section class="share-details-card"><div class="share-detail"><span class="share-detail-icon">${icons.calendar}</span><span><small>Validity</small><strong>${escapeHtml(formattedExpiry)}</strong></span></div><div class="share-detail"><span class="share-detail-icon">${icons.calendar}</span><span><small>Registered on</small><strong>${escapeHtml(createdAt ? new Date(createdAt).toLocaleString() : "—")}</strong></span></div></section>`
     : `<section class="share-details-card share-generation-details"><label class="share-detail share-name-field"><span class="share-detail-icon">${icons.idCard}</span><span><small>Remote instance name</small><input data-receiver-name maxlength="100" required placeholder="e.g. Holiday home" autofocus></span></label><div class="share-detail share-expiry-field"><span class="share-detail-icon">${icons.calendar}</span><span><small>Validity</small><label class="check"><input data-never-expire name="access-duration" type="radio" checked> Never expires</label><label class="check" data-access-expiry-row><span><input data-expiring name="access-duration" type="radio"> Set expiry date &amp; time</span><input data-access-expiry type="datetime-local" min="${earliestExpiry}" disabled hidden></label></span></div></section>`;
-  const stageProgress = readOnly ? "" : '<div class="share-stage-progress" role="progressbar" aria-label="Pairing link setup progress" aria-valuemin="1" aria-valuemax="3" aria-valuenow="1"><span data-share-stage-progress></span></div>';
+  const stageProgress = readOnly ? "" : '<div class="share-stage-progress" role="progressbar" aria-label="Pairing link setup progress" aria-valuemin="0" aria-valuemax="3" aria-valuenow="0"><span data-share-stage-progress></span></div>';
   const heading = readOnly
     ? `<h2>${escapeHtml(viewedShare.receiver_name)} <span class="share-status-badge ${status.toLocaleLowerCase().replaceAll(" ", "-")}"><i></i>${escapeHtml(status)}</span></h2><p>Review the access permissions granted to this Home Assistant instance.</p>`
     : `<h2>Create Pairing Link</h2>${stageProgress}<p data-share-stage-description>${stageDescriptions[0]}</p>`;
   const devicesTable = `<section class="share-permissions" data-share-stage="2"${readOnly ? "" : " hidden"}><div class="table-wrap"><table class="share-access-table share-device-access-table"><thead><tr><th></th><th colspan="2"><span class="share-table-section-heading">${icons.cameraDoor}<span>Devices</span></span></th><th colspan="3"><span class="share-table-section-heading">${icons.key}<span>Temporary keys</span></span></th></tr><tr><th>Name</th><th><span class="share-permission-label">Camera</span></th><th><span class="share-permission-label">${hasMultipleRelays ? "Relays" : "Relay"}</span></th><th><span class="share-permission-label">View</span></th><th><span class="share-permission-label">Create</span></th><th><span class="share-permission-label">Edit</span></th></tr></thead><tbody>${readOnly ? "" : selectAllRow}${deviceRows}</tbody></table></div></section>`;
   const dataTable = `<section class="share-permissions" data-share-stage="3"${readOnly ? "" : " hidden"}><div class="table-wrap share-data-table"><table class="share-access-table"><thead><tr><th></th><th colspan="2"><span class="share-table-section-heading">${icons.database}<span>Data</span></span></th></tr><tr><th>Family Members</th><th><span class="share-permission-label">Latest Activity</span></th><th><span class="share-permission-label">Call History</span></th></tr></thead><tbody>${readOnly ? "" : dataSelectAllRow}${dataRows || '<tr><td colspan="3">No family members available.</td></tr>'}</tbody></table></div></section>`;
   const createActions = `<button class="modal-cancel" data-previous type="button" hidden>Previous</button><button class="modal-action" data-next type="button">Next</button><button class="modal-action" data-confirm type="button" hidden>Create pairing link</button>`;
-  dialog.innerHTML = `<button class="share-access-close" type="button" data-cancel aria-label="Close">×</button><div class="remote-instance-dialog-header">${heading}</div>${readOnly ? basics : `<div data-share-stage="1">${basics}</div>`}<p class="notice share-error" data-share-error hidden></p>${devicesTable}${dataTable}<div class="modal-actions">${readOnly ? '<button class="modal-cancel" data-cancel type="button">Close</button>' : createActions}</div>`;
+  dialog.innerHTML = `<button class="share-access-close" type="button" data-cancel aria-label="Close">×</button><div class="remote-instance-dialog-header">${heading}</div><div class="share-stage-content">${readOnly ? basics : `<div data-share-stage="1">${basics}</div>`}<p class="notice share-error" data-share-error hidden></p>${devicesTable}${dataTable}</div><div class="modal-actions">${readOnly ? '<button class="modal-cancel" data-cancel type="button">Close</button>' : createActions}</div>`;
   const devices = [...dialog.querySelectorAll("[data-share-device], [data-share-relay]")];
   const activity = [...dialog.querySelectorAll("[data-share-activity]")];
   const calls = [...dialog.querySelectorAll("[data-share-calls]")];
@@ -690,6 +699,13 @@ const requestShareAccess = (host, viewedShare = null) => new Promise((resolve) =
     if (nextButton) nextButton.disabled = !isFirstStageValid();
     if (confirmButton) confirmButton.disabled = !isFirstStageValid() || !hasSelectedPermission;
   };
+  const updateProgress = () => {
+    const progress = dialog.querySelector("[data-share-stage-progress]");
+    if (!progress) return;
+    const progressStage = stage === 1 && !receiverName?.value.trim() ? 0 : stage;
+    progress.style.width = `${(progressStage / 3) * 100}%`;
+    progress.parentElement?.setAttribute("aria-valuenow", String(progressStage));
+  };
   const updateStage = () => {
     stages.forEach((element) => { element.hidden = Number(element.dataset.shareStage) !== stage; });
     if (previousButton) previousButton.hidden = stage === 1;
@@ -697,17 +713,16 @@ const requestShareAccess = (host, viewedShare = null) => new Promise((resolve) =
     if (confirmButton) confirmButton.hidden = stage !== 3;
     const description = dialog.querySelector("[data-share-stage-description]");
     if (description) description.textContent = stageDescriptions[stage - 1];
-    const progress = dialog.querySelector("[data-share-stage-progress]");
-    if (progress) {
-      progress.style.width = `${(stage / 3) * 100}%`;
-      progress.parentElement?.setAttribute("aria-valuenow", String(stage));
-    }
+    updateProgress();
     dialog.querySelector("[data-share-error]").hidden = true;
     updateConfirmState();
   };
   dialog.addEventListener("change", updateConfirmState);
   expiry?.addEventListener("input", updateConfirmState);
-  receiverName?.addEventListener("input", updateConfirmState);
+  receiverName?.addEventListener("input", () => {
+    updateConfirmState();
+    updateProgress();
+  });
   const updateExpiryState = () => {
     if (!expiry) return;
     const expirySelected = Boolean(expires?.checked);
