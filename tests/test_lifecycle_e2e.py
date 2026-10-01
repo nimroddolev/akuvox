@@ -25,6 +25,7 @@ from custom_components.akuvox import repairs
 from custom_components.akuvox.const import DOMAIN
 from custom_components.akuvox.coordinator import AkuvoxDataUpdateCoordinator
 from custom_components.akuvox import panel
+from custom_components.akuvox.device_visibility import filter_disabled_panel_devices
 from custom_components.akuvox.sharing import (
     _filter_shared_activity,
     _filter_shared_devices,
@@ -496,6 +497,48 @@ class TestPanelHubSelectionE2E(unittest.TestCase):
         hass.config_entries.async_entries.return_value = [enabled, disabled]
 
         self.assertEqual(panel._visible_panel_entries(hass), [enabled])
+
+
+class TestDisabledDevicePanelVisibilityE2E(unittest.TestCase):
+    """Verify a disabled Home Assistant device has no panel representation."""
+
+    def test_disabled_device_is_removed_with_its_related_data(self) -> None:
+        entry = SimpleNamespace(entry_id="entry-id")
+        hass = MagicMock()
+        enabled = SimpleNamespace(disabled_by=None)
+        disabled = SimpleNamespace(disabled_by="user")
+        with patch(
+            "custom_components.akuvox.device_visibility.dr.async_get",
+            return_value=SimpleNamespace(
+                async_get_device_by_identifier=MagicMock(
+                    side_effect=lambda identifier, _entry_id: (
+                        disabled if identifier[1].endswith(":Lobby") else enabled
+                    )
+                )
+            ),
+        ):
+            result = filter_disabled_panel_devices(hass, entry, {
+                "cameras": [
+                    {"name": "Lobby", "source_name": "Lobby"},
+                    {"name": "Garage", "source_name": "Garage"},
+                ],
+                "relays": [
+                    {"name": "Lobby", "source_name": "Lobby", "mac": "AA", "relay_id": "0"},
+                    {"name": "Garage", "source_name": "Garage", "mac": "BB", "relay_id": "1"},
+                ],
+                "temporary_keys": [
+                    {"key_id": "lobby", "doors": [{"mac": "AA", "relay": "0"}]},
+                    {"key_id": "garage", "doors": [{"mac": "BB", "relay": "1"}]},
+                ],
+                "activity": [{"Location": "Lobby"}, {"Location": "Garage"}],
+                "calls": [{"calleeName": "Lobby"}, {"calleeName": "Garage"}],
+            })
+
+        self.assertEqual([item["name"] for item in result["cameras"]], ["Garage"])
+        self.assertEqual([item["name"] for item in result["relays"]], ["Garage"])
+        self.assertEqual([item["key_id"] for item in result["temporary_keys"]], ["garage"])
+        self.assertEqual([item["Location"] for item in result["activity"]], ["Garage"])
+        self.assertEqual([item["calleeName"] for item in result["calls"]], ["Garage"])
 
 
 class TestOneTimePairingLinkE2E(unittest.IsolatedAsyncioTestCase):

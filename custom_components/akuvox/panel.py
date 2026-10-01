@@ -51,6 +51,7 @@ from .const import (
     PANEL_URL_PATH,
 )
 from .coordinator import AkuvoxDataUpdateCoordinator
+from .device_visibility import filter_disabled_panel_devices
 from .repairs import (
     async_update_credential_source_issue,
     authentication_failed,
@@ -247,6 +248,7 @@ async def websocket_panel_data(
                 for call in entry.data.get("call_data", [])
                 if isinstance(call, dict)
             ]
+        panel_data = filter_disabled_panel_devices(hass, entry, panel_data)
         panel_data["activity"] = [
             {
                 **{

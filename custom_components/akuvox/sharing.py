@@ -27,6 +27,7 @@ from .credentials import (
     async_store_credentials,
     async_store_remote_share_secret,
 )
+from .device_visibility import filter_disabled_device_data, filter_disabled_panel_devices
 from .repairs import async_update_credential_source_issue
 
 SHARED_MODE = "credential_mode"
@@ -204,6 +205,7 @@ async def async_create_share(
         for share in shares.values()
     ):
         raise ValueError("A paired Home Assistant already uses this receiver name")
+    source_client = getattr(hass.data.get(DOMAIN, {}).get(entry.entry_id), "client", None)
     # Persist concrete, scoped relay permissions.  This keeps the receiver
     # fail-closed and avoids accidentally granting a newly added relay.
     shared_relays = {
@@ -227,7 +229,6 @@ async def async_create_share(
         view_key_relay_ids = [
             item for item in view_key_relay_ids if isinstance(item, str) and item in shared_relays
         ]
-    source_client = getattr(hass.data.get(DOMAIN, {}).get(entry.entry_id), "client", None)
     default_members = (
         source_client.get_panel_data().get("family_members", [])
         if source_client is not None else []
@@ -520,6 +521,7 @@ class CredentialShareView(HomeAssistantView):
                 for key in ("camera_data", "door_relay_data", "door_keys_data")
             }
         )
+        device_data = filter_disabled_device_data(self.hass, entry, device_data)
         temporary_key_relays = _permission_relay_ids(
             share, "view_key_relay_ids", "allow_view_keys"
         )
@@ -530,8 +532,12 @@ class CredentialShareView(HomeAssistantView):
             source_client.get_sip_accounts() if source_client is not None else {},
             device_data,
         )
+        source_panel_data = (
+            filter_disabled_panel_devices(self.hass, entry, source_client.get_panel_data())
+            if source_client is not None else {}
+        )
         activity_data = _filter_shared_activity(
-            source_client.get_panel_data().get("activity", []) if source_client is not None else [],
+            source_panel_data.get("activity", []),
             share.get("activity_member_names", []),
         ) if share.get("allow_activity", True) else []
         # Activity preview URLs are cloud credentials in practice.  The
@@ -554,7 +560,7 @@ class CredentialShareView(HomeAssistantView):
                 "has_image": bool(item.get("picUrl") or item.get("smallPicUrl")),
             }
             for item in _filter_shared_calls(
-                source_client.get_panel_data().get("calls", []) if source_client is not None else [],
+                source_panel_data.get("calls", []),
                 share.get("call_member_names", []),
             ) if share.get("allow_call_history", False)
             if isinstance(item, dict)
@@ -650,7 +656,9 @@ class CredentialShareImageView(HomeAssistantView):
                     return web.Response(status=403)
                 activity = next(
                     (
-                        item for item in source_client.get_panel_data().get("activity", [])
+                        item for item in filter_disabled_panel_devices(
+                            self.hass, entry, source_client.get_panel_data()
+                        ).get("activity", [])
                         if str(item.get("CaptureTime", "")) == image_id
                     ),
                     None,
@@ -666,7 +674,9 @@ class CredentialShareImageView(HomeAssistantView):
                 if not share.get("allow_call_history", False):
                     return web.Response(status=403)
                 calls = _filter_shared_calls(
-                    source_client.get_panel_data().get("calls", []),
+                    filter_disabled_panel_devices(
+                        self.hass, entry, source_client.get_panel_data()
+                    ).get("calls", []),
                     share.get("call_member_names", []),
                 )
                 if not any(str(item.get("id", "")) == image_id for item in calls):
@@ -677,7 +687,9 @@ class CredentialShareImageView(HomeAssistantView):
                     return web.Response(status=403)
                 if not any(
                     str(item.get("key_id", "")) == image_id
-                    for item in source_client.get_panel_data().get("temporary_keys", [])
+                    for item in filter_disabled_panel_devices(
+                        self.hass, entry, source_client.get_panel_data()
+                    ).get("temporary_keys", [])
                 ):
                     return web.Response(status=404)
                 image = await source_client.async_get_panel_temp_key_qr(image_id)
