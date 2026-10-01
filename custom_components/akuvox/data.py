@@ -60,6 +60,8 @@ class AkuvoxData:
         self.camera_data: list[dict] = []
         self.door_relay_data: list[dict] = []
         self.door_keys_data: list[dict] = []
+        self.family_members: list[str] = []
+        self.account_holder_name = ""
         self.host = host or self.get_value_for_key(entry, "host", "")
         self.auth_token = auth_token or self.get_value_for_key(entry, "auth_token", "")
         self.token = token or self.get_value_for_key(entry, "token", "")
@@ -130,6 +132,7 @@ class AkuvoxData:
         payload = json_data.get("datas", json_data)
         if not isinstance(payload, dict):
             return
+        self._update_account_holder_name(payload)
         # SMS sign-in calls this the ``auth_token``. The email/password OTP
         # endpoint returns the same long-lived credential as ``refresh_token``.
         # Store both formats in the common field used by token refreshes.
@@ -179,6 +182,7 @@ class AkuvoxData:
         if isinstance(json_data, dict):
             if isinstance(json_data.get("app_conf"), dict):
                 app_conf = json_data["app_conf"]
+                self._update_account_holder_name(app_conf)
                 self.project_name = str(app_conf.get("project_name", self.project_name)).strip()
                 self.sip_server = str(app_conf.get("sip_server", "")).strip()
                 self.sip_account = str(
@@ -302,8 +306,34 @@ class AkuvoxData:
             for door_key in self.door_keys_data:
                 LOGGER.debug(" - '%s', with access to %s door%s",
                              door_key.get("description", ""),
-                             len(door_key["doors"]),
-                             "" if len(door_key["doors"]) == 1 else "s")
+                            len(door_key["doors"]),
+                            "" if len(door_key["doors"]) == 1 else "s")
+
+    def parse_family_members_data(self, json_data: list) -> None:
+        """Store the account holder and active associated members for callers."""
+        names = {
+            str(member.get("Name", "")).strip()
+            for member in json_data
+            if isinstance(member, dict)
+            and str(member.get("Name", "")).strip()
+            and str(member.get("Active", "1")) != "0"
+            and not bool(member.get("Unavailable", False))
+        }
+        if self.account_holder_name:
+            names.add(self.account_holder_name)
+        self.family_members = sorted(names, key=str.casefold)
+
+    def _update_account_holder_name(self, payload: dict) -> None:
+        """Keep a human-friendly primary-account name when SmartPlus provides one."""
+        for key in (
+            "Name", "name", "DisplayName", "display_name", "NickName", "nickname",
+            "UserName", "userName", "user_name", "AccountName", "account_name",
+            "RealName", "real_name", "OwnerName", "owner_name",
+        ):
+            value = str(payload.get(key, "")).strip()
+            if value:
+                self.account_holder_name = value
+                return
 
     @staticmethod
     def _normalise_temp_key_time(value: object) -> str:

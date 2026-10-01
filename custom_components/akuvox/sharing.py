@@ -145,14 +145,27 @@ def _filter_shared_sip_accounts(
 
 
 def _filter_shared_activity(
-    activity_data: list[dict[str, Any]], activity_device_names: list[str]
+    activity_data: list[dict[str, Any]], member_names: list[str]
 ) -> list[dict[str, Any]]:
-    """Return activity records associated with the selected device names."""
-    allowed = {str(name).strip() for name in activity_device_names if str(name).strip()}
+    """Return activity records initiated by selected family members."""
+    allowed = {str(name).strip() for name in member_names if str(name).strip()}
     return [
         item
         for item in activity_data
-        if str(item.get("Location", "")).strip() in allowed
+        if str(item.get("Initiator", "")).strip() in allowed
+    ]
+
+
+def _filter_shared_calls(
+    call_data: list[dict[str, Any]], member_names: list[str]
+) -> list[dict[str, Any]]:
+    """Return calls where a selected family member is caller or callee."""
+    allowed = {str(name).strip() for name in member_names if str(name).strip()}
+    return [
+        item
+        for item in call_data
+        if str(item.get("callerName", "")).strip() in allowed
+        or str(item.get("calleeName", "")).strip() in allowed
     ]
 
 
@@ -173,8 +186,8 @@ async def async_create_share(
     create_key_relay_ids: list[str] | None = None,
     edit_key_relay_ids: list[str] | None = None,
     view_key_relay_ids: list[str] | None = None,
-    allow_activity: bool = True,
-    activity_device_names: list[str] | None = None,
+    activity_member_names: list[str] | None = None,
+    call_member_names: list[str] | None = None,
 ) -> str:
     """Create a ten-minute, one-time pairing URI for one receiving instance."""
     parsed = urlsplit(external_url)
@@ -215,23 +228,19 @@ async def async_create_share(
         view_key_relay_ids = [
             item for item in view_key_relay_ids if isinstance(item, str) and item in shared_relays
         ]
-    entry_data = entry.data if isinstance(entry.data, Mapping) else {}
-    shared_activity_devices = {
-        item.removeprefix("camera:")
-        for item in device_ids
-        if isinstance(item, str) and item.startswith("camera:")
-    }
-    shared_activity_devices.update(
-        str(item.get("source_name") or item.get("name") or "").strip()
-        for item in entry_data.get("door_relay_data", [])
-        if f"relay:{item.get('mac', '')}:{item.get('relay_id', '')}" in shared_relays
+    source_client = getattr(hass.data.get(DOMAIN, {}).get(entry.entry_id), "client", None)
+    default_members = (
+        source_client.get_panel_data().get("family_members", [])
+        if source_client is not None else []
     )
-    shared_activity_devices.discard("")
-    activity_device_names = [
-        name.strip()
-        for name in (activity_device_names or [])
-        if isinstance(name, str) and name.strip() in shared_activity_devices
-    ]
+    activity_member_names = sorted({
+        name.strip() for name in (default_members if activity_member_names is None else activity_member_names)
+        if isinstance(name, str) and name.strip()
+    })
+    call_member_names = sorted({
+        name.strip() for name in (default_members if call_member_names is None else call_member_names)
+        if isinstance(name, str) and name.strip()
+    })
     shares[share_id] = {
         "entry_id": entry.entry_id,
         "receiver_name": receiver_name.strip() or "Unnamed receiver",
@@ -251,8 +260,10 @@ async def async_create_share(
         "edit_key_relay_ids": edit_key_relay_ids,
         "allow_view_keys": bool(view_key_relay_ids),
         "view_key_relay_ids": view_key_relay_ids,
-        "allow_activity": bool(allow_activity and activity_device_names),
-        "activity_device_names": activity_device_names,
+        "allow_activity": bool(activity_member_names),
+        "activity_member_names": activity_member_names,
+        "allow_call_history": bool(call_member_names),
+        "call_member_names": call_member_names,
         "access_expires_at": access_expires_at,
     }
     await _store(hass).async_save(shares)
@@ -329,7 +340,9 @@ async def async_list_shares(hass: HomeAssistant, entry_id: str) -> list[dict[str
             "allow_view_keys": share.get("allow_view_keys", True),
             "view_key_relay_ids": _permission_relay_ids(share, "view_key_relay_ids", "allow_view_keys"),
             "allow_activity": share.get("allow_activity", True),
-            "activity_device_names": share.get("activity_device_names", []),
+            "activity_member_names": share.get("activity_member_names", []),
+            "allow_call_history": share.get("allow_call_history", False),
+            "call_member_names": share.get("call_member_names", []),
             "access_expires_at": share.get("access_expires_at"),
             "connected": connected(share),
         }
@@ -520,7 +533,7 @@ class CredentialShareView(HomeAssistantView):
         )
         activity_data = _filter_shared_activity(
             source_client.get_panel_data().get("activity", []) if source_client is not None else [],
-            share.get("activity_device_names", []),
+            share.get("activity_member_names", []),
         ) if share.get("allow_activity", True) else []
         # Activity preview URLs are cloud credentials in practice.  The
         # receiver receives event metadata only; its panel never exposes the
@@ -541,11 +554,10 @@ class CredentialShareView(HomeAssistantView):
                 },
                 "has_image": bool(item.get("picUrl") or item.get("smallPicUrl")),
             }
-            for item in (
-                source_client.get_panel_data().get("calls", [])
-                if source_client is not None and share.get("allow_activity", True)
-                else []
-            )
+            for item in _filter_shared_calls(
+                source_client.get_panel_data().get("calls", []) if source_client is not None else [],
+                share.get("call_member_names", []),
+            ) if share.get("allow_call_history", False)
             if isinstance(item, dict)
         ]
         revision = '"' + _digest(
@@ -554,7 +566,8 @@ class CredentialShareView(HomeAssistantView):
                     share.get("allow_edit_keys"), share.get("create_key_relay_ids"),
                     share.get("edit_key_relay_ids"), share.get("allow_view_keys"),
                     share.get("view_key_relay_ids"), share.get("allow_activity"),
-                    share.get("activity_device_names"), share.get("access_expires_at"),
+                    share.get("activity_member_names"), share.get("allow_call_history"),
+                    share.get("call_member_names"), share.get("access_expires_at"),
                     account_label, device_data, sip_accounts, activity_data, call_data))
         ) + '"'
         # A conditional request is still a successful contact from this
@@ -590,7 +603,9 @@ class CredentialShareView(HomeAssistantView):
                 "allow_view_keys": share.get("allow_view_keys", True),
                 "view_key_relay_ids": _permission_relay_ids(share, "view_key_relay_ids", "allow_view_keys"),
                 "allow_activity": share.get("allow_activity", True),
-                "activity_device_names": share.get("activity_device_names", []),
+                "activity_member_names": share.get("activity_member_names", []),
+                "allow_call_history": share.get("allow_call_history", False),
+                "call_member_names": share.get("call_member_names", []),
             },
             "credentials": credentials,
         }, headers={"ETag": revision, "Cache-Control": "no-store"})
@@ -643,18 +658,19 @@ class CredentialShareImageView(HomeAssistantView):
                 )
                 if (
                     activity is None
-                    or str(activity.get("Location", "")).strip()
-                    not in share.get("activity_device_names", [])
+                    or str(activity.get("Initiator", "")).strip()
+                    not in share.get("activity_member_names", [])
                 ):
                     return web.Response(status=404)
                 image = await source_client.async_get_panel_activity_image(image_id)
             elif image_type == "call":
-                if not share.get("allow_activity", True):
+                if not share.get("allow_call_history", False):
                     return web.Response(status=403)
-                if not any(
-                    str(item.get("id", "")) == image_id
-                    for item in source_client.get_panel_data().get("calls", [])
-                ):
+                calls = _filter_shared_calls(
+                    source_client.get_panel_data().get("calls", []),
+                    share.get("call_member_names", []),
+                )
+                if not any(str(item.get("id", "")) == image_id for item in calls):
                     return web.Response(status=404)
                 image = await source_client.async_get_panel_call_image(image_id)
             elif image_type == "temp_key_qr":

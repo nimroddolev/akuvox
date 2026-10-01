@@ -56,6 +56,16 @@ class TestDataAndHelpersE2E(unittest.IsolatedAsyncioTestCase):
         self.assertIn("safe%2Fpassword", self.data.camera_data[0]["video_url"])
         self.assertEqual(self.data.door_relay_data[0]["relay_id"], "2")
 
+    def test_caller_list_includes_the_primary_account_holder(self) -> None:
+        """The caller selector includes the account owner and active members."""
+        self.data.parse_sms_login_response({"Name": "Nimrod", "token": "new-session"})
+        self.data.parse_family_members_data([
+            {"Name": "Liv", "Active": "1"},
+            {"Name": "Former member", "Active": "0"},
+        ])
+
+        self.assertEqual(self.data.family_members, ["Liv", "Nimrod"])
+
     async def test_door_log_deduplicated_then_published_new_event(self) -> None:
         """The parser ignored duplicates and returned a new activity exactly once."""
         event = {

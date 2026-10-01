@@ -808,8 +808,8 @@ async def websocket_panel_apply_remote_share_link(
         vol.Required("receiver_name"): vol.All(str, vol.Length(min=1, max=100)),
         vol.Optional("source_url", default=""): str,
         vol.Required("device_ids"): [str],
-        vol.Optional("allow_activity", default=True): bool,
-        vol.Optional("activity_device_names", default=[]): [str],
+        vol.Optional("activity_member_names", default=[]): [str],
+        vol.Optional("call_member_names", default=[]): [str],
         vol.Optional("allow_create_keys", default=True): bool,
         vol.Optional("allow_edit_keys", default=True): bool,
         vol.Optional("create_key_relay_ids", default=[]): [str],
@@ -843,8 +843,8 @@ async def websocket_panel_create_credential_share(
             msg["device_ids"], msg["allow_create_keys"], msg["allow_edit_keys"],
             msg["access_expires_at"], msg["create_key_relay_ids"],
             msg["edit_key_relay_ids"],
-            msg["view_key_relay_ids"], msg["allow_activity"],
-            msg["activity_device_names"],
+            msg["view_key_relay_ids"], msg["activity_member_names"],
+            msg["call_member_names"],
         )
     except ValueError as error:
         connection.send_error(msg["id"], "duplicate_receiver_name", str(error))
