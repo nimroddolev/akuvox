@@ -48,9 +48,10 @@ class AkuvoxDataUpdateCoordinator(DataUpdateCoordinator):
 
     async def _async_update_data(self):
         """Update data via library."""
+        entry = getattr(self.client, "config_entry", None)
         if (
-            self.client.config_entry is not None
-            and is_remote_entry(self.client.config_entry)
+            entry is not None
+            and is_remote_entry(entry)
         ):
             # Remote entries are populated exclusively by their source's
             # scoped snapshot. A generic coordinator refresh must never pull
@@ -59,10 +60,10 @@ class AkuvoxDataUpdateCoordinator(DataUpdateCoordinator):
         try:
             if await self.client.async_retrieve_user_data():
                 data: dict = self.client.get_devices_json()
-                if data is not None:
+                if data is not None and entry is not None:
                     LOGGER.debug("Saving user's data to local storage")
                     store = storage.Store(
-                        self.hass, 1, account_storage_key(self.client.config_entry.entry_id, "cache")
+                        self.hass, 1, account_storage_key(entry.entry_id, "cache")
                     )
                     await store.async_save(data)
 

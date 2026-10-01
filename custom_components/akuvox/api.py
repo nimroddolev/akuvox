@@ -858,15 +858,19 @@ class AkuvoxApiClient:
     @staticmethod
     def _caesar_shift_login_value(value: str) -> str:
         """Apply SmartPlus's three-character alphabetical login obfuscation."""
+        # SmartPlus obfuscates the account name, not the email provider.  Keep
+        # the domain untouched so an address remains routable and matches the
+        # mobile client's request format.
+        account, separator, domain = value.partition("@")
         shifted: list[str] = []
-        for character in value:
+        for character in account:
             if "a" <= character <= "z":
                 shifted.append(chr((ord(character) - ord("a") + 3) % 26 + ord("a")))
             elif "A" <= character <= "Z":
                 shifted.append(chr((ord(character) - ord("A") + 3) % 26 + ord("A")))
             else:
                 shifted.append(character)
-        return "".join(shifted)
+        return "".join(shifted) + separator + domain
 
     @staticmethod
     def _double_md5_password(password: str) -> str:

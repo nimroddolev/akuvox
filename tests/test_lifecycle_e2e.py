@@ -397,16 +397,16 @@ class TestSharedDeviceScopingE2E(unittest.TestCase):
 
         self.assertEqual([key["key_id"] for key in scoped["door_keys_data"]], ["lobby"])
 
-    def test_activity_scope_includes_all_event_types_for_selected_devices(self) -> None:
-        """Camera, motion, and door events share the same per-device scope."""
+    def test_activity_scope_includes_all_event_types_for_selected_members(self) -> None:
+        """All event types initiated by a selected member remain visible."""
         activity = [
-            {"Location": "Lobby", "CaptureType": "door"},
-            {"Location": "Lobby", "CaptureType": "motion"},
-            {"Location": "Garage", "CaptureType": "camera"},
+            {"Initiator": "Liv", "CaptureType": "door"},
+            {"Initiator": "Liv", "CaptureType": "motion"},
+            {"Initiator": "Guest", "CaptureType": "camera"},
         ]
 
         self.assertEqual(
-            _filter_shared_activity(activity, ["Lobby"]), activity[:2]
+            _filter_shared_activity(activity, ["Liv"]), activity[:2]
         )
 
 
@@ -636,7 +636,7 @@ class TestCredentialShareNamesE2E(unittest.IsolatedAsyncioTestCase):
                 create_key_relay_ids=["relay:AA:0", "relay:NOT-SHARED:2"],
                 edit_key_relay_ids=[],
                 view_key_relay_ids=["relay:AA:0", "relay:NOT-SHARED:2"],
-                activity_device_names=["Lobby", "Garage"],
+                activity_member_names=["Liv", "Guest"],
             )
 
         saved_shares = store.async_save.await_args.args[0]
@@ -648,7 +648,7 @@ class TestCredentialShareNamesE2E(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(saved_share["view_key_relay_ids"], ["relay:AA:0"])
         self.assertTrue(saved_share["allow_view_keys"])
         self.assertTrue(saved_share["allow_activity"])
-        self.assertEqual(saved_share["activity_device_names"], ["Lobby"])
+        self.assertEqual(saved_share["activity_member_names"], ["Guest", "Liv"])
 
 
 class TestAuthenticationRepairE2E(unittest.TestCase):

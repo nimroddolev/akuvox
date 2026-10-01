@@ -160,17 +160,17 @@ class TestPlatformSetupE2E(unittest.IsolatedAsyncioTestCase):
     async def test_camera_snapshot_used_direct_udp_ffmpeg_capture(self) -> None:
         """Snapshots bypassed the cloud RTSP proxy's broken MJPEG transport."""
         entity = camera.AkuvoxCameraEntity(_Hass(), "Lobby", "rtsp://example/lobby")
-        with patch(
-            "custom_components.akuvox.camera.async_get_image",
-            new=AsyncMock(return_value=b"jpeg-data"),
-        ) as get_image:
+        frame = MagicMock()
+        frame.get_image = AsyncMock(return_value=b"jpeg-data")
+        with (
+            patch("custom_components.akuvox.camera.get_ffmpeg_manager") as manager,
+            patch("custom_components.akuvox.camera.ImageFrame", return_value=frame),
+        ):
+            manager.return_value.binary = "ffmpeg"
             self.assertEqual(await entity.async_camera_image(640, 360), b"jpeg-data")
 
-        get_image.assert_awaited_once_with(
-            entity.hass,
-            "rtsp://example/lobby",
+        frame.get_image.assert_awaited_once_with(
+            "-rtsp_transport udp -i rtsp://example/lobby",
             output_format=ANY,
-            extra_cmd="-rtsp_transport udp",
-            width=640,
-            height=360,
+            timeout=8,
         )
