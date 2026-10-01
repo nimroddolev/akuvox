@@ -210,7 +210,7 @@ export const renderActivityView = (host, account) => {
   const hasMore = visible.length < filtered.length;
 
   return `
-    <div class="card table-wrap">
+    <div class="card table-wrap activity-table-wrap">
       <div class="section-heading activity-heading">
         <h2>Latest activity</h2>
         ${account.activity_updated_at ? `<span class="muted activity-updated" data-activity-updated-at="${escapeHtml(account.activity_updated_at)}"></span>` : ""}

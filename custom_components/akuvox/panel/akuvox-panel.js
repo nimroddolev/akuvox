@@ -5,7 +5,7 @@
  */
 
 import { PANEL_TAG, TAB_HASHES, TAB_HASH_BY_ID, TABS } from "./utils/constants.js";
-import { escapeHtml } from "./utils/dom.js";
+import { closeOnBackdrop, escapeHtml } from "./utils/dom.js";
 import { copyText } from "./utils/clipboard.js";
 import { settingsRenderSignature } from "./utils/settings-signature.js";
 import { getPanelStyles } from "./styles/index.js?v=20260928-camera-stream-loader-v34";
@@ -68,7 +68,6 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
     this._blockingRequest = false;
     this._modalCount = 0;
     this._modalScrollLocked = false;
-    this._modalScrollLockStyles = null;
     this._onModalWheel = (event) => this._preventBackgroundModalScroll(event);
     this._onModalTouchMove = (event) => this._preventBackgroundModalScroll(event);
     this._modalScrollLockObserver = new MutationObserver(() => this._syncModalScrollLock());
@@ -224,35 +223,30 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
   }
 
   _syncModalScrollLock() {
-    const documentElement = this.ownerDocument.documentElement;
-    const body = this.ownerDocument.body;
     const hasOpenModal = Boolean(this._openModal());
     if (hasOpenModal === this._modalScrollLocked) return;
     this._modalScrollLocked = hasOpenModal;
-    if (hasOpenModal) {
-      this._modalScrollLockStyles = {
-        documentElementOverflow: documentElement.style.overflow,
-        bodyOverflow: body.style.overflow,
-      };
-      documentElement.style.overflow = "hidden";
-      body.style.overflow = "hidden";
-      return;
-    }
-    documentElement.style.overflow = this._modalScrollLockStyles?.documentElementOverflow || "";
-    body.style.overflow = this._modalScrollLockStyles?.bodyOverflow || "";
-    this._modalScrollLockStyles = null;
   }
 
   _preventBackgroundModalScroll(event) {
     const dialog = this._openModal();
     if (!dialog) return;
-    const scrollableModalContent = event.composedPath().some((item) => (
+    const scrollableModalContent = event.composedPath().find((item) => (
       item instanceof HTMLElement
       && dialog.contains(item)
       && item.scrollHeight > item.clientHeight
       && ["auto", "scroll"].includes(getComputedStyle(item).overflowY)
     ));
-    if (!scrollableModalContent) event.preventDefault();
+    if (!scrollableModalContent) {
+      event.preventDefault();
+      return;
+    }
+    if (event.type !== "wheel") return;
+    const scrollingUp = event.deltaY < 0;
+    const scrollingDown = event.deltaY > 0;
+    const atTop = scrollableModalContent.scrollTop <= 0;
+    const atBottom = scrollableModalContent.scrollTop + scrollableModalContent.clientHeight >= scrollableModalContent.scrollHeight - 1;
+    if ((scrollingUp && atTop) || (scrollingDown && atBottom)) event.preventDefault();
   }
 
   set hass(value) {
@@ -277,11 +271,6 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
     this._modalScrollLockObserver.disconnect();
     this.ownerDocument.removeEventListener("wheel", this._onModalWheel, true);
     this.ownerDocument.removeEventListener("touchmove", this._onModalTouchMove, true);
-    const documentElement = this.ownerDocument.documentElement;
-    const body = this.ownerDocument.body;
-    documentElement.style.overflow = this._modalScrollLockStyles?.documentElementOverflow || "";
-    body.style.overflow = this._modalScrollLockStyles?.bodyOverflow || "";
-    this._modalScrollLockStyles = null;
     this._modalScrollLocked = false;
     window.clearInterval(this._timer);
     window.clearInterval(this._devicePreviewRefreshTimer);
@@ -838,6 +827,7 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
       dialog.addEventListener("close", () => {
         this._modalCount = Math.max(0, (this._modalCount || 1) - 1);
       }, { once: true });
+      closeOnBackdrop(dialog);
       this.shadowRoot.append(dialog);
       dialog.showModal();
       input.focus();
@@ -969,9 +959,18 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
         window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}#HelpInfo`);
       }
     }
+    // A direct hash URL renders once before the asynchronous account data has
+    // arrived. Treat that initial pass as having no remote restrictions rather
+    // than dereferencing a missing account and leaving the panel blank.
+    const sharedPermissions = account?.shared_permissions || {};
     const availableTabs = requiresAttention
       ? TABS.filter(([id]) => id === "help")
-      : TABS;
+      : TABS.filter(([id]) => !(
+        account?.credential_mode === "remote"
+        && ((id === "activity" && !sharedPermissions.allow_activity)
+          || (id === "calls" && !sharedPermissions.allow_call_history))
+      ));
+    if (!availableTabs.some(([id]) => id === this._activeTab)) this._activeTab = "overview";
     const tabsMarkup = availableTabs.map(
       ([id, label]) =>
         `<button class="tab ${this._activeTab === id ? "selected" : ""}" data-tab="${id}">${label}</button>`

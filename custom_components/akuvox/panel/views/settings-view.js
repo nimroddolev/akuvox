@@ -2,7 +2,7 @@
  * Settings view: Event, display, and panel options.
  */
 
-import { escapeHtml } from "../utils/dom.js";
+import { closeOnBackdrop, escapeHtml } from "../utils/dom.js";
 import { icons } from "../utils/icons.js?v=20260930-notification-bell-v5";
 import { callWsWithBlocker, confirmModal, showNotice, showPairingLinkNotice } from "../components/dialogs.js?v=20260923-pairing-link-copy-feedback";
 import { CAMERA_ORIENTATION_OPTIONS } from "../utils/orientation.js?v=20260830-combined-directional-labels";
@@ -68,6 +68,12 @@ const notificationServices = (host) => Object.keys(host._hass?.services?.notify 
     name: service.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase()),
   }));
 
+const familyMembers = (host) => [...new Set(
+  (host._account?.()?.family_members || [])
+    .map((name) => String(name).trim())
+    .filter(Boolean)
+)].sort((left, right) => left.localeCompare(right));
+
 const notificationAction = (service, withImage) => ({
   action: service,
   data: {
@@ -81,10 +87,43 @@ const suggestedAutomationName = (doors) => doors.length === 1
   ? `Notify when ${doors[0].name} opens`
   : "Notify when selected Akuvox doors open";
 
-const buildDoorNotificationAutomation = ({ name, doors, services, includeOpened, includeCalls }) => {
+const joinCallerNames = (names, conjunction) => {
+  if (names.length < 2) return names[0] || "";
+  if (names.length === 2) return `${names[0]} ${conjunction} ${names[1]}`;
+  return `${names.slice(0, -1).join(", ")}, ${conjunction} ${names.at(-1)}`;
+};
+
+const callerConditionSummary = (rules) => {
+  const allowed = rules.filter((rule) => rule.operator === "is").map((rule) => rule.name);
+  const excluded = rules.filter((rule) => rule.operator === "is_not").map((rule) => rule.name);
+  if (!allowed.length && !excluded.length) return "Optionally limit notifications to selected callers.";
+  const allowedSummary = allowed.length
+    ? `Triggered when ${joinCallerNames(allowed, "or")} ${allowed.length === 1 ? "opens" : "open"} the door`
+    : "";
+  const excludedClause = excluded.length
+    ? `${joinCallerNames(excluded, "and")} did not open the door`
+    : "";
+  if (allowedSummary && excludedClause) return `${allowedSummary} and ${excludedClause}.`;
+  if (allowedSummary) return `${allowedSummary}.`;
+  return `Triggered if ${excludedClause}.`;
+};
+
+const buildDoorNotificationAutomation = ({ name, doors, services, includeOpened, includeCalls, callerRules = [] }) => {
   const captureTypes = [
     ...(includeOpened ? ["Face Unlock", "Unlock on SmartPlus"] : []),
     ...(includeCalls ? ["Call"] : []),
+  ];
+  const allowedCallers = callerRules.filter((rule) => rule.operator === "is").map((rule) => rule.name);
+  const excludedCallers = callerRules.filter((rule) => rule.operator === "is_not").map((rule) => rule.name);
+  const callerConditions = [
+    ...(allowedCallers.length ? [{
+      condition: "template",
+      value_template: `{{ (trigger.event.data.Initiator | default('', true)) in ${JSON.stringify(allowedCallers)} }}`,
+    }] : []),
+    ...(excludedCallers.length ? [{
+      condition: "template",
+      value_template: `{{ (trigger.event.data.Initiator | default('', true)) not in ${JSON.stringify(excludedCallers)} }}`,
+    }] : []),
   ];
   return {
     alias: name,
@@ -100,7 +139,7 @@ const buildDoorNotificationAutomation = ({ name, doors, services, includeOpened,
     conditions: [{
       condition: "template",
       value_template: `{{ trigger.event.data.CaptureType in ${JSON.stringify(captureTypes)} }}`,
-    }],
+    }, ...callerConditions],
     actions: [{
       choose: [{
         conditions: [{
@@ -114,14 +153,14 @@ const buildDoorNotificationAutomation = ({ name, doors, services, includeOpened,
   };
 };
 
-const requestDoorNotificationStep = (host, { title, description, content, backLabel, nextLabel, submit, bind, focusCancel = false }) => new Promise((resolve) => {
+const requestDoorNotificationStep = (host, { description, headerContent = "", stage, progressFromStage = stage - 1, progressToStage = stage, content, backLabel, nextLabel, submit, bind, focusCancel = false }) => new Promise((resolve) => {
   const dialog = host.shadowRoot.ownerDocument.createElement("dialog");
   dialog.className = "door-notification-dialog";
-  dialog.innerHTML = `<button class="door-notification-close" type="button" data-cancel aria-label="Close" title="Close" ${focusCancel ? "autofocus" : ""}>×</button><h2>${escapeHtml(title)}</h2>
-    <p>${escapeHtml(description)}</p>
+  dialog.innerHTML = `<button class="door-notification-close" type="button" data-cancel aria-label="Close" title="Close" ${focusCancel ? "autofocus" : ""}>×</button><div class="remote-instance-dialog-header"><h2>Create Automation</h2>
+    <div class="share-stage-progress" role="progressbar" aria-label="Automation setup progress" aria-valuemin="1" aria-valuemax="5" aria-valuenow="${progressFromStage}"><span data-door-notification-progress style="width:${(progressFromStage / 5) * 100}%"></span></div>
+    ${headerContent ? `<div class="door-notification-heading-row"><p data-door-notification-description>${escapeHtml(description)}</p>${headerContent}</div>` : `<p data-door-notification-description>${escapeHtml(description)}</p>`}</div>
     <form data-door-notification-form>
-      ${content}
-      <p class="form-error" data-door-notification-error hidden></p>
+      <div class="door-notification-step-content">${content}<p class="form-error" data-door-notification-error hidden></p></div>
       <div class="modal-actions">${backLabel ? `<button class="modal-cancel" type="button" data-back>${escapeHtml(backLabel)}</button>` : ""}<button class="modal-action" type="submit" data-next>${escapeHtml(nextLabel)}</button></div>
     </form>`;
   const form = dialog.querySelector("[data-door-notification-form]");
@@ -145,54 +184,63 @@ const requestDoorNotificationStep = (host, { title, description, content, backLa
     resolve(result);
   }, { once: true });
   host._modalCount = (host._modalCount || 0) + 1;
+  closeOnBackdrop(dialog);
   host.shadowRoot.append(dialog);
   bind?.(dialog, form);
   dialog.showModal();
+  window.requestAnimationFrame(() => {
+    const stepContent = dialog.querySelector(".door-notification-step-content");
+    if (stepContent) stepContent.scrollTop = 0;
+    const progress = dialog.querySelector("[data-door-notification-progress]");
+    if (progress) {
+      progress.style.width = `${(progressToStage / 5) * 100}%`;
+      progress.parentElement?.setAttribute("aria-valuenow", String(progressToStage));
+    }
+  });
 });
 
 const requestDoorNotificationAutomation = async (host) => {
   const doors = notificationDoors(host);
+  const members = familyMembers(host);
   const services = notificationServices(host);
-  const selection = { doorIds: [], includeOpened: true, includeCalls: false, services: [], name: "" };
+  const selection = { doorIds: [], includeOpened: true, includeCalls: false, callerRules: [], callerOperator: "is", services: [], name: "" };
   let step = 0;
-  while (step >= 0 && step < 4) {
+  let progressFromStage = 0;
+  while (step >= 0 && step < 5) {
     let result;
     if (step === 0) {
       result = await requestDoorNotificationStep(host, {
-        title: "Select Doors", description: "Choose the doors that should send notifications.", nextLabel: "Next", focusCancel: true,
-        content: `<div class="door-picker-control"><label class="door-picker-search"><input type="search" data-door-search aria-label="Search doors" placeholder="Type to filter doors" autocomplete="off"></label><div class="door-picker" data-door-picker hidden><div class="door-picker-results" data-door-picker-results role="listbox"></div></div></div><div class="door-picker-badges" data-door-picker-badges aria-label="Selected doors"></div>`,
+        stage: 1, progressFromStage, progressToStage: selection.doorIds.length ? 1 : 0, description: "Which doors should trigger the automation?", nextLabel: "Next", focusCancel: true,
+        content: `<div class="door-picker-control selection-list-picker-control"><label class="door-picker-search"><input type="search" data-door-search aria-label="Search doors" placeholder="Type to filter doors" autocomplete="off"></label><div class="door-picker-results selection-list" data-door-picker-results role="listbox" aria-label="Doors"></div></div>`,
         bind: (dialog) => {
           const search = dialog.querySelector("[data-door-search]");
-          const picker = dialog.querySelector("[data-door-picker]");
           const results = dialog.querySelector("[data-door-picker-results]");
-          const badges = dialog.querySelector("[data-door-picker-badges]");
           const nextButton = dialog.querySelector("[data-next]");
-          const render = () => {
+          const render = (updateProgress = false) => {
             nextButton.disabled = selection.doorIds.length === 0;
+            if (updateProgress) {
+              const progress = dialog.querySelector("[data-door-notification-progress]");
+              if (progress) {
+                const progressStage = selection.doorIds.length ? 1 : 0;
+                progress.style.width = `${(progressStage / 5) * 100}%`;
+                progress.parentElement?.setAttribute("aria-valuenow", String(progressStage));
+              }
+            }
             const query = search.value.trim().toLocaleLowerCase();
-            const available = doors.filter((door) => !selection.doorIds.includes(door.deviceId));
-            const matching = available.filter((door) => door.name.toLocaleLowerCase().includes(query));
-            badges.innerHTML = selection.doorIds.map((deviceId) => {
-              const door = doors.find((item) => item.deviceId === deviceId);
-              return door ? `<button class="door-selection-badge" type="button" data-remove-door="${escapeHtml(deviceId)}"><span>${escapeHtml(door.name)}</span><span aria-hidden="true">×</span><span class="sr-only">Remove ${escapeHtml(door.name)}</span></button>` : "";
-            }).join("");
-            results.innerHTML = matching.map((door) => `<button class="door-picker-option" type="button" role="option" data-add-door="${escapeHtml(door.deviceId)}">${escapeHtml(door.name)}</button>`).join("") || `<p class="muted">${available.length ? "No matching doors." : "All available doors are selected."}</p>`;
-            results.querySelectorAll("[data-add-door]").forEach((button) => button.addEventListener("mousedown", (event) => event.preventDefault()));
-            badges.querySelectorAll("[data-remove-door]").forEach((button) => button.addEventListener("click", () => {
-              selection.doorIds = selection.doorIds.filter((deviceId) => deviceId !== button.dataset.removeDoor);
-              render();
-            }));
-            results.querySelectorAll("[data-add-door]").forEach((button) => button.addEventListener("click", () => {
-              selection.doorIds = [...selection.doorIds, button.dataset.addDoor];
-              search.value = "";
-              render();
-              picker.hidden = true;
-              search.blur();
+            const matching = doors.filter((door) => door.name.toLocaleLowerCase().includes(query));
+            results.innerHTML = matching.map((door) => {
+              const selected = selection.doorIds.includes(door.deviceId);
+              return `<button class="door-picker-option door-selection-list-option" type="button" role="option" aria-selected="${selected}" data-toggle-door="${escapeHtml(door.deviceId)}"><span class="notification-service-selection${selected ? " selected" : ""}" aria-hidden="true">✓</span><span>${escapeHtml(door.name)}</span></button>`;
+            }).join("") || '<p class="muted">No matching doors.</p>';
+            results.querySelectorAll("[data-toggle-door]").forEach((button) => button.addEventListener("click", () => {
+              const doorId = button.dataset.toggleDoor;
+              selection.doorIds = selection.doorIds.includes(doorId)
+                ? selection.doorIds.filter((item) => item !== doorId)
+                : [...selection.doorIds, doorId];
+              render(true);
             }));
           };
-          search.addEventListener("focus", () => { picker.hidden = false; });
-          search.addEventListener("input", () => { picker.hidden = false; render(); });
-          search.addEventListener("blur", () => window.setTimeout(() => { picker.hidden = true; }, 100));
+          search.addEventListener("input", () => render());
           render();
         },
         submit: (_form, error) => {
@@ -202,8 +250,23 @@ const requestDoorNotificationAutomation = async (host) => {
       });
     } else if (step === 1) {
       result = await requestDoorNotificationStep(host, {
-        title: "Select Event Types", description: "Choose which door events should create a notification.", backLabel: "Back", nextLabel: "Next",
+        stage: 2, progressFromStage, progressToStage: selection.includeOpened || selection.includeCalls ? 2 : 1, description: "Which events should trigger the automation?", backLabel: "Back", nextLabel: "Next",
         content: `<fieldset><legend>Event types</legend><label class="door-notification-option"><input type="checkbox" name="opened" ${selection.includeOpened ? "checked" : ""}><span>Door opened / unlocked</span></label><label class="door-notification-option"><input type="checkbox" name="call" ${selection.includeCalls ? "checked" : ""}><span>Doorbell call</span></label></fieldset>`,
+        bind: (dialog) => {
+          const eventTypes = [...dialog.querySelectorAll('[name="opened"], [name="call"]')];
+          const nextButton = dialog.querySelector("[data-next]");
+          const updateStepState = () => {
+            const hasEventType = eventTypes.some((input) => input.checked);
+            nextButton.disabled = !hasEventType;
+            const progress = dialog.querySelector("[data-door-notification-progress]");
+            if (!progress) return;
+            const progressStage = hasEventType ? 2 : 1;
+            progress.style.width = `${(progressStage / 5) * 100}%`;
+            progress.parentElement?.setAttribute("aria-valuenow", String(progressStage));
+          };
+          eventTypes.forEach((input) => input.addEventListener("change", updateStepState));
+          updateStepState();
+        },
         submit: (form, error) => {
           const includeOpened = form.querySelector('[name="opened"]').checked;
           const includeCalls = form.querySelector('[name="call"]').checked;
@@ -213,42 +276,125 @@ const requestDoorNotificationAutomation = async (host) => {
       });
     } else if (step === 2) {
       result = await requestDoorNotificationStep(host, {
-        title: "Notify Via", description: "Choose one or more Home Assistant notification services.", backLabel: "Back", nextLabel: "Next",
+        stage: 3, progressFromStage, description: "Who should trigger the automation?", backLabel: "Back", nextLabel: "Next",
+        content: members.length
+          ? `<div class="caller-picker"><div class="caller-picker-add" data-caller-picker-add><button class="caller-picker-add-button" type="button" data-add-caller aria-label="Add family member" aria-expanded="false"><span aria-hidden="true">+</span></button><div class="caller-picker-add-menu" data-add-caller-menu role="menu" hidden></div></div><div class="caller-condition-summary muted" data-caller-condition-summary hidden></div></div>`
+          : '<p class="muted">No associated family members are available. Continue to notify for every caller.</p>',
+        bind: (dialog) => {
+          const addCaller = dialog.querySelector("[data-add-caller]");
+          const addCallerPicker = dialog.querySelector("[data-caller-picker-add]");
+          const addCallerMenu = dialog.querySelector("[data-add-caller-menu]");
+          const summary = dialog.querySelector("[data-caller-condition-summary]");
+          if (!addCaller || !summary) return;
+          const render = () => {
+            const selectedNames = new Set(selection.callerRules.map((rule) => rule.name));
+            const availableMembers = members.filter((name) => !selectedNames.has(name));
+            addCallerPicker.hidden = availableMembers.length === 0;
+            addCallerMenu.innerHTML = availableMembers.map((name) => `<button type="button" role="menuitem" data-add-caller-name="${escapeHtml(name)}">${escapeHtml(name)}</button>`).join("");
+            const plural = selection.callerRules.length !== 1;
+            const callerRuleLabel = (isNot) => {
+              if (selection.includeOpened && !selection.includeCalls) {
+                if (isNot) return plural ? "do not open or unlock the door" : "does not open or unlock the door";
+                return plural ? "open or unlock the door" : "opens or unlocks the door";
+              }
+              if (!selection.includeOpened && selection.includeCalls) {
+                if (isNot) return plural ? "are not the caller" : "is not the caller";
+                return plural ? "are the caller" : "is the caller";
+              }
+              if (isNot) return plural ? "do not call or unlock the door" : "does not call or unlock the door";
+              return plural ? "call or unlock the door" : "calls or unlocks the door";
+            };
+            const hasCallers = selection.callerRules.length > 0;
+            summary.hidden = false;
+            if (!hasCallers) {
+              summary.textContent = "Triggered by anyone.";
+            } else {
+              const separator = selection.callerOperator === "is" ? "or" : "and";
+              const badges = selection.callerRules.map((rule, index) => {
+                const punctuation = index === selection.callerRules.length - 1
+                  ? ""
+                  : index === selection.callerRules.length - 2
+                    ? ` ${separator} `
+                    : ", ";
+                return `<button class="door-selection-badge" type="button" data-remove-caller="${escapeHtml(rule.name)}"><span>${escapeHtml(rule.name)}</span><span aria-hidden="true">×</span><span class="sr-only">Remove ${escapeHtml(rule.name)}</span></button>${punctuation ? `<span class="caller-condition-punctuation">${punctuation}</span>` : ""}`;
+              }).join("");
+              summary.innerHTML = `<span>Triggered when</span><span class="door-picker-badges" aria-label="Selected family members">${badges}</span><span class="caller-picker-rule"><select data-caller-operator aria-label="Caller rule"><option value="is" ${selection.callerOperator === "is" ? "selected" : ""}>${callerRuleLabel(false)}</option><option value="is_not" ${selection.callerOperator === "is_not" ? "selected" : ""}>${callerRuleLabel(true)}</option></select></span>`;
+            }
+            const badges = summary.querySelector("[aria-label='Selected family members']");
+            badges?.querySelectorAll("[data-remove-caller]").forEach((button) => button.addEventListener("click", () => {
+              selection.callerRules = selection.callerRules.filter((rule) => rule.name !== button.dataset.removeCaller);
+              render();
+            }));
+            addCallerMenu.querySelectorAll("[data-add-caller-name]").forEach((button) => button.addEventListener("click", () => {
+              selection.callerRules.push({ name: button.dataset.addCallerName, operator: selection.callerOperator });
+              addCallerMenu.hidden = true;
+              addCaller.setAttribute("aria-expanded", "false");
+              render();
+            }));
+            summary.querySelector("[data-caller-operator]")?.addEventListener("change", (event) => {
+              selection.callerOperator = event.target.value;
+              selection.callerRules.forEach((rule) => { rule.operator = selection.callerOperator; });
+              render();
+            });
+          };
+          addCaller.addEventListener("click", (event) => {
+            event.stopPropagation();
+            const opening = addCallerMenu.hidden;
+            addCallerMenu.hidden = !opening;
+            if (opening) {
+              const pickerBounds = addCallerPicker.getBoundingClientRect();
+              const menuHeight = addCallerMenu.scrollHeight;
+              const footerTop = dialog.querySelector(".modal-actions")?.getBoundingClientRect().top ?? window.innerHeight;
+              addCallerPicker.classList.toggle("opens-upward", footerTop - pickerBounds.bottom < menuHeight + 6);
+            }
+            addCaller.setAttribute("aria-expanded", String(opening));
+          });
+          dialog.addEventListener("click", (event) => {
+            if (!addCallerPicker.contains(event.target)) {
+              addCallerMenu.hidden = true;
+              addCaller.setAttribute("aria-expanded", "false");
+            }
+          });
+          render();
+        },
+        submit: () => ({ callerRules: selection.callerRules }),
+      });
+    } else if (step === 3) {
+      result = await requestDoorNotificationStep(host, {
+        stage: 4, progressFromStage, progressToStage: selection.services.length ? 4 : 3, description: "Which notify services should be run?", backLabel: "Back", nextLabel: "Next",
         content: services.length
-          ? `<div class="door-picker-control notification-service-picker-control"><label class="door-picker-search"><input type="search" data-service-search aria-label="Search notification services" placeholder="Type to filter notification services" autocomplete="off"></label><div class="door-picker" data-service-picker hidden><div class="door-picker-results" data-service-picker-results role="listbox"></div></div></div><div class="door-picker-badges" data-notification-service-badges aria-label="Selected notification services"></div>`
+          ? `<div class="door-picker-control notification-service-picker-control"><label class="door-picker-search"><input type="search" data-service-search aria-label="Search notification services" placeholder="Type to filter notification services" autocomplete="off"></label><div class="door-picker-results notification-service-list" data-service-picker-results role="listbox" aria-label="Notification services"></div></div>`
           : '<p class="muted">No notification services are available.</p>',
         bind: (dialog) => {
           const search = dialog.querySelector("[data-service-search]");
-          const picker = dialog.querySelector("[data-service-picker]");
           const results = dialog.querySelector("[data-service-picker-results]");
-          const badges = dialog.querySelector("[data-notification-service-badges]");
-          const serviceById = new Map(services.map((service) => [service.service, service]));
-          if (!search || !picker || !results || !badges) return;
-          const render = () => {
+          const nextButton = dialog.querySelector("[data-next]");
+          if (!search || !results) return;
+          const render = (updateProgress = false) => {
+            nextButton.disabled = selection.services.length === 0;
+            if (updateProgress) {
+              const progress = dialog.querySelector("[data-door-notification-progress]");
+              if (progress) {
+                const progressStage = selection.services.length ? 4 : 3;
+                progress.style.width = `${(progressStage / 5) * 100}%`;
+                progress.parentElement?.setAttribute("aria-valuenow", String(progressStage));
+              }
+            }
             const query = search.value.trim().toLocaleLowerCase();
-            const available = services.filter((service) => !selection.services.includes(service.service));
-            const matching = available.filter((service) => service.name.toLocaleLowerCase().includes(query));
-            badges.innerHTML = selection.services.map((serviceId) => {
-              const service = serviceById.get(serviceId);
-              return service ? `<button class="door-selection-badge" type="button" data-remove-service="${escapeHtml(serviceId)}"><span>${escapeHtml(service.name)}</span><span aria-hidden="true">×</span><span class="sr-only">Remove ${escapeHtml(service.name)}</span></button>` : "";
-            }).join("");
-            results.innerHTML = matching.map((service) => `<button class="door-picker-option notification-service-action-option" type="button" role="option" data-add-service="${escapeHtml(service.service)}"><span class="notification-service-action-icon">${icons.bell}</span><span class="notification-service-action-copy"><span>Send a notification with ${escapeHtml(service.name)}</span><small>Sends a notification message using the ${escapeHtml(service.name)} service.</small></span><span class="notification-service-action-domain">notify</span></button>`).join("") || `<p class="muted">${available.length ? "No matching notification services." : "All available notification services are selected."}</p>`;
-            results.querySelectorAll("[data-add-service]").forEach((button) => button.addEventListener("mousedown", (event) => event.preventDefault()));
-            badges.querySelectorAll("[data-remove-service]").forEach((button) => button.addEventListener("click", () => {
-              selection.services = selection.services.filter((service) => service !== button.dataset.removeService);
-              render();
-            }));
-            results.querySelectorAll("[data-add-service]").forEach((button) => button.addEventListener("click", () => {
-              selection.services = [...selection.services, button.dataset.addService];
-              search.value = "";
-              render();
-              picker.hidden = true;
-              search.blur();
+            const matching = services.filter((service) => service.name.toLocaleLowerCase().includes(query));
+            results.innerHTML = matching.map((service) => {
+              const selected = selection.services.includes(service.service);
+              return `<button class="door-picker-option notification-service-action-option" type="button" role="option" aria-selected="${selected}" data-toggle-service="${escapeHtml(service.service)}"><span class="notification-service-selection${selected ? " selected" : ""}" aria-hidden="true">✓</span><span class="notification-service-action-copy"><span>Send a notification with ${escapeHtml(service.name)}</span><small>Sends a notification message using the ${escapeHtml(service.name)} service.</small></span><span class="notification-service-action-domain">notify</span></button>`;
+            }).join("") || '<p class="muted">No matching notification services.</p>';
+            results.querySelectorAll("[data-toggle-service]").forEach((button) => button.addEventListener("click", () => {
+              const serviceId = button.dataset.toggleService;
+              selection.services = selection.services.includes(serviceId)
+                ? selection.services.filter((item) => item !== serviceId)
+                : [...selection.services, serviceId];
+              render(true);
             }));
           };
-          search.addEventListener("focus", () => { picker.hidden = false; });
-          search.addEventListener("input", () => { picker.hidden = false; render(); });
-          search.addEventListener("blur", () => window.setTimeout(() => { picker.hidden = true; }, 100));
+          search.addEventListener("input", () => render());
           render();
         },
         submit: (_form, error) => {
@@ -260,8 +406,18 @@ const requestDoorNotificationAutomation = async (host) => {
       const selectedDoors = doors.filter((door) => selection.doorIds.includes(door.deviceId));
       const defaultName = suggestedAutomationName(selectedDoors);
       result = await requestDoorNotificationStep(host, {
-        title: "Confirm Automation", description: "Review the automation name, then create and enable it.", backLabel: "Back", nextLabel: "Create automation",
-        content: `<label>Automation name<input name="automation-name" type="text" value="${escapeHtml(selection.name || defaultName)}" required></label>`,
+        stage: 5, progressFromStage, progressToStage: (selection.name || defaultName).trim() ? 5 : 4, description: "Enter the automation name.", backLabel: "Back", nextLabel: "Create automation",
+        content: `<input name="automation-name" type="text" value="${escapeHtml(selection.name || defaultName)}" aria-label="Automation name" required>`,
+        bind: (dialog) => {
+          const nameInput = dialog.querySelector('[name="automation-name"]');
+          nameInput?.addEventListener("input", () => {
+            const progress = dialog.querySelector("[data-door-notification-progress]");
+            if (!progress) return;
+            const progressStage = nameInput.value.trim() ? 5 : 4;
+            progress.style.width = `${(progressStage / 5) * 100}%`;
+            progress.parentElement?.setAttribute("aria-valuenow", String(progressStage));
+          });
+        },
         submit: (form, error) => {
           const name = form.querySelector('[name="automation-name"]').value.trim();
           if (name) return { name };
@@ -270,6 +426,7 @@ const requestDoorNotificationAutomation = async (host) => {
       });
     }
     if (!result) return null;
+    progressFromStage = step + 1;
     if (result.direction === "back") { step -= 1; continue; }
     Object.assign(selection, result.value);
     step += 1;
@@ -285,13 +442,14 @@ const showDoorNotificationCreated = (host, automationId) => {
   dialog.className = "door-notification-dialog door-notification-complete";
   dialog.innerHTML = `<h2>Notification Automation Created</h2>
     <p>Your door-event notification is enabled and ready to use.</p>
-    <div class="modal-actions"><button class="modal-cancel" type="button" data-close>Done</button><a class="modal-action" href="/config/automation/edit/${encodeURIComponent(automationId)}">Review in Automations</a></div>`;
+    <div class="modal-actions"><button class="modal-cancel" type="button" data-close>Done</button><a class="modal-action" href="/config/automation/edit/${encodeURIComponent(automationId)}">Open Automation</a></div>`;
   dialog.querySelector("[data-close]").addEventListener("click", () => dialog.close());
   dialog.addEventListener("close", () => {
     host._modalCount = Math.max(0, (host._modalCount || 1) - 1);
     dialog.remove();
   }, { once: true });
   host._modalCount = (host._modalCount || 0) + 1;
+  closeOnBackdrop(dialog);
   host.shadowRoot.append(dialog);
   dialog.showModal();
 };
@@ -301,7 +459,11 @@ const eventOptions = (host) => {
   const cameras = panelCameras(host);
   const overrides = settings.event_image_wait_overrides || {};
   const eventImageWaiting = settings.wait_for_event_image !== false;
-  return `<div class="settings-row">
+  return `<div class="settings-row door-notification-row">
+    <div><strong>Door-open notifications</strong><p>Create an automation to fire a notification when doors are opened.</p></div>
+    <button class="action settings-inline-action" type="button" data-create-door-notification>${icons.automation}<span>Create</span></button>
+  </div>
+  <div class="settings-row">
     <div><strong>Wait for event images</strong><p>Wait for an image URL before sending a door event.</p></div>
     <label class="settings-switch" aria-label="Wait for event images"><input name="wait_for_event_image" type="checkbox" ${eventImageWaiting ? "checked" : ""}><span></span></label>
   </div>
@@ -311,10 +473,6 @@ const eventOptions = (host) => {
   </div>
   <div class="settings-device-options" data-event-image-overrides ${eventImageWaiting && settings.custom_event_image_wait ? "" : "hidden"}>
     ${cameras.map((camera) => `<label class="settings-device-option"><span>${escapeHtml(camera.name)}</span><span class="settings-switch"><input type="checkbox" data-event-image-wait="${escapeHtml(camera.sourceName)}" aria-label="Wait for an event image from ${escapeHtml(camera.name)}" ${overrides[camera.sourceName] !== undefined ? (overrides[camera.sourceName] ? "checked" : "") : (settings.wait_for_event_image !== false ? "checked" : "")}><span></span></span></label>`).join("") || '<p class="muted">No cameras are currently available.</p>'}
-  </div>
-  <div class="settings-row door-notification-row">
-    <div><strong>Door-open notifications</strong><p>Create an enabled notification automation for selected doors and event types.</p></div>
-    <button class="action settings-inline-action" type="button" data-create-door-notification>${icons.plus}<span>Create automation</span></button>
   </div>`;
 };
 
@@ -407,6 +565,7 @@ const requestShareAccess = (host, viewedShare = null) => new Promise((resolve) =
   );
   const cameras = new Map((account.cameras || []).map((item) => [item.source_name || item.name, item]));
   const relays = account.relays || [];
+  const members = familyMembers(host);
   const names = [...new Set([...cameras.keys(), ...relays.map((item) => item.source_name || item.name)])].sort();
   const availableDeviceIds = [
     ...cameras.values()].map((camera) => `camera:${camera.source_name || camera.name}`)
@@ -416,7 +575,8 @@ const requestShareAccess = (host, viewedShare = null) => new Promise((resolve) =
   const createRelayIds = new Set(viewedShare?.create_key_relay_ids || (readOnly ? [] : availableRelayIds));
   const editRelayIds = new Set(viewedShare?.edit_key_relay_ids || (readOnly ? [] : availableRelayIds));
   const viewRelayIds = new Set(viewedShare?.view_key_relay_ids || (readOnly ? [] : availableRelayIds));
-  const activityDeviceNames = new Set(viewedShare?.activity_device_names || (readOnly ? [] : names));
+  const activityMemberNames = new Set(viewedShare?.activity_member_names || (readOnly ? [] : members));
+  const callMemberNames = new Set(viewedShare?.call_member_names || (readOnly ? [] : members));
   const checked = (value) => value ? "checked" : "";
   const readOnlyCheck = (enabled) => `<span class="share-permission-control share-readonly-check${enabled ? " enabled" : ""}">${enabled ? "✓" : ""}</span>`;
   const checkbox = (attribute, value, inputValue = "") => readOnly
@@ -429,7 +589,8 @@ const requestShareAccess = (host, viewedShare = null) => new Promise((resolve) =
   const relayIds = availableRelayIds;
   const allCameras = cameras.size > 0 && [...cameras.values()].every((camera) => selectedDeviceIds.has(`camera:${camera.source_name || camera.name}`));
   const allRelays = relayIds.length > 0 && relayIds.every((id) => selectedDeviceIds.has(id));
-  const allActivity = names.length > 0 && names.every((name) => activityDeviceNames.has(name));
+  const allActivity = members.length > 0 && members.every((name) => activityMemberNames.has(name));
+  const allCalls = members.length > 0 && members.every((name) => callMemberNames.has(name));
   const allView = relayIds.length > 0 && relayIds.every((id) => viewRelayIds.has(id));
   const allCreate = relayIds.length > 0 && relayIds.every((id) => createRelayIds.has(id));
   const allEdit = relayIds.length > 0 && relayIds.every((id) => editRelayIds.has(id));
@@ -448,9 +609,11 @@ const requestShareAccess = (host, viewedShare = null) => new Promise((resolve) =
     const keyPermissionCell = (attribute, enabled) => deviceRelays.length
       ? checkbox(attribute, enabled)
       : '<span class="share-empty-cell">—</span>';
-    return `<tr><td>${escapeHtml(displayName)}</td><td>${camera ? checkbox("data-share-device", selectedDeviceIds.has(cameraId), cameraId) : '<span class="share-empty-cell">—</span>'}</td><td>${relayCell || '<span class="share-empty-cell">—</span>'}</td><td>${checkbox("data-share-activity", activityDeviceNames.has(name), name)}</td><td>${keyPermissionCell("data-view-keys", permitsView)}</td><td>${keyPermissionCell("data-create-keys", permitsCreate)}</td><td>${keyPermissionCell("data-edit-keys", permitsEdit)}</td></tr>`;
+    return `<tr><td>${escapeHtml(displayName)}</td><td>${camera ? checkbox("data-share-device", selectedDeviceIds.has(cameraId), cameraId) : '<span class="share-empty-cell">—</span>'}</td><td>${relayCell || '<span class="share-empty-cell">—</span>'}</td><td>${keyPermissionCell("data-view-keys", permitsView)}</td><td>${keyPermissionCell("data-create-keys", permitsCreate)}</td><td>${keyPermissionCell("data-edit-keys", permitsEdit)}</td></tr>`;
   }).join("");
-  const selectAllRow = `<tr class="share-select-all-row"><td><span class="share-select-all-label">${icons.checklist}<span>Select all</span></span></td><td>${checkbox("data-all-camera", allCameras)}</td><td>${checkbox("data-all-relay", allRelays)}</td><td>${checkbox("data-all-activity", allActivity)}</td><td>${checkbox("data-all-view", allView)}</td><td>${checkbox("data-all-create", allCreate)}</td><td>${checkbox("data-all-edit", allEdit)}</td></tr>`;
+  const selectAllRow = `<tr class="share-select-all-row"><td><span class="share-select-all-label">${icons.checklist}<span>Select all</span></span></td><td>${checkbox("data-all-camera", allCameras)}</td><td>${checkbox("data-all-relay", allRelays)}</td><td>${checkbox("data-all-view", allView)}</td><td>${checkbox("data-all-create", allCreate)}</td><td>${checkbox("data-all-edit", allEdit)}</td></tr>`;
+  const dataRows = members.map((name) => `<tr><td>${escapeHtml(name)}</td><td>${checkbox("data-share-activity", activityMemberNames.has(name), name)}</td><td>${checkbox("data-share-calls", callMemberNames.has(name), name)}</td></tr>`).join("");
+  const dataSelectAllRow = `<tr class="share-select-all-row"><td><span class="share-select-all-label">${icons.checklist}<span>Select all</span></span></td><td>${checkbox("data-all-activity", allActivity)}</td><td>${checkbox("data-all-calls", allCalls)}</td></tr>`;
   const accessExpiresAt = viewedShare?.access_expires_at;
   const earliestExpiry = (() => {
     const now = new Date();
@@ -463,15 +626,25 @@ const requestShareAccess = (host, viewedShare = null) => new Promise((resolve) =
     return Number.isFinite(pairingExpiry) ? new Date(pairingExpiry - 10 * 60 * 1000).toISOString() : null;
   })();
   const status = viewedShare?.revoked ? "Revoked" : viewedShare?.activated ? "Connected" : "Waiting to pair";
+  const stageDescriptions = [
+    "Enter a name for the remote instance and the validity duration.",
+    "Choose the devices and temporary key permissions that should be made available to the remote instance.",
+    "Chose which family members should appear in the Latest Activity and Call History tables of the remote instance.",
+  ];
   const basics = readOnly
     ? `<section class="share-details-card"><div class="share-detail"><span class="share-detail-icon">${icons.calendar}</span><span><small>Validity</small><strong>${escapeHtml(formattedExpiry)}</strong></span></div><div class="share-detail"><span class="share-detail-icon">${icons.calendar}</span><span><small>Registered on</small><strong>${escapeHtml(createdAt ? new Date(createdAt).toLocaleString() : "—")}</strong></span></div></section>`
     : `<section class="share-details-card share-generation-details"><label class="share-detail share-name-field"><span class="share-detail-icon">${icons.idCard}</span><span><small>Remote instance name</small><input data-receiver-name maxlength="100" required placeholder="e.g. Holiday home" autofocus></span></label><div class="share-detail share-expiry-field"><span class="share-detail-icon">${icons.calendar}</span><span><small>Validity</small><label class="check"><input data-never-expire name="access-duration" type="radio" checked> Never expires</label><label class="check" data-access-expiry-row><span><input data-expiring name="access-duration" type="radio"> Set expiry date &amp; time</span><input data-access-expiry type="datetime-local" min="${earliestExpiry}" disabled hidden></label></span></div></section>`;
+  const stageProgress = readOnly ? "" : '<div class="share-stage-progress" role="progressbar" aria-label="Pairing link setup progress" aria-valuemin="1" aria-valuemax="3" aria-valuenow="1"><span data-share-stage-progress></span></div>';
   const heading = readOnly
     ? `<h2>${escapeHtml(viewedShare.receiver_name)} <span class="share-status-badge ${status.toLocaleLowerCase().replaceAll(" ", "-")}"><i></i>${escapeHtml(status)}</span></h2><p>Review the access permissions granted to this Home Assistant instance.</p>`
-    : `<h2>Create pairing link</h2><p>Choose the devices and permissions available to the remote Home Assistant instance.</p>`;
-  dialog.innerHTML = `<button class="share-access-close" type="button" data-cancel aria-label="Close">×</button><div class="remote-instance-dialog-header">${heading}</div>${basics}<p class="notice share-error" data-share-error hidden></p><section class="share-permissions"><div class="table-wrap"><table class="share-access-table"><thead><tr><th></th><th colspan="3"><span class="share-table-section-heading">${icons.cameraDoor}<span>Devices</span></span></th><th colspan="3"><span class="share-table-section-heading">${icons.key}<span>Temporary keys</span></span></th></tr><tr><th>Name</th><th><span class="share-permission-label">Camera</span></th><th><span class="share-permission-label">${hasMultipleRelays ? "Relays" : "Relay"}</span></th><th><span class="share-permission-label">Activity</span></th><th><span class="share-permission-label">View</span></th><th><span class="share-permission-label">Create</span></th><th><span class="share-permission-label">Edit</span></th></tr></thead><tbody>${readOnly ? "" : selectAllRow}${deviceRows}</tbody></table></div></section><div class="modal-actions"><button class="modal-cancel" data-cancel type="button">${readOnly ? "Close" : "Cancel"}</button>${readOnly ? "" : '<button class="modal-action" data-confirm type="button">Create pairing link</button>'}</div>`;
+    : `<h2>Create Pairing Link</h2>${stageProgress}<p data-share-stage-description>${stageDescriptions[0]}</p>`;
+  const devicesTable = `<section class="share-permissions" data-share-stage="2"${readOnly ? "" : " hidden"}><div class="table-wrap"><table class="share-access-table share-device-access-table"><thead><tr><th></th><th colspan="2"><span class="share-table-section-heading">${icons.cameraDoor}<span>Devices</span></span></th><th colspan="3"><span class="share-table-section-heading">${icons.key}<span>Temporary keys</span></span></th></tr><tr><th>Name</th><th><span class="share-permission-label">Camera</span></th><th><span class="share-permission-label">${hasMultipleRelays ? "Relays" : "Relay"}</span></th><th><span class="share-permission-label">View</span></th><th><span class="share-permission-label">Create</span></th><th><span class="share-permission-label">Edit</span></th></tr></thead><tbody>${readOnly ? "" : selectAllRow}${deviceRows}</tbody></table></div></section>`;
+  const dataTable = `<section class="share-permissions" data-share-stage="3"${readOnly ? "" : " hidden"}><div class="table-wrap share-data-table"><table class="share-access-table"><thead><tr><th></th><th colspan="2"><span class="share-table-section-heading">${icons.database}<span>Data</span></span></th></tr><tr><th>Family Members</th><th><span class="share-permission-label">Latest Activity</span></th><th><span class="share-permission-label">Call History</span></th></tr></thead><tbody>${readOnly ? "" : dataSelectAllRow}${dataRows || '<tr><td colspan="3">No family members available.</td></tr>'}</tbody></table></div></section>`;
+  const createActions = `<button class="modal-cancel" data-previous type="button" hidden>Previous</button><button class="modal-action" data-next type="button">Next</button><button class="modal-action" data-confirm type="button" hidden>Create pairing link</button>`;
+  dialog.innerHTML = `<button class="share-access-close" type="button" data-cancel aria-label="Close">×</button><div class="remote-instance-dialog-header">${heading}</div>${readOnly ? basics : `<div data-share-stage="1">${basics}</div>`}<p class="notice share-error" data-share-error hidden></p>${devicesTable}${dataTable}<div class="modal-actions">${readOnly ? '<button class="modal-cancel" data-cancel type="button">Close</button>' : createActions}</div>`;
   const devices = [...dialog.querySelectorAll("[data-share-device], [data-share-relay]")];
   const activity = [...dialog.querySelectorAll("[data-share-activity]")];
+  const calls = [...dialog.querySelectorAll("[data-share-calls]")];
   const neverExpire = dialog.querySelector("[data-never-expire]");
   const expires = dialog.querySelector("[data-expiring]");
   const expiry = dialog.querySelector("[data-access-expiry]");
@@ -495,33 +668,83 @@ const requestShareAccess = (host, viewedShare = null) => new Promise((resolve) =
   wireSelectAll("[data-all-camera]", "[data-share-device]");
   wireSelectAll("[data-all-relay]", "[data-share-relay]");
   wireSelectAll("[data-all-activity]", "[data-share-activity]");
+  wireSelectAll("[data-all-calls]", "[data-share-calls]");
   wireSelectAll("[data-all-view]", "[data-view-keys]");
   wireSelectAll("[data-all-create]", "[data-create-keys]");
   wireSelectAll("[data-all-edit]", "[data-edit-keys]");
+  let stage = 1;
+  const stages = readOnly ? [] : [...dialog.querySelectorAll("[data-share-stage]")];
+  const previousButton = dialog.querySelector("[data-previous]");
+  const nextButton = dialog.querySelector("[data-next]");
   const confirmButton = dialog.querySelector("[data-confirm]");
-  const permissionInputs = [...dialog.querySelectorAll("[data-share-device], [data-share-relay], [data-share-activity], [data-view-keys], [data-create-keys], [data-edit-keys]")];
-  const updateConfirmState = () => {
-    if (!confirmButton) return;
-    const hasSelectedPermission = permissionInputs.some((input) => input.checked);
+  const permissionInputs = [...dialog.querySelectorAll("[data-share-device], [data-share-relay], [data-share-activity], [data-share-calls], [data-view-keys], [data-create-keys], [data-edit-keys]")];
+  const isFirstStageValid = () => {
+    const name = receiverName?.value.trim() || "";
     const expiryTime = Date.parse(expiry?.value || "");
-    const hasValidExpiry = !expires?.checked || (Number.isFinite(expiryTime) && expiryTime >= Date.now());
-    confirmButton.disabled = !receiverName?.value.trim() || !hasSelectedPermission || !hasValidExpiry;
+    return Boolean(name) && !existingReceiverNames.has(name.toLocaleLowerCase()) && (
+      !expires?.checked || (Number.isFinite(expiryTime) && expiryTime >= Date.now())
+    );
+  };
+  const updateConfirmState = () => {
+    const hasSelectedPermission = permissionInputs.some((input) => input.checked);
+    if (nextButton) nextButton.disabled = !isFirstStageValid();
+    if (confirmButton) confirmButton.disabled = !isFirstStageValid() || !hasSelectedPermission;
+  };
+  const updateStage = () => {
+    stages.forEach((element) => { element.hidden = Number(element.dataset.shareStage) !== stage; });
+    if (previousButton) previousButton.hidden = stage === 1;
+    if (nextButton) nextButton.hidden = stage === 3;
+    if (confirmButton) confirmButton.hidden = stage !== 3;
+    const description = dialog.querySelector("[data-share-stage-description]");
+    if (description) description.textContent = stageDescriptions[stage - 1];
+    const progress = dialog.querySelector("[data-share-stage-progress]");
+    if (progress) {
+      progress.style.width = `${(stage / 3) * 100}%`;
+      progress.parentElement?.setAttribute("aria-valuenow", String(stage));
+    }
+    dialog.querySelector("[data-share-error]").hidden = true;
+    updateConfirmState();
   };
   dialog.addEventListener("change", updateConfirmState);
   expiry?.addEventListener("input", updateConfirmState);
   receiverName?.addEventListener("input", updateConfirmState);
-  updateConfirmState();
   const updateExpiryState = () => {
     if (!expiry) return;
     const expirySelected = Boolean(expires?.checked);
     expiry.disabled = !expirySelected;
     expiry.hidden = !expirySelected;
+    updateConfirmState();
   };
   neverExpire?.addEventListener("change", updateExpiryState);
   expires?.addEventListener("change", updateExpiryState);
   updateExpiryState();
+  previousButton?.addEventListener("click", (event) => {
+    // Changing stages can resize the dialog before its backdrop handler runs.
+    // Keep this button click from being interpreted as an outside click.
+    event.stopPropagation();
+    stage = Math.max(1, stage - 1);
+    updateStage();
+  });
+  nextButton?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    const error = dialog.querySelector("[data-share-error]");
+    if (!isFirstStageValid()) {
+      const name = receiverName?.value.trim() || "";
+      error.textContent = !name
+        ? "Enter a name."
+        : existingReceiverNames.has(name.toLocaleLowerCase())
+          ? "A paired Home Assistant already uses this receiver name."
+          : "Choose a future access expiry date.";
+      error.hidden = false;
+      return;
+    }
+    stage = Math.min(3, stage + 1);
+    updateStage();
+  });
+  if (!readOnly) updateStage();
   dialog.querySelectorAll("[data-cancel]").forEach((button) => button.addEventListener("click", () => dialog.close()));
-  dialog.querySelector("[data-confirm]")?.addEventListener("click", () => {
+  dialog.querySelector("[data-confirm]")?.addEventListener("click", (event) => {
+    event.stopPropagation();
     const name = dialog.querySelector("[data-receiver-name]").value.trim();
     const error = dialog.querySelector("[data-share-error]");
     const expiryTime = Date.parse(expiry.value || "");
@@ -550,8 +773,9 @@ const requestShareAccess = (host, viewedShare = null) => new Promise((resolve) =
     const createKeyRelayIds = relayIdsFor("[data-create-keys]");
     const editKeyRelayIds = relayIdsFor("[data-edit-keys]");
     const viewKeyRelayIds = relayIdsFor("[data-view-keys]");
-    const activityDeviceNames = activity.filter((item) => item.checked).map((item) => item.value);
-    resolve({ receiverName: name, deviceIds: devices.filter((item) => item.checked).map((item) => item.value), allowActivity: activityDeviceNames.length > 0, activityDeviceNames, allowCreateKeys: createKeyRelayIds.length > 0, allowEditKeys: editKeyRelayIds.length > 0, createKeyRelayIds, editKeyRelayIds, viewKeyRelayIds, accessExpiresAt: neverExpire.checked ? null : new Date(expiry.value).toISOString() });
+    const activityMemberNames = activity.filter((item) => item.checked).map((item) => item.value);
+    const callMemberNames = calls.filter((item) => item.checked).map((item) => item.value);
+    resolve({ receiverName: name, deviceIds: devices.filter((item) => item.checked).map((item) => item.value), activityMemberNames, callMemberNames, allowCreateKeys: createKeyRelayIds.length > 0, allowEditKeys: editKeyRelayIds.length > 0, createKeyRelayIds, editKeyRelayIds, viewKeyRelayIds, accessExpiresAt: neverExpire.checked ? null : new Date(expiry.value).toISOString() });
     dialog.close();
   });
   dialog.addEventListener("close", () => {
@@ -561,6 +785,7 @@ const requestShareAccess = (host, viewedShare = null) => new Promise((resolve) =
     resolve(null);
   }, { once: true });
   host._modalCount = (host._modalCount || 0) + 1;
+  closeOnBackdrop(dialog);
   host.shadowRoot.append(dialog); dialog.showModal();
 });
 
@@ -586,16 +811,8 @@ const activityStorageProgress = (settings) => {
   const exceedsLimit = usedBytes > limitMb * 1_000_000;
   return `<div class="activity-storage-progress${exceedsLimit ? " is-over-limit" : ""}" role="progressbar" aria-label="Local activity storage used" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${escapeHtml(Math.min(100, percentage).toFixed(1))}">
     <span class="activity-storage-progress-fill" style="width:${Math.min(100, percentage)}%"></span>
-    <span class="activity-storage-progress-label">${escapeHtml(formatStorageAmount(usedBytes))} Used (${escapeHtml(percentageLabel)})</span>
+    <span class="activity-storage-progress-label">${escapeHtml(formatStorageAmount(usedBytes))} / ${escapeHtml(limitMb.toFixed(2))} MB (${escapeHtml(percentageLabel)})</span>
   </div>`;
-};
-
-const activityStorageQuota = (settings) => {
-  const limitMb = Number(settings.activity_history_max_storage_mb) || 0;
-  const usedBytes = Math.max(0, Number(settings.activity_history_storage_bytes) || 0);
-  if (limitMb <= 0) return "Unlimited local storage";
-  const percentage = Math.min(100, (usedBytes / (limitMb * 1_000_000)) * 100);
-  return `${formatStorageAmount(usedBytes)} / ${limitMb.toFixed(2)} MB (${percentage.toFixed(0)}%)`;
 };
 
 const sipAccountsSection = (sipAccounts = {}) => {
@@ -625,7 +842,7 @@ const sipAccountsSection = (sipAccounts = {}) => {
 
 const requestSipPdfPassword = (host) => new Promise((resolve) => {
   const dialog = host.shadowRoot.ownerDocument.createElement("dialog");
-  dialog.innerHTML = `<h2>Protect SIP accounts PDF</h2>
+  dialog.innerHTML = `<h2>Protect SIP Accounts PDF</h2>
     <p class="sip-warning">This PDF contains passwords. Do not share this information with anyone else.</p>
     <form method="dialog" data-sip-pdf-form>
       <label>Password<input required minlength="8" type="password" autocomplete="new-password" data-sip-pdf-password></label>
@@ -659,6 +876,7 @@ const requestSipPdfPassword = (host) => new Promise((resolve) => {
     dialog.remove();
     resolve(password ? { password, confirmation } : null);
   }, { once: true });
+  closeOnBackdrop(dialog);
   host.shadowRoot.append(dialog);
   dialog.showModal();
   form.querySelector("[data-sip-pdf-password]").focus();
@@ -670,7 +888,6 @@ export const updateActivityStorageProgress = (host, usageBytes) => {
   host._settings.activity_history_storage_bytes = Math.max(0, Number(usageBytes) || 0);
   const warning = host.shadowRoot.querySelector("[data-activity-storage-limit-warning]");
   const progress = host.shadowRoot.querySelector("[data-activity-storage-progress]");
-  const quota = host.shadowRoot.querySelector("[data-activity-storage-quota]");
   if (!progress) return;
   const liveLimitInput = host.shadowRoot.querySelector(
     '[name="activity_history_max_storage_mb"]'
@@ -683,7 +900,6 @@ export const updateActivityStorageProgress = (host, usageBytes) => {
   };
   if (warning) warning.innerHTML = activityStorageLimitWarning(settings);
   progress.innerHTML = activityStorageProgress(settings);
-  if (quota) quota.textContent = activityStorageQuota(settings);
 };
 
 /**
@@ -716,24 +932,18 @@ export const renderSettingsView = (host) => {
             <button class="action settings-save" type="submit" ${host._settingsDirty && !host._settingsSaving ? "" : "disabled"}>${icons.check}<span>Save changes</span></button>
           </div>
         </div>
-        <fieldset class="settings-section">
-          <legend>${icons.webcam}<span>Camera Options</span></legend>
-          <p class="settings-section-description">Set the orientation used for live streams and activity snapshots.</p>
-          ${cameraOptionsTable(host)}
-        </fieldset>
-
         <div class="settings-two-column">
         <fieldset class="settings-section door-events-section">
-          <legend>${icons.door}<span>Door events</span></legend>
+          <legend>${icons.door}<span>Door Events</span></legend>
           <p class="settings-section-description">Automations and image delivery behavior.</p>
           ${eventOptions(host)}
         </fieldset>
 
         <fieldset class="settings-section storage-section">
           <legend>${icons.database}<span>Storage & Data Management</span></legend>
-          <p class="settings-section-description">Keep a rolling buffer of activity history and preview images on this Home Assistant.</p>
+          <p class="settings-section-description">Locally store the activity records, preview images &amp; call history beyond what is available in the SmartPlus app.</p>
           <div class="settings-row">
-            <div><strong>Store activity history</strong><p>Keep a rolling buffer of activity records and preview images.</p></div>
+            <div><strong>Store activity history</strong></div>
             <label class="settings-switch" aria-label="Store activity history locally">
             <input name="store_activity_history" type="checkbox" ${settings.store_activity_history ? "checked" : ""}>
             <span></span>
@@ -741,19 +951,39 @@ export const renderSettingsView = (host) => {
           </div>
           <div data-activity-storage-limit-controls ${settings.store_activity_history ? "" : "hidden"}>
             <div data-activity-storage-limit-warning>${activityStorageLimitWarning(settings)}</div>
-            <label class="storage-limit-input"><span>Max cache limit</span>
-              <input name="activity_history_max_storage_mb" type="number" min="0" value="${escapeHtml(storageLimitValue)}" style="--storage-limit-digits: ${Math.max(1, storageLimitValue.length)}" aria-label="Local activity storage limit in MB">
-              <span class="activity-storage-limit-unit" data-activity-storage-limit-unit ${Number(storageLimitValue) >= 1 ? "" : "hidden"}>MB</span>
+            <label class="storage-limit-input"><span>Enable local storage up to</span>
+              <span class="storage-limit-value"><input name="activity_history_max_storage_mb" type="number" min="0" value="${escapeHtml(storageLimitValue)}" style="--storage-limit-digits: ${Math.max(1, storageLimitValue.length)}" aria-label="Local activity storage limit in MB">
+              <span class="activity-storage-limit-unit" data-activity-storage-limit-unit ${Number(storageLimitValue) >= 1 ? "" : "hidden"}>MB</span></span>
               <span class="activity-storage-limit-description" data-activity-storage-limit-description ${Number(settings.activity_history_max_storage_mb) > 0 ? "hidden" : ""}>Local activity storage limit in MB (0 = unlimited)</span>
             </label>
             <div class="storage-quota-card">
-              <div class="storage-quota-heading"><span>Allocated quota</span><strong data-activity-storage-quota>${activityStorageQuota(settings)}</strong></div>
               <span data-activity-storage-progress>${activityStorageProgress(settings)}</span>
             </div>
             <div class="storage-actions"><button class="activity-storage-action activity-storage-clear" type="button" data-clear-activity-storage>${icons.trash}<span>Delete</span></button><span class="activity-storage-transfer-actions"><button class="activity-storage-action activity-storage-download" type="button" data-export-activity-storage>${icons.download}<span>Export</span></button><button class="activity-storage-action activity-storage-import" type="button" data-import-activity-storage>${icons.upload}<span>Import</span></button></span><input data-import-activity-file type="file" accept=".zip,application/zip" hidden></div>
           </div>
         </fieldset>
         </div>
+
+        ${settings.credential_mode === "remote" ? `
+        <fieldset class="settings-section remote-instances-section">
+          <legend>${icons.hub}<span>Remote instance</span></legend>
+          <p class="settings-section-description">This Home Assistant receives credentials from another instance.</p>
+          ${remoteShareConnectionSection(settings.remote_last_sync)}
+        </fieldset>` : `
+        <fieldset class="settings-section remote-instances-section">
+          <legend>${icons.hub}<span>Share Access With Another Instance</span></legend>
+          <p class="settings-section-description">Securely bridge cameras, relays, activity history, call history, events and temporary keys with other Home Assistant instances.</p>
+          <button class="action settings-inline-action" type="button" data-create-credential-share>${icons.externalLink}<span>Create pairing link</span></button>
+          ${pairedReceiversSection(settings.credential_shares)}
+        </fieldset>`}
+
+        <fieldset class="settings-section">
+          <legend>${icons.webcam}<span>Camera Options</span></legend>
+          <p class="settings-section-description">Set the orientation used for live streams and activity snapshots.</p>
+          ${cameraOptionsTable(host)}
+        </fieldset>
+
+        ${sipAccountsSection(settings.sip_accounts)}
 
         <fieldset class="settings-section">
           <legend>${icons.bug}<span>Debug</span></legend>
@@ -769,21 +999,6 @@ export const renderSettingsView = (host) => {
             <a class="settings-native-link" href="/config/logs?search=Akuvox">Open logs${icons.externalLink}</a>
           </div>
         </fieldset>
-
-        ${settings.credential_mode === "remote" ? `
-        <fieldset class="settings-section remote-instances-section">
-          <legend>${icons.hub}<span>Remote instance</span></legend>
-          <p class="settings-section-description">This Home Assistant receives credentials from another instance.</p>
-          ${remoteShareConnectionSection(settings.remote_last_sync)}
-        </fieldset>` : `
-        <fieldset class="settings-section remote-instances-section">
-          <legend>${icons.hub}<span>Share Access & Multi-Instance Pairing</span></legend>
-          <p class="settings-section-description">Securely bridge intercom events and temporary keys with other Home Assistant instances.</p>
-          <button class="action settings-inline-action" type="button" data-create-credential-share>${icons.externalLink}<span>Create pairing link</span></button>
-          ${pairedReceiversSection(settings.credential_shares)}
-        </fieldset>`}
-
-        ${sipAccountsSection(settings.sip_accounts)}
 
       </form>
     </div>
@@ -954,10 +1169,8 @@ export const bindSettingsEvents = (host) => {
     };
     const warning = settingsForm.querySelector("[data-activity-storage-limit-warning]");
     const progress = settingsForm.querySelector("[data-activity-storage-progress]");
-    const quota = settingsForm.querySelector("[data-activity-storage-quota]");
     if (warning) warning.innerHTML = activityStorageLimitWarning(currentSettings);
     if (progress) progress.innerHTML = activityStorageProgress(currentSettings);
-    if (quota) quota.textContent = activityStorageQuota(currentSettings);
   });
 
   settingsForm.querySelector("[data-export-sip-accounts]")?.addEventListener("click", async () => {
@@ -1076,8 +1289,8 @@ export const bindSettingsEvents = (host) => {
         receiver_name: receiverName,
         source_url: window.location.origin,
         device_ids: access.deviceIds,
-        allow_activity: access.allowActivity,
-        activity_device_names: access.activityDeviceNames,
+        activity_member_names: access.activityMemberNames,
+        call_member_names: access.callMemberNames,
         allow_create_keys: access.allowCreateKeys,
         allow_edit_keys: access.allowEditKeys,
         create_key_relay_ids: access.createKeyRelayIds,

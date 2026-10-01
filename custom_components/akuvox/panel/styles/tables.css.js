@@ -1089,6 +1089,12 @@ export const tableStyles = `
   }
 
   @media (max-width: 600px) {
+    .activity-table-wrap {
+      margin-inline: -12px;
+      border-inline-width: 0;
+      border-radius: 0;
+    }
+
     .row-view-heading {
       align-items: flex-start;
     }
