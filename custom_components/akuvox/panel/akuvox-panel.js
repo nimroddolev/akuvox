@@ -25,6 +25,7 @@ import {
   bindKeysEvents,
   deleteSelectedKeys,
 } from "./views/keys-view.js?v=20260928-key-filter-controls-row";
+import { renderAutomationsView, bindAutomationsEvents } from "./views/automations-view.js?v=20261001-door-notification-management";
 import { renderSettingsView, bindSettingsEvents, updateActivityStorageProgress, updateRemoteShareConnectionStatus } from "./views/settings-view.js?v=20261001-settings-actions-visibility";
 import { renderHelpView } from "./views/help-view.js";
 
@@ -65,6 +66,9 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
     this._settingsEntryId = "";
     this._settingsDirty = false;
     this._settingsSaving = false;
+    this._doorNotificationAutomations = null;
+    this._doorNotificationAutomationsLoading = false;
+    this._doorNotificationAutomationsError = "";
     this._blockingRequest = false;
     this._modalCount = 0;
     this._modalScrollLocked = false;
@@ -730,6 +734,7 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
     if (this._activeTab === "activity") return renderActivityView(this, account);
     if (this._activeTab === "calls") return renderCallsView(this, account);
     if (this._activeTab === "keys") return renderKeysView(this, account);
+    if (this._activeTab === "automations") return renderAutomationsView(this);
     if (this._activeTab === "settings") return renderSettingsView(this);
     return renderDevicesView(this, account);
   }
@@ -1043,6 +1048,8 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
       this._settingsEntryId = "";
       this._settingsSignature = null;
       this._settingsDirty = false;
+      this._doorNotificationAutomations = null;
+      this._doorNotificationAutomationsError = "";
       this._selectingKeys = false;
       this._selectedKeyIds.clear();
       await this._loadSettings();
@@ -1059,6 +1066,8 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
       bindCallsEvents(this);
     } else if (this._activeTab === "keys") {
       bindKeysEvents(this);
+    } else if (this._activeTab === "automations") {
+      bindAutomationsEvents(this);
     } else if (this._activeTab === "settings") {
       bindSettingsEvents(this);
     }

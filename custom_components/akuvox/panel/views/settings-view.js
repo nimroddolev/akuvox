@@ -83,13 +83,16 @@ const notificationAction = (service, withImage) => ({
   },
 });
 
-const suggestedAutomationName = ({ doors, callerRules, includeOpened, includeCalls }) => {
-  const doorName = doors.length === 1 ? doors[0].name : "selected Akuvox doors";
+const suggestedAutomationName = ({ doors, totalDoorCount, callerRules, includeOpened, includeCalls }) => {
+  const allDoorsSelected = doors.length > 0 && doors.length === totalDoorCount;
+  const doorName = allDoorsSelected ? "any door"
+    : doors.length === 1 ? `the ${doors[0].name} door` : "selected doors";
+  const pluralDoors = !allDoorsSelected && doors.length !== 1;
   const callerNames = callerRules.map((rule) => rule.name);
   if (!callerNames.length) {
-    if (includeOpened && !includeCalls) return `Notify when ${doorName} opens`;
-    if (!includeOpened && includeCalls) return `Notify when ${doorName} is called`;
-    return `Notify when ${doorName} is called or opened`;
+    if (includeOpened && !includeCalls) return `Notify when ${doorName} ${pluralDoors ? "open" : "opens"}`;
+    if (!includeOpened && includeCalls) return `Notify when ${doorName} ${pluralDoors ? "are" : "is"} called`;
+    return `Notify when ${doorName} ${pluralDoors ? "are" : "is"} called or opened`;
   }
 
   const excludedCallers = callerRules.every((rule) => rule.operator === "is_not");
@@ -126,7 +129,7 @@ const callerConditionSummary = (rules) => {
   return `Triggered if ${excludedClause}.`;
 };
 
-const buildDoorNotificationAutomation = ({ name, doors, services, includeOpened, includeCalls, callerRules = [] }) => {
+export const buildDoorNotificationAutomation = ({ name, doors, services, includeOpened, includeCalls, callerRules = [], initialState }) => {
   const captureTypes = [
     ...(includeOpened ? ["Face Unlock", "Unlock on SmartPlus"] : []),
     ...(includeCalls ? ["Call"] : []),
@@ -168,13 +171,14 @@ const buildDoorNotificationAutomation = ({ name, doors, services, includeOpened,
       }],
       default: services.map((service) => notificationAction(service, false)),
     }],
+    ...(initialState === false ? { initial_state: false } : {}),
   };
 };
 
-const requestDoorNotificationStep = (host, { description, headerContent = "", stage, progressFromStage = stage - 1, progressToStage = stage, content, backLabel, nextLabel, submit, bind, focusCancel = false }) => new Promise((resolve) => {
+const requestDoorNotificationStep = (host, { title = "Create Automation", description, headerContent = "", stage, progressFromStage = stage - 1, progressToStage = stage, content, backLabel, nextLabel, submit, bind, focusCancel = false }) => new Promise((resolve) => {
   const dialog = host.shadowRoot.ownerDocument.createElement("dialog");
   dialog.className = "door-notification-dialog";
-  dialog.innerHTML = `<button class="door-notification-close" type="button" data-cancel aria-label="Close" title="Close" ${focusCancel ? "autofocus" : ""}>×</button><div class="remote-instance-dialog-header"><h2>Create Automation</h2>
+  dialog.innerHTML = `<button class="door-notification-close" type="button" data-cancel aria-label="Close" title="Close" ${focusCancel ? "autofocus" : ""}>×</button><div class="remote-instance-dialog-header"><h2>${escapeHtml(title)}</h2>
     <div class="share-stage-progress" role="progressbar" aria-label="Automation setup progress" aria-valuemin="0" aria-valuemax="5" aria-valuenow="${progressFromStage}"><span data-door-notification-progress style="width:${(progressFromStage / 5) * 100}%"></span></div>
     ${headerContent ? `<div class="door-notification-heading-row"><p data-door-notification-description>${escapeHtml(description)}</p>${headerContent}</div>` : `<p data-door-notification-description>${escapeHtml(description)}</p>`}</div>
     <form data-door-notification-form>
@@ -226,17 +230,24 @@ const requestDoorNotificationStep = (host, { description, headerContent = "", st
   }
 });
 
-const requestDoorNotificationAutomation = async (host) => {
+export const requestDoorNotificationAutomation = async (host, existing = null) => {
   const doors = notificationDoors(host);
   const members = familyMembers(host);
   const services = notificationServices(host);
-  const selection = { doorIds: [], includeOpened: false, includeCalls: false, callerRules: [], callerOperator: "is", services: [], name: "" };
+  const editing = Boolean(existing);
+  const selection = {
+    doorIds: [], includeOpened: false, includeCalls: false, callerRules: [],
+    callerOperator: "is", services: [], name: "", initialState: undefined,
+    ...existing,
+  };
+  const title = editing ? "Edit Automation" : "Create Automation";
   let step = 0;
   let progressFromStage = 0;
   while (step >= 0 && step < 5) {
     let result;
     if (step === 0) {
       result = await requestDoorNotificationStep(host, {
+        title,
         stage: 1, progressFromStage, progressToStage: selection.doorIds.length ? 1 : 0, description: "Which doors should trigger the automation?", nextLabel: "Next", focusCancel: true,
         content: `<div class="door-picker-control selection-list-picker-control"><label class="door-picker-search"><input type="search" data-door-search aria-label="Search doors" placeholder="Type to filter doors" autocomplete="off"></label><div class="door-picker-results selection-list" data-door-picker-results role="listbox" aria-label="Doors"></div></div>`,
         bind: (dialog) => {
@@ -277,6 +288,7 @@ const requestDoorNotificationAutomation = async (host) => {
       });
     } else if (step === 1) {
       result = await requestDoorNotificationStep(host, {
+        title,
         stage: 2, progressFromStage, progressToStage: selection.includeOpened || selection.includeCalls ? 2 : 1, description: "Which events should trigger the automation?", backLabel: "Back", nextLabel: "Next",
         content: `<fieldset><legend>Event types</legend><label class="door-notification-option"><input type="checkbox" name="opened" ${selection.includeOpened ? "checked" : ""}><span>Door opened / unlocked</span></label><label class="door-notification-option"><input type="checkbox" name="call" ${selection.includeCalls ? "checked" : ""}><span>Doorbell call</span></label></fieldset>`,
         bind: (dialog) => {
@@ -303,6 +315,7 @@ const requestDoorNotificationAutomation = async (host) => {
       });
     } else if (step === 2) {
       result = await requestDoorNotificationStep(host, {
+        title,
         stage: 3, progressFromStage, description: "Who should trigger the automation?", backLabel: "Back", nextLabel: "Next",
         content: members.length
           ? `<div class="caller-picker"><div class="caller-picker-add" data-caller-picker-add><button class="caller-picker-add-button" type="button" data-add-caller aria-label="Add family member" aria-expanded="false"><span aria-hidden="true">+</span></button><div class="caller-picker-add-menu" data-add-caller-menu role="menu" hidden></div></div><div class="caller-condition-summary muted" data-caller-condition-summary hidden></div></div>`
@@ -388,6 +401,7 @@ const requestDoorNotificationAutomation = async (host) => {
       });
     } else if (step === 3) {
       result = await requestDoorNotificationStep(host, {
+        title,
         stage: 4, progressFromStage, progressToStage: selection.services.length ? 4 : 3, description: "Which notify services should be run?", backLabel: "Back", nextLabel: "Next",
         content: services.length
           ? `<div class="door-picker-control notification-service-picker-control"><label class="door-picker-search"><input type="search" data-service-search aria-label="Search notification services" placeholder="Type to filter notification services" autocomplete="off"></label><div class="door-picker-results notification-service-list" data-service-picker-results role="listbox" aria-label="Notification services"></div></div>`
@@ -433,12 +447,14 @@ const requestDoorNotificationAutomation = async (host) => {
       const selectedDoors = doors.filter((door) => selection.doorIds.includes(door.deviceId));
       const defaultName = suggestedAutomationName({
         doors: selectedDoors,
+        totalDoorCount: doors.length,
         callerRules: selection.callerRules,
         includeOpened: selection.includeOpened,
         includeCalls: selection.includeCalls,
       });
       result = await requestDoorNotificationStep(host, {
-        stage: 5, progressFromStage, progressToStage: (selection.name || defaultName).trim() ? 5 : 4, description: "Enter the automation name.", backLabel: "Back", nextLabel: "Create automation",
+        title,
+        stage: 5, progressFromStage, progressToStage: (selection.name || defaultName).trim() ? 5 : 4, description: "Enter the automation name.", backLabel: "Back", nextLabel: editing ? "Save automation" : "Create automation",
         content: `<input name="automation-name" type="text" value="${escapeHtml(selection.name || defaultName)}" aria-label="Automation name" required>`,
         bind: (dialog) => {
           const nameInput = dialog.querySelector('[name="automation-name"]');
@@ -469,12 +485,13 @@ const requestDoorNotificationAutomation = async (host) => {
   };
 };
 
-const showDoorNotificationCreated = (host, automationId) => {
+export const showDoorNotificationCreated = (host, automationId, edited = false) => {
   const dialog = host.shadowRoot.ownerDocument.createElement("dialog");
   dialog.className = "door-notification-dialog door-notification-complete";
-  dialog.innerHTML = `<h2>Notification Automation Created</h2>
-    <p>Your door-event notification is enabled and ready to use.</p>
-    <div class="modal-actions"><button class="modal-cancel" type="button" data-close>Done</button><a class="modal-action" href="/config/automation/edit/${encodeURIComponent(automationId)}">Open Automation</a></div>`;
+  dialog.innerHTML = `<h2>Notification Automation ${edited ? "Updated" : "Created"}</h2>
+    <p>${edited ? "Your door-event notification has been updated." : "Your door-event notification is enabled and ready to use."}</p>
+    <span class="result-icon success" aria-hidden="true">${icons.check}</span>
+    <div class="modal-actions"><button class="modal-cancel" type="button" data-close>Close</button><a class="modal-action" href="/config/automation/edit/${encodeURIComponent(automationId)}">Open Automation</a></div>`;
   dialog.querySelector("[data-close]").addEventListener("click", () => dialog.close());
   dialog.addEventListener("close", () => {
     host._modalCount = Math.max(0, (host._modalCount || 1) - 1);
@@ -491,11 +508,7 @@ const eventOptions = (host) => {
   const cameras = panelCameras(host);
   const overrides = settings.event_image_wait_overrides || {};
   const eventImageWaiting = settings.wait_for_event_image !== false;
-  return `<div class="settings-row door-notification-row">
-    <div><strong>Automation Wizard</strong><p>Create automations to notify when doors are called / opened.</p></div>
-    <button class="action settings-inline-action" type="button" data-create-door-notification>${icons.automation}<span>Create</span></button>
-  </div>
-  <div class="settings-row">
+  return `<div class="settings-row">
     <div><strong>Wait for event images</strong><p>Wait for an image URL before sending a door event.</p></div>
     <label class="settings-switch" aria-label="Wait for event images"><input name="wait_for_event_image" type="checkbox" ${eventImageWaiting ? "checked" : ""}><span></span></label>
   </div>
@@ -1031,7 +1044,7 @@ export const renderSettingsView = (host) => {
             </label>
           </div>
           <div class="settings-row settings-link-row">
-            <div><strong>View Home Assistant logs</strong><p>Open the log viewer with Akuvox already selected as the search term.</p></div>
+            <div><strong>View Home Assistant logs</strong><p>Open the Home Assistant log viewer to review relevant log messages.</p></div>
             <a class="settings-native-link" href="/config/logs?search=Akuvox">Open logs${icons.externalLink}</a>
           </div>
         </fieldset>
@@ -1166,26 +1179,6 @@ export const bindSettingsEvents = (host) => {
   };
   eventImageToggle?.addEventListener("change", syncEventImageOptions);
   eventOverrideToggle?.addEventListener("change", syncEventImageOptions);
-
-  settingsForm.querySelector("[data-create-door-notification]")?.addEventListener("click", async () => {
-    const selection = await requestDoorNotificationAutomation(host);
-    if (!selection) return;
-    const automationId = String(Date.now());
-    try {
-      await host._hass.callApi(
-        "POST",
-        `config/automation/config/${encodeURIComponent(automationId)}`,
-        buildDoorNotificationAutomation(selection)
-      );
-      showDoorNotificationCreated(host, automationId);
-    } catch (error) {
-      showNotice(
-        host,
-        error?.message || "Could not create the notification automation.",
-        "Automation creation failed"
-      );
-    }
-  });
 
   const storageLimitInput = settingsForm.querySelector(
     '[name="activity_history_max_storage_mb"]'

@@ -9,6 +9,7 @@ export const TAB_HASHES = {
   LatestActivity: "activity",
   CallHistory: "calls",
   TemporaryKeys: "keys",
+  Automations: "automations",
   Settings: "settings",
   HelpInfo: "help",
 };
@@ -22,6 +23,7 @@ export const TABS = [
   ["activity", "Latest activity"],
   ["calls", "Call history"],
   ["keys", "Temporary keys"],
+  ["automations", "Automations"],
   ["settings", "Settings"],
   ["help", "Help & Info"],
 ];

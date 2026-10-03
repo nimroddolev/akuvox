@@ -553,7 +553,42 @@ export const mainStyles = `
   .door-notification-option input { flex: 0 0 auto; width: 22px; height: 22px; margin: 0; }
   .door-notification-dialog .modal-actions { flex: 0 0 auto; justify-content: center; margin: 4px 0 0; }
   .door-notification-dialog a.modal-action { display: inline-flex; align-items: center; text-decoration: none; }
-  .door-notification-complete .modal-actions { justify-content: center; }
+  .door-notification-complete {
+    box-sizing: border-box;
+    width: min(420px, calc(100vw - 32px));
+    height: min(390px, calc(100dvh - 32px));
+    padding: 28px 32px 24px;
+    overflow: hidden;
+  }
+  .door-notification-complete h2 { margin: 0; font-size: 22px; }
+  .door-notification-complete > p { margin: 14px 0 0; color: var(--panel-muted); }
+  .door-notification-complete .result-icon {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    margin: 0;
+    transform: translate(-50%, -50%);
+  }
+  .door-notification-complete .result-icon svg {
+    width: 32px;
+    height: 32px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .door-notification-complete .modal-actions {
+    width: 100%;
+    box-sizing: border-box;
+    justify-content: center;
+    margin-top: auto;
+    padding-top: 20px;
+    border-top: 1px solid var(--panel-outline);
+  }
+  .door-notification-complete .modal-action,
+  .door-notification-complete .modal-cancel { min-width: 150px; }
+  .door-notification-complete a.modal-action { justify-content: center; }
   .door-picker-control { position: relative; width: 100%; }
   .door-picker-search { display: grid; gap: 4px; width: 100%; font-weight: 600; }
   .door-picker { position: absolute; z-index: 2; top: 100%; left: 0; box-sizing: border-box; width: 100%; max-height: 190px; overflow: auto; border: 1px solid var(--panel-outline); border-radius: 8px; background: var(--panel-card); box-shadow: 0 8px 18px #0003; overscroll-behavior: contain; }
