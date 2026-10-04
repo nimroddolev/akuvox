@@ -1139,14 +1139,8 @@ export const tableStyles = `
 
   }
   /* Physical offsets in tiles and tables must be mirrored for RTL locales. */
-  :host([dir="rtl"]) .device-table th,
-  :host([dir="rtl"]) .device-table td,
-  :host([dir="rtl"]) .activity-table th,
-  :host([dir="rtl"]) .activity-table td,
-  :host([dir="rtl"]) .calls-table th,
-  :host([dir="rtl"]) .calls-table td,
-  :host([dir="rtl"]) .keys-table th,
-  :host([dir="rtl"]) .keys-table td { text-align: right; }
+  :host([dir="rtl"]) .table-wrap table th,
+  :host([dir="rtl"]) .table-wrap table td { text-align: right; }
   :host([dir="rtl"]) .tile-status,
   :host([dir="rtl"]) .device-preview-status { left: auto; right: 10px; }
   :host([dir="rtl"]) .tile-menu,

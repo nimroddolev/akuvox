@@ -24,7 +24,7 @@ import { showDateRangePicker } from "../components/date-range-picker.js?v=202610
 import { showTemporaryKeyQrDialog } from "../components/qr-dialog.js?v=20260928-qr-loading-modal-v2";
 import { showKeyActionsMenu, closeKeyActionsMenu } from "../components/key-menu.js?v=20260928-disabled-edit-muted";
 import { bindListOrdering, bindTileOrdering } from "../utils/tile-ordering.js?v=20260917-list-drop-position";
-import { localizeElement, t } from "../utils/i18n.js?v=20261003-hebrew-rtl-6";
+import { localizeElement, t } from "../utils/i18n.js?v=20261004-key-table-titles";
 
 /**
  * Update visibility of validation error messages under vehicle registration and UHF card fields.
@@ -205,8 +205,8 @@ export const renderKeysView = (host, account) => {
           <td>${code}</td>
           <td>${escapeHtml(formatTimestamp(key.begin_time))}</td>
           <td>${escapeHtml(formatTimestamp(key.end_time))}</td>
-          <td>${escapeHtml(key.access_times)}/${escapeHtml(key.allowed_times)}</td>
-          <td><span class="key-status ${key.expired ? "expired" : "active"}">${key.expired ? "Expired" : "Active"}</span></td>
+          <td title="${escapeHtml(t(host, "Usage: {used} of {allowed}", { used: key.access_times, allowed: key.allowed_times }))}">${escapeHtml(key.access_times)}/${escapeHtml(key.allowed_times)}</td>
+          <td><span class="key-status ${key.expired ? "expired" : "active"}" title="${escapeHtml(t(host, key.expired ? "Expired" : "Active"))}">${escapeHtml(t(host, key.expired ? "Expired" : "Active"))}</span></td>
           <td><div class="key-actions">${menu}</div></td>
         </tr>
       `;
@@ -414,16 +414,16 @@ const showCreateKeyDialog = (host) => {
   if (identifiers && !identifiers.dataset.initialized) {
     identifiers.dataset.initialized = "true";
     identifiers.innerHTML = `
-      <label><span>Access ID</span><input name="id_number" maxlength="100" autocomplete="off"></label>
+      <label><span>${t(host, "Access ID")}</span><input name="id_number" maxlength="100" autocomplete="off"></label>
       <label>
-        <span>Vehicle registration</span>
+        <span>${t(host, "Vehicle registration")}</span>
         <span class="field-input-wrap">
           <input name="license_plate" maxlength="16" pattern="${LICENSE_PLATE_PATTERN}" title="${LICENSE_PLATE_TITLE}" autocomplete="off">
           <span class="field-error" data-error-for="license_plate" hidden>${LICENSE_PLATE_ERROR_MSG}</span>
         </span>
       </label>
       <label>
-        <span>UHF card</span>
+        <span>${t(host, "UHF card")}</span>
         <span class="field-input-wrap">
           <input name="uhf_card" maxlength="24" pattern="${UHF_CARD_PATTERN}" title="${UHF_CARD_TITLE}" autocomplete="off">
           <span class="field-error" data-error-for="uhf_card" hidden>${UHF_CARD_ERROR_MSG}</span>
@@ -472,7 +472,7 @@ export const showEditKeyDialog = (host, keyId) => {
   dialog.innerHTML = `
     <header class="key-create-dialog-header">
       <span class="key-create-dialog-icon">${icons.idCard}</span>
-      <div><h2>Edit Temporary Key</h2><p>Update optional access identifiers for this temporary key.</p></div>
+      <div><h2>${t(host, "Edit Temporary Key")}</h2><p>${t(host, "Update optional access identifiers for this temporary key.")}</p></div>
       <button type="button" class="key-create-dialog-close" data-edit-cancel aria-label="Close">×</button>
     </header>
     <form class="key-modal-form key-create-form key-edit-form">
@@ -481,23 +481,23 @@ export const showEditKeyDialog = (host, keyId) => {
       <input name="id_number" type="hidden" value="${escapeHtml(key.id_number || "")}">
       <div class="key-create-dialog-body">
         <div class="key-edit-readonly-fields">
-          <div class="key-readonly-field"><span>Key name</span><strong>${escapeHtml(key.description)}</strong></div>
-          <div class="key-readonly-field"><span>Validity period</span><strong>${escapeHtml(displayPeriod)}</strong></div>
-          <div class="key-readonly-field"><span>Allowed uses</span><strong>${escapeHtml(key.allowed_times || 1)}</strong></div>
-          <div class="key-readonly-field"><span>Access ID</span><strong>${escapeHtml(key.id_number || "—")}</strong></div>
+          <div class="key-readonly-field"><span>${t(host, "Key name")}</span><strong>${escapeHtml(key.description)}</strong></div>
+          <div class="key-readonly-field"><span>${t(host, "Validity period")}</span><strong>${escapeHtml(displayPeriod)}</strong></div>
+          <div class="key-readonly-field"><span>${t(host, "Allowed uses")}</span><strong>${escapeHtml(key.allowed_times || 1)}</strong></div>
+          <div class="key-readonly-field"><span>${t(host, "Access ID")}</span><strong>${escapeHtml(key.id_number || "—")}</strong></div>
         </div>
         <details class="key-optional-identifiers">
-          <summary>Optional identifiers</summary>
+          <summary>${t(host, "Optional identifiers")}</summary>
           <div class="key-form-extra-fields">
             <label>
-              <span>Vehicle registration</span>
+              <span>${t(host, "Vehicle registration")}</span>
               <span class="field-input-wrap">
                 <input name="license_plate" maxlength="16" pattern="${LICENSE_PLATE_PATTERN}" title="${LICENSE_PLATE_TITLE}" autocomplete="off" value="${escapeHtml(key.license_plate || "")}">
                 <span class="field-error" data-error-for="license_plate" hidden>${LICENSE_PLATE_ERROR_MSG}</span>
               </span>
             </label>
             <label>
-              <span>UHF card</span>
+              <span>${t(host, "UHF card")}</span>
               <span class="field-input-wrap">
                 <input name="uhf_card" maxlength="24" pattern="${UHF_CARD_PATTERN}" title="${UHF_CARD_TITLE}" autocomplete="off" value="${escapeHtml(key.uhf_card || "")}">
                 <span class="field-error" data-error-for="uhf_card" hidden>${UHF_CARD_ERROR_MSG}</span>
@@ -506,7 +506,7 @@ export const showEditKeyDialog = (host, keyId) => {
           </div>
         </details>
         <section class="key-relay-row">
-          <div class="key-relay-heading"><span>Permitted relays</span><small>Relays assigned when this key was created.</small></div>
+          <div class="key-relay-heading"><span>${t(host, "Permitted relays")}</span><small>${t(host, "Relays assigned when this key was created.")}</small></div>
           <div class="relay-options">${relays || '<span class="muted">No relays are available.</span>'}</div>
         </section>
       </div>

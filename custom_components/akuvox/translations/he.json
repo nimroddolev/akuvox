@@ -16,7 +16,16 @@
     "error": { "cannot_connect": "לא ניתן לבקש קוד אימות של SmartPlus. יש לבדוק את פרטי החשבון ולנסות שוב.", "cannot_reach_source": "לא ניתן להגיע למופע Home Assistant שיצר את קישור הצימוד.", "invalid_auth": "קוד האימות שגוי או שפג תוקפו.", "invalid_share": "קישור הצימוד לא תקין, פג תוקף או בוטל.", "external_url_required": "יש להגדיר כתובת HTTPS חיצונית תקינה ב־Home Assistant לפני יצירת קישור צימוד." },
     "abort": { "reauth_missing_account_data": "החשבון השמור אינו כולל פרטי טלפון. יש להגדיר מחדש את השילוב.", "reauth_successful": "החיבור מחדש ל־Akuvox SmartPlus הצליח." }
   },
-  "issues": { "reauthentication_required": { "title": "נדרשת התחברות מחדש עבור {entry_title}", "description": "יש לפתוח את שילוב Akuvox ולהשלים התחברות מחדש כדי לשחזר את הגישה." }, "activity_storage_full": { "title": "אחסון הפעילות עבור {entry_title} מלא", "description": "אחסון הפעילות המקומי הגיע למגבלה שהוגדרה." } },
+  "issues": {
+    "reauthentication_required": { "title": "נדרשת התחברות מחדש עבור {entry_title}", "description": "יש לפתוח את שילוב Akuvox ולהשלים התחברות מחדש כדי לשחזר את הגישה." },
+    "activity_storage_90": { "title": "אחסון הפעילות עבור {entry_title} כמעט מלא", "description": "אחסון הפעילות המקומי עבר 90% מהמגבלה שהוגדרה. יש להגדיל את המגבלה כדי למנוע ניקוי אוטומטי." },
+    "activity_storage_95": { "title": "אחסון הפעילות עבור {entry_title} כמעט מלא מאוד", "description": "אחסון הפעילות המקומי עבר 95% מהמגבלה שהוגדרה. יש להגדיל את המגבלה כדי למנוע ניקוי אוטומטי." },
+    "activity_storage_99": { "title": "אחסון הפעילות עבור {entry_title} מלא כמעט לגמרי", "description": "אחסון הפעילות המקומי עבר 99% מהמגבלה שהוגדרה. יש להגדיל את המגבלה כדי למנוע ניקוי אוטומטי." },
+    "activity_storage_full": { "title": "אחסון הפעילות עבור {entry_title} מלא", "description": "אחסון הפעילות המקומי הגיע למגבלה שהוגדרה." },
+    "credential_source_unreachable": { "title": "מקור פרטי הגישה עבור {entry_title} אינו זמין", "description": "מופע זה אינו יכול להגיע למופע Home Assistant שמשתף את פרטי הגישה ל־Akuvox. ייעשה שימוש בפרטי גישה שמורים במטמון עד ש־SmartPlus ידחה אותם." },
+    "credential_source_revoked": { "title": "שיתוף פרטי הגישה עבור {entry_title} בוטל", "description": "מופע Home Assistant המקור ביטל את המקבל הזה. יש לצמד מחדש את השילוב כדי לשחזר את הגישה." },
+    "credential_source_source_needs_reauth": { "title": "מקור פרטי הגישה עבור {entry_title} סיפק פרטי גישה לא תקינים", "description": "SmartPlus דחה את האסימון שסופק על־ידי מופע Home Assistant המקור. יש להתחבר מחדש ל־Akuvox SmartPlus במופע המקור ולאחר מכן לרענן את פרטי הגישה המשותפים במופע המקבל הזה." }
+  },
   "device_automation": { "trigger_type": { "door_unlocked": "דלת נפתחה" } },
   "options": { "step": { "init": { "title": "תצורת אירועי Akuvox SmartPlus", "description": "התאמת הגדרות אירועי הדלת עבור שילוב זה.", "data": { "country": "המדינה הרשומה בחשבון Akuvox SmartPlus", "subdomain": "הגדרת תת־דומיין אזורי של API", "create_share_for": "יצירת קישור צימוד בתוקף ל־10 דקות", "revoke_pairing_link": "ביטול קישור הצימוד" } } } }
 }

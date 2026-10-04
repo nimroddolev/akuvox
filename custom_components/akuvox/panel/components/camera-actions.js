@@ -112,21 +112,36 @@ export const installCameraRelayActions = (host, relays, orientation = "none", at
     return;
   }
 
-  const nativeSnapshotAction = [
+  const nativeSnapshotAction = actions.querySelector("ha-progress-button") || [
     ...actions.querySelectorAll("button, ha-button, mwc-button, a"),
   ].find((action) => /download snapshot/i.test(action.textContent || ""));
+  let snapshotButton;
 
   actions.querySelector(".akuvox-camera-relay-actions")?.remove();
   if (nativeSnapshotAction) {
-    const walker = documentRef.createTreeWalker(
-      nativeSnapshotAction,
-      NodeFilter.SHOW_TEXT
-    );
-    while (walker.nextNode()) {
-      walker.currentNode.nodeValue = walker.currentNode.nodeValue.replace(
-        /snapshot/gi,
-        "Snapshot"
-      );
+    // Home Assistant renders this control through ha-progress-button. Apply
+    // the panel action metrics to its actual button, not its wrapper.
+    nativeSnapshotAction.style.setProperty("--ha-button-border-radius", "8px");
+    nativeSnapshotAction.style.setProperty("--mdc-shape-small", "8px");
+    nativeSnapshotAction.style.borderRadius = "8px";
+    // The action's known component chain is ha-progress-button → ha-button
+    // → button. Prefer it over a generic deep lookup so the icon is inserted
+    // into the actual rendered control.
+    snapshotButton =
+      nativeSnapshotAction.shadowRoot?.querySelector("ha-button")?.shadowRoot?.querySelector("button") ||
+      findInComposedTree(nativeSnapshotAction, "button");
+    if (snapshotButton) {
+      snapshotButton.style.cssText +=
+        ";display:inline-flex;align-items:center;justify-content:center;gap:5px;" +
+        "min-height:38px;height:38px;padding:8px 10px;text-align:center;white-space:nowrap;";
+      if (!snapshotButton.querySelector(".akuvox-snapshot-download-icon")) {
+        const icon = documentRef.createElement("span");
+        icon.className = "akuvox-snapshot-download-icon";
+        icon.setAttribute("aria-hidden", "true");
+        icon.innerHTML = icons.download;
+        icon.querySelector("svg")?.setAttribute("style", "width:20px;height:20px;flex:0 0 auto;");
+        snapshotButton.prepend(icon);
+      }
     }
   }
 
@@ -150,9 +165,9 @@ export const installCameraRelayActions = (host, relays, orientation = "none", at
     : "color:#a12828;background:#ffebee;";
 
   relays.forEach((relay, index) => {
-    const button =
-      nativeSnapshotAction?.cloneNode(false) ||
-      documentRef.createElement("button");
+    const button = nativeSnapshotAction?.tagName === "HA-PROGRESS-BUTTON"
+      ? documentRef.createElement("button")
+      : nativeSnapshotAction?.cloneNode(false) || documentRef.createElement("button");
     const duplicate =
       labels.filter((label) => label === labels[index]).length > 1;
     const name = t(host, "Unlock");
@@ -184,5 +199,20 @@ export const installCameraRelayActions = (host, relays, orientation = "none", at
   });
 
   actions.prepend(group);
+
+  // The native snapshot action lives in nested Home Assistant components,
+  // whose button rules can override normal inline values. Match the final
+  // rendered typography and corner shape of the relay action beside it.
+  const relayButton = group.querySelector("button");
+  if (snapshotButton && relayButton) {
+    const relayStyle = window.getComputedStyle(relayButton);
+    [
+      ["font-family", relayStyle.fontFamily],
+      ["font-size", relayStyle.fontSize],
+      ["font-weight", relayStyle.fontWeight],
+      ["line-height", relayStyle.lineHeight],
+      ["border-radius", relayStyle.borderRadius],
+    ].forEach(([property, value]) => snapshotButton.style.setProperty(property, value, "important"));
+  }
 
 };

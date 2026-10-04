@@ -8,11 +8,11 @@ import { PANEL_TAG, TAB_HASHES, TAB_HASH_BY_ID, TABS } from "./utils/constants.j
 import { closeOnBackdrop, escapeHtml } from "./utils/dom.js";
 import { copyText } from "./utils/clipboard.js";
 import { settingsRenderSignature } from "./utils/settings-signature.js";
-import { getPanelStyles } from "./styles/index.js?v=20261004-centered-load-notice";
-import { showNotice, confirmModal, callWsWithBlocker } from "./components/dialogs.js?v=20261003-i18n-statuses";
-import { installCameraRelayActions } from "./components/camera-actions.js?v=20261004-tile-matched-unlock-action";
+import { getPanelStyles } from "./styles/index.js?v=20261004-rtl-share-table";
+import { showNotice, confirmModal, callWsWithBlocker } from "./components/dialogs.js?v=20261004-rtsp-copy-dialog";
+import { installCameraRelayActions } from "./components/camera-actions.js?v=20261004-snapshot-action-icon";
 import { closeKeyActionsMenu } from "./components/key-menu.js";
-import { isRtlLanguage, localizeElement } from "./utils/i18n.js?v=20261004-sip-pdf-hebrew";
+import { isRtlLanguage, localizeElement } from "./utils/i18n.js?v=20261004-relay-confirmation";
 
 import { renderDevicesView, bindDevicesEvents } from "./views/devices-view.js?v=20261004-still-refresh-rebuilt-v6";
 import {
@@ -25,7 +25,7 @@ import {
   renderKeysView,
   bindKeysEvents,
   deleteSelectedKeys,
-} from "./views/keys-view.js?v=20261004-mobile-key-order";
+} from "./views/keys-view.js?v=20261004-key-table-titles";
 import { renderAutomationsView, bindAutomationsEvents } from "./views/automations-view.js?v=20261003-hebrew-rtl-2";
 import { renderSettingsView, bindSettingsEvents, updateActivityStorageProgress, updateRemoteShareConnectionStatus } from "./views/settings-view.js?v=20261004-localized-sip-pdf-user-locale";
 import { renderHelpView } from "./views/help-view.js";
@@ -662,7 +662,7 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
         confirmed: true,
       });
       if (await copyText(result.stream_url)) {
-        showNotice(this, "RTSP link copied.");
+        showNotice(this, "", "Link Copied");
       } else {
         window.prompt("Copy the RTSP link:", result.stream_url);
       }

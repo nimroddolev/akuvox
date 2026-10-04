@@ -4,7 +4,7 @@
 
 import { closeOnBackdrop } from "../utils/dom.js";
 import { icons } from "../utils/icons.js";
-import { t } from "../utils/i18n.js?v=20261003-hebrew-rtl";
+import { t } from "../utils/i18n.js?v=20261004-rtsp-copy-dialog";
 
 const titleCase = (title) => String(title).replace(/\b\w/g, (letter) => letter.toUpperCase());
 const isFailureTitle = (title) => /failed|could not|unavailable|required|invalid|error/i.test(title);
@@ -41,7 +41,9 @@ export const showNotice = (host, message, title = "Akuvox SmartPlus") => {
 
   actions.append(closeButton);
   if (isFailureTitle(title)) addResultIcon(dialog, false);
-  dialog.append(heading, text, actions);
+  dialog.append(heading);
+  if (text.textContent) dialog.append(text);
+  dialog.append(actions);
   closeOnBackdrop(dialog);
 
   host._modalCount = (host._modalCount || 0) + 1;

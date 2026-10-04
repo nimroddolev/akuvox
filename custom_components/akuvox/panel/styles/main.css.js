@@ -656,7 +656,7 @@ export const mainStyles = `
   [data-activity-storage-progress] { display: block; width: 100%; margin-top: 12px; }
   [data-activity-storage-progress] .activity-storage-progress { width: 100%; max-width: none; margin: 0; }
   .storage-limit-input { display: flex; align-items: center; justify-content: space-between; gap: 24px; min-height: 48px; padding: 13px 0; border-top: 1px solid var(--panel-outline); color: var(--panel-muted); font-size: 12px; }
-  .storage-limit-value { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 10px; }
+  .storage-limit-value { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 10px; direction: ltr; }
   .storage-limit-input input {
     width: max(52px, calc(var(--storage-limit-digits, 1) * 1ch + 2.75rem));
     padding: 5px 7px;
@@ -1061,6 +1061,22 @@ export const mainStyles = `
   :host([dir="rtl"]) .door-notification-dialog fieldset,
   :host([dir="rtl"]) .door-picker-option,
   :host([dir="rtl"]) .caller-picker-add-menu button { text-align: right; }
+  :host([dir="rtl"]) .door-picker-search input,
+  :host([dir="rtl"]) input[name="automation-name"],
+  :host([dir="rtl"]) .share-name-field input { direction: rtl; text-align: right; }
+  :host([dir="rtl"]) .share-access-table thead tr:first-child th { text-align: center; }
+  :host([dir="rtl"]) .share-device-access-table thead tr:first-child th:nth-child(2),
+  :host([dir="rtl"]) .share-device-access-table thead tr:last-child th:nth-child(2),
+  :host([dir="rtl"]) .share-device-access-table tbody td:nth-child(2),
+  :host([dir="rtl"]) .share-access-table thead tr:first-child th:nth-child(3),
+  :host([dir="rtl"]) .share-access-table thead tr:last-child th:nth-child(4),
+  :host([dir="rtl"]) .share-access-table tbody td:nth-child(4),
+  :host([dir="rtl"]) .share-data-table .share-access-table thead tr:first-child th:nth-child(2),
+  :host([dir="rtl"]) .share-data-table .share-access-table thead tr:last-child th:nth-child(2),
+  :host([dir="rtl"]) .share-data-table .share-access-table tbody td:nth-child(2) {
+    border-left: 0;
+    border-right: 1px solid var(--divider-color, #d9e1eb);
+  }
   :host([dir="rtl"]) .door-notification-dialog legend { margin-left: 0; margin-right: 10px; }
   :host([dir="rtl"]) .door-picker { left: auto; right: 0; }
   :host([dir="rtl"]) .notification-service-picker-control .door-picker { right: auto; }
