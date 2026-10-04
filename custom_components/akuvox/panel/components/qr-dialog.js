@@ -5,6 +5,7 @@
 import { closeOnBackdrop } from "../utils/dom.js";
 import { icons } from "../utils/icons.js";
 import { showNotice } from "./dialogs.js";
+import { localizeElement, t } from "../utils/i18n.js?v=20261003-hebrew-rtl";
 
 /**
  * Display the QR code modal for a temporary key.
@@ -26,7 +27,7 @@ export const showTemporaryKeyQrDialog = async (host, keyId) => {
   const close = documentRef.createElement("button");
 
   dialog.className = "activity-image-dialog temporary-key-qr-dialog";
-  heading.textContent = `${key?.description || "Temporary key"} QR code`;
+  heading.textContent = `${key?.description || t(host, "Temporary key")} ${t(host, "QR code")}`;
   content.className = "temporary-key-qr-content";
   loading.className = "temporary-key-qr-loading";
   loading.setAttribute("role", "status");
@@ -45,7 +46,7 @@ export const showTemporaryKeyQrDialog = async (host, keyId) => {
 
   close.className = "modal-cancel";
   close.type = "button";
-  close.textContent = "Close";
+  close.textContent = t(host, "Close");
   close.addEventListener("click", () => dialog.close());
 
   actions.append(save, close);
@@ -64,6 +65,7 @@ export const showTemporaryKeyQrDialog = async (host, keyId) => {
   );
 
   host.shadowRoot.append(dialog);
+  localizeElement(host, dialog);
   dialog.showModal();
 
   try {

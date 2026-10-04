@@ -1136,5 +1136,22 @@ export const tableStyles = `
     .device-table .info-link span { display: none; }
 
     .tile-details { grid-template-columns: 1fr; }
+
   }
+  /* Physical offsets in tiles and tables must be mirrored for RTL locales. */
+  :host([dir="rtl"]) .device-table th,
+  :host([dir="rtl"]) .device-table td,
+  :host([dir="rtl"]) .activity-table th,
+  :host([dir="rtl"]) .activity-table td,
+  :host([dir="rtl"]) .calls-table th,
+  :host([dir="rtl"]) .calls-table td,
+  :host([dir="rtl"]) .keys-table th,
+  :host([dir="rtl"]) .keys-table td { text-align: right; }
+  :host([dir="rtl"]) .tile-status,
+  :host([dir="rtl"]) .device-preview-status { left: auto; right: 10px; }
+  :host([dir="rtl"]) .tile-menu,
+  :host([dir="rtl"]) .key-menu-button { right: auto; left: 11px; }
+  :host([dir="rtl"]) .tile-grab,
+  :host([dir="rtl"]) .list-grab { margin-left: 0; margin-right: 2px; }
+  :host([dir="rtl"]) .tile-meta-icon { margin-left: 0; margin-right: 8px; }
 `;

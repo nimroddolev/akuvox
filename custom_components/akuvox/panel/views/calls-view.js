@@ -10,6 +10,7 @@ import {
 } from "../utils/multi-select-filter.js?v=20260925-option-labels";
 import { tableTimestampFormatter } from "../utils/formatters.js?v=20260820-table-timestamps";
 import { showCallImageDialog } from "../components/image-dialog.js";
+import { t } from "../utils/i18n.js?v=20261003-hebrew-rtl-6";
 
 const callFilterValues = (calls, key) => [
     ...new Set(
@@ -53,23 +54,23 @@ const parseCallTimestamp = (value) => {
   return Number.isNaN(timestamp.getTime()) ? null : timestamp;
 };
 
-const formatCallAge = (value) => {
+const formatCallAge = (host, value) => {
   const timestamp = parseCallTimestamp(value);
   if (!timestamp) return "";
   const now = new Date();
   const elapsedMinutes = Math.max(0, Math.floor((now - timestamp) / 60_000));
   const isToday = timestamp.toDateString() === now.toDateString();
-  const withToday = (label) => (isToday ? `Today • ${label}` : label);
-  if (elapsedMinutes < 1) return withToday("Just now");
-  if (elapsedMinutes < 60) return withToday(`${elapsedMinutes} min${elapsedMinutes === 1 ? "" : "s"} ago`);
+  const withToday = (label) => (isToday ? `${t(host, "Today")} • ${label}` : label);
+  if (elapsedMinutes < 1) return withToday(t(host, "Just now"));
+  if (elapsedMinutes < 60) return withToday(t(host, elapsedMinutes === 1 ? "{count} min ago" : "{count} mins ago", { count: elapsedMinutes }));
   const elapsedHours = Math.floor(elapsedMinutes / 60);
-  if (elapsedHours < 24) return withToday(`${elapsedHours} hour${elapsedHours === 1 ? "" : "s"} ago`);
+  if (elapsedHours < 24) return withToday(t(host, elapsedHours === 1 ? "{count} hour ago" : "{count} hours ago", { count: elapsedHours }));
   const elapsedDays = Math.floor(elapsedHours / 24);
-  return `${elapsedDays} day${elapsedDays === 1 ? "" : "s"} ago`;
+  return t(host, elapsedDays === 1 ? "{count} day ago" : "{count} days ago", { count: elapsedDays });
 };
 
-const renderCallTimestamp = (value, formatTimestamp) => {
-  const age = formatCallAge(value);
+const renderCallTimestamp = (host, value, formatTimestamp) => {
+  const age = formatCallAge(host, value);
   return `<div class="activity-timestamp">
     <time>${escapeHtml(formatTimestamp(value))}</time>
     ${age ? `<span>${escapeHtml(age)}</span>` : ""}
@@ -145,7 +146,7 @@ export const renderCallsView = (host, account) => {
               ${sortOptions.map((option) => `<label><input type="radio" name="call-sort" data-call-sort-menu value="${option.value}" ${host._callSort.key === option.value ? "checked" : ""}> ${option.label}</label>`).join("")}
             </div>
           </details>
-          <button type="button" class="tile-sort-direction" data-call-sort-direction aria-label="Sort ${host._callSort.direction === "asc" ? "ascending" : "descending"}" title="Sort ${host._callSort.direction === "asc" ? "ascending" : "descending"}">${host._callSort.direction === "asc" ? "↑" : "↓"}</button>
+          <button type="button" class="tile-sort-direction" data-call-sort-direction aria-label="${escapeHtml(t(host, "Sort {direction}", { direction: t(host, host._callSort.direction === "asc" ? "ascending" : "descending") }))}" title="${escapeHtml(t(host, "Sort {direction}", { direction: t(host, host._callSort.direction === "asc" ? "ascending" : "descending") }))}">${host._callSort.direction === "asc" ? "↑" : "↓"}</button>
         </div>
         <button type="button" class="mobile-clear-filters" data-clear-mobile-filters>Clear filters</button>
       </div>
@@ -166,7 +167,7 @@ export const renderCallsView = (host, account) => {
               .map(
                 (call) => `
               <tr>
-                <td>${renderCallTimestamp(call.startTime, formatTimestamp)}</td>
+                <td>${renderCallTimestamp(host, call.startTime, formatTimestamp)}</td>
                 <td>${escapeHtml(call.callerName || "")}</td>
                 <td>${escapeHtml(call.calleeName || "")}</td>
                 <td>

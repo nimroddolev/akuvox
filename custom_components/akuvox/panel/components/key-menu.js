@@ -3,6 +3,7 @@
  */
 
 import { icons } from "../utils/icons.js?v=20260928-qr-menu-eye";
+import { localizeElement } from "../utils/i18n.js?v=20261003-hebrew-rtl";
 
 /**
  * Close any currently active key actions menu and clean up event listeners.
@@ -119,6 +120,7 @@ export const showKeyActionsMenu = (host, trigger, event, { onQr, onEdit, onDelet
   host._keyActionsMenu = menu;
   host._keyActionsMenuAbort = abort;
   documentRef.body.append(menu);
+  localizeElement(host, menu);
 
   const menuWidth = menu.getBoundingClientRect().width;
   menu.style.left = `${Math.max(12, Math.min(bounds.right - menuWidth, window.innerWidth - menuWidth - 12))}px`;

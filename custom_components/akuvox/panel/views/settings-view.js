@@ -4,8 +4,9 @@
 
 import { closeOnBackdrop, escapeHtml } from "../utils/dom.js";
 import { icons } from "../utils/icons.js?v=20260930-notification-bell-v5";
-import { callWsWithBlocker, confirmModal, showNotice, showPairingLinkNotice } from "../components/dialogs.js?v=20260923-pairing-link-copy-feedback";
+import { callWsWithBlocker, confirmModal, showNotice, showPairingLinkNotice } from "../components/dialogs.js?v=20261003-i18n-statuses";
 import { CAMERA_ORIENTATION_OPTIONS } from "../utils/orientation.js?v=20260830-combined-directional-labels";
+import { localizeElement, t } from "../utils/i18n.js?v=20261003-hebrew-rtl-4";
 
 const RECEIVER_CONTACT_TIMEOUT_MS = 2 * 60 * 1000;
 
@@ -30,8 +31,8 @@ const cameraOptionsTable = (host) => {
         <tbody>
           ${cameras.map((camera) => `<tr>
             <td title="${escapeHtml(camera.name)}">${escapeHtml(camera.name)}</td>
-            <td><select name="camera_stream_orientation" data-stream-orientation="${escapeHtml(camera.sourceName)}" aria-label="${escapeHtml(camera.name)} stream orientation">${CAMERA_ORIENTATION_OPTIONS.map(([value, label]) => `<option value="${value}" ${streamOrientations[camera.sourceName] === value ? "selected" : ""}>${label}</option>`).join("")}</select></td>
-            <td><select name="activity_image_orientation" data-activity-orientation="${escapeHtml(camera.sourceName)}" aria-label="${escapeHtml(camera.name)} activity image orientation">${CAMERA_ORIENTATION_OPTIONS.map(([value, label]) => `<option value="${value}" ${activityOrientations[camera.sourceName] === value ? "selected" : ""}>${label}</option>`).join("")}</select></td>
+            <td><select name="camera_stream_orientation" data-stream-orientation="${escapeHtml(camera.sourceName)}" aria-label="${escapeHtml(t(host, "{name} stream orientation", { name: camera.name }))}">${CAMERA_ORIENTATION_OPTIONS.map(([value, label]) => `<option value="${value}" ${streamOrientations[camera.sourceName] === value ? "selected" : ""}>${escapeHtml(t(host, label))}</option>`).join("")}</select></td>
+            <td><select name="activity_image_orientation" data-activity-orientation="${escapeHtml(camera.sourceName)}" aria-label="${escapeHtml(t(host, "{name} activity image orientation", { name: camera.name }))}">${CAMERA_ORIENTATION_OPTIONS.map(([value, label]) => `<option value="${value}" ${activityOrientations[camera.sourceName] === value ? "selected" : ""}>${escapeHtml(t(host, label))}</option>`).join("")}</select></td>
             <td><button class="camera-copy-rtsp" type="button" data-stream="${escapeHtml(camera.sourceName)}" data-mode="copy" aria-label="Copy RTSP link" title="Copy RTSP link">${icons.copy}<span>Copy RTSP</span></button></td>
           </tr>`).join("") || '<tr><td colspan="4" class="muted">No cameras are currently available for this account.</td></tr>'}
         </tbody>
@@ -83,29 +84,29 @@ const notificationAction = (service, withImage) => ({
   },
 });
 
-const suggestedAutomationName = ({ doors, totalDoorCount, callerRules, includeOpened, includeCalls }) => {
+const suggestedAutomationName = (host, { doors, totalDoorCount, callerRules, includeOpened, includeCalls }) => {
   const allDoorsSelected = doors.length > 0 && doors.length === totalDoorCount;
-  const doorName = allDoorsSelected ? "any door"
-    : doors.length === 1 ? `the ${doors[0].name} door` : "selected doors";
+  const doorName = allDoorsSelected ? t(host, "any door")
+    : doors.length === 1 ? t(host, "the {name} door", { name: doors[0].name }) : t(host, "selected doors");
   const pluralDoors = !allDoorsSelected && doors.length !== 1;
   const callerNames = callerRules.map((rule) => rule.name);
   if (!callerNames.length) {
-    if (includeOpened && !includeCalls) return `Notify when ${doorName} ${pluralDoors ? "open" : "opens"}`;
-    if (!includeOpened && includeCalls) return `Notify when ${doorName} ${pluralDoors ? "are" : "is"} called`;
-    return `Notify when ${doorName} ${pluralDoors ? "are" : "is"} called or opened`;
+    if (includeOpened && !includeCalls) return t(host, pluralDoors ? "Notify when {door} open" : "Notify when {door} opens", { door: doorName });
+    if (!includeOpened && includeCalls) return t(host, pluralDoors ? "Notify when {door} are called" : "Notify when {door} is called", { door: doorName });
+    return t(host, pluralDoors ? "Notify when {door} are called or opened" : "Notify when {door} is called or opened", { door: doorName });
   }
 
   const excludedCallers = callerRules.every((rule) => rule.operator === "is_not");
   const names = joinCallerNames(callerNames, excludedCallers ? "and" : "or");
-  const subject = excludedCallers ? `someone other than ${names}` : names;
+  const subject = excludedCallers ? t(host, "someone other than {names}", { names }) : names;
   const plural = !excludedCallers && callerNames.length > 1;
   if (includeOpened && !includeCalls) {
-    return `Notify when ${subject} ${plural ? "open or unlock" : "opens or unlocks"} ${doorName}`;
+    return t(host, plural ? "Notify when {subject} open or unlock {door}" : "Notify when {subject} opens or unlocks {door}", { subject, door: doorName });
   }
   if (!includeOpened && includeCalls) {
-    return `Notify when ${subject} ${plural ? "call" : "calls"} ${doorName}`;
+    return t(host, plural ? "Notify when {subject} call {door}" : "Notify when {subject} calls {door}", { subject, door: doorName });
   }
-  return `Notify when ${subject} ${plural ? "call or open" : "calls or opens"} ${doorName}`;
+  return t(host, plural ? "Notify when {subject} call or open {door}" : "Notify when {subject} calls or opens {door}", { subject, door: doorName });
 };
 
 const joinCallerNames = (names, conjunction) => {
@@ -208,6 +209,7 @@ const requestDoorNotificationStep = (host, { title = "Create Automation", descri
   host._modalCount = (host._modalCount || 0) + 1;
   closeOnBackdrop(dialog);
   host.shadowRoot.append(dialog);
+  localizeElement(host, dialog);
   bind?.(dialog, form);
   dialog.showModal();
   const stepContent = dialog.querySelector(".door-notification-step-content");
@@ -334,20 +336,20 @@ export const requestDoorNotificationAutomation = async (host, existing = null) =
             const plural = selection.callerRules.length !== 1;
             const callerRuleLabel = (isNot) => {
               if (selection.includeOpened && !selection.includeCalls) {
-                if (isNot) return plural ? "do not open or unlock the door" : "does not open or unlock the door";
-                return plural ? "open or unlock the door" : "opens or unlocks the door";
+                if (isNot) return t(host, plural ? "do not open or unlock the door" : "does not open or unlock the door");
+                return t(host, plural ? "open or unlock the door" : "opens or unlocks the door");
               }
               if (!selection.includeOpened && selection.includeCalls) {
-                if (isNot) return plural ? "are not the caller" : "is not the caller";
-                return plural ? "are the caller" : "is the caller";
+                if (isNot) return t(host, plural ? "are not the caller" : "is not the caller");
+                return t(host, plural ? "are the caller" : "is the caller");
               }
-              if (isNot) return plural ? "do not call or unlock the door" : "does not call or unlock the door";
-              return plural ? "call or unlock the door" : "calls or unlocks the door";
+              if (isNot) return t(host, plural ? "do not call or unlock the door" : "does not call or unlock the door");
+              return t(host, plural ? "call or unlock the door" : "calls or unlocks the door");
             };
             const hasCallers = selection.callerRules.length > 0;
             summary.hidden = false;
             if (!hasCallers) {
-              summary.textContent = "Triggered by anyone.";
+              summary.textContent = t(host, "Triggered by anyone.");
             } else {
               const separator = selection.callerOperator === "is" ? "or" : "and";
               const badges = selection.callerRules.map((rule, index) => {
@@ -356,9 +358,9 @@ export const requestDoorNotificationAutomation = async (host, existing = null) =
                   : index === selection.callerRules.length - 2
                     ? ` ${separator} `
                     : ", ";
-                return `<button class="door-selection-badge" type="button" data-remove-caller="${escapeHtml(rule.name)}"><span>${escapeHtml(rule.name)}</span><span aria-hidden="true">×</span><span class="sr-only">Remove ${escapeHtml(rule.name)}</span></button>${punctuation ? `<span class="caller-condition-punctuation">${punctuation}</span>` : ""}`;
+                return `<button class="door-selection-badge" type="button" data-remove-caller="${escapeHtml(rule.name)}"><span>${escapeHtml(rule.name)}</span><span aria-hidden="true">×</span><span class="sr-only">${escapeHtml(t(host, "Remove {name}", { name: rule.name }))}</span></button>${punctuation ? `<span class="caller-condition-punctuation">${punctuation}</span>` : ""}`;
               }).join("");
-              summary.innerHTML = `<span>Triggered when</span><span class="door-picker-badges" aria-label="Selected family members">${badges}</span><span class="caller-picker-rule"><select data-caller-operator aria-label="Caller rule"><option value="is" ${selection.callerOperator === "is" ? "selected" : ""}>${callerRuleLabel(false)}</option><option value="is_not" ${selection.callerOperator === "is_not" ? "selected" : ""}>${callerRuleLabel(true)}</option></select></span>`;
+              summary.innerHTML = `<span>${t(host, "Triggered when")}</span><span class="door-picker-badges" aria-label="${escapeHtml(t(host, "Selected family members"))}">${badges}</span><span class="caller-picker-rule"><select data-caller-operator aria-label="${escapeHtml(t(host, "Caller rule"))}"><option value="is" ${selection.callerOperator === "is" ? "selected" : ""}>${callerRuleLabel(false)}</option><option value="is_not" ${selection.callerOperator === "is_not" ? "selected" : ""}>${callerRuleLabel(true)}</option></select></span>`;
             }
             const badges = summary.querySelector("[aria-label='Selected family members']");
             badges?.querySelectorAll("[data-remove-caller]").forEach((button) => button.addEventListener("click", () => {
@@ -425,7 +427,7 @@ export const requestDoorNotificationAutomation = async (host, existing = null) =
             const matching = services.filter((service) => service.name.toLocaleLowerCase().includes(query));
             results.innerHTML = matching.map((service) => {
               const selected = selection.services.includes(service.service);
-              return `<button class="door-picker-option notification-service-action-option" type="button" role="option" aria-selected="${selected}" data-toggle-service="${escapeHtml(service.service)}"><span class="notification-service-selection${selected ? " selected" : ""}" aria-hidden="true">✓</span><span class="notification-service-action-copy"><span>Send a notification with ${escapeHtml(service.name)}</span><small>Sends a notification message using the ${escapeHtml(service.name)} service.</small></span><span class="notification-service-action-domain">notify</span></button>`;
+              return `<button class="door-picker-option notification-service-action-option" type="button" role="option" aria-selected="${selected}" data-toggle-service="${escapeHtml(service.service)}"><span class="notification-service-selection${selected ? " selected" : ""}" aria-hidden="true">✓</span><span class="notification-service-action-copy"><span>${escapeHtml(t(host, "Send a notification with {name}", { name: service.name }))}</span><small>${escapeHtml(t(host, "Sends a notification message using the {name} service.", { name: service.name }))}</small></span><span class="notification-service-action-domain">notify</span></button>`;
             }).join("") || '<p class="muted">No matching notification services.</p>';
             results.querySelectorAll("[data-toggle-service]").forEach((button) => button.addEventListener("click", () => {
               const serviceId = button.dataset.toggleService;
@@ -445,7 +447,7 @@ export const requestDoorNotificationAutomation = async (host, existing = null) =
       });
     } else {
       const selectedDoors = doors.filter((door) => selection.doorIds.includes(door.deviceId));
-      const defaultName = suggestedAutomationName({
+      const defaultName = suggestedAutomationName(host, {
         doors: selectedDoors,
         totalDoorCount: doors.length,
         callerRules: selection.callerRules,
@@ -500,6 +502,7 @@ export const showDoorNotificationCreated = (host, automationId, edited = false) 
   host._modalCount = (host._modalCount || 0) + 1;
   closeOnBackdrop(dialog);
   host.shadowRoot.append(dialog);
+  localizeElement(host, dialog);
   dialog.showModal();
 };
 
@@ -540,45 +543,45 @@ const formatPairingTimeRemaining = (milliseconds) => {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 };
 
-const relativeContactTime = (value) => {
+const relativeContactTime = (host, value) => {
   const elapsed = Math.max(0, Date.now() - Date.parse(value || ""));
   const minutes = Math.floor(elapsed / 60000);
-  if (minutes < 1) return "Last contacted just now";
-  if (minutes < 60) return `Last contacted ${minutes} minute${minutes === 1 ? "" : "s"} ago`;
+  if (minutes < 1) return t(host, "Last contacted just now");
+  if (minutes < 60) return t(host, minutes === 1 ? "Last contacted {count} minute ago" : "Last contacted {count} minutes ago", { count: minutes });
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `Last contacted ${hours} hour${hours === 1 ? "" : "s"} ago`;
+  if (hours < 24) return t(host, hours === 1 ? "Last contacted {count} hour ago" : "Last contacted {count} hours ago", { count: hours });
   const days = Math.floor(hours / 24);
-  return `Last contacted ${days} day${days === 1 ? "" : "s"} ago`;
+  return t(host, days === 1 ? "Last contacted {count} day ago" : "Last contacted {count} days ago", { count: days });
 };
 
-const relativeTime = (value) => {
+const relativeTime = (host, value) => {
   const elapsed = Math.max(0, Date.now() - Date.parse(value || ""));
   const minutes = Math.floor(elapsed / 60000);
-  if (minutes < 1) return "just now";
-  if (minutes < 60) return `${minutes} minute${minutes === 1 ? "" : "s"} ago`;
+  if (minutes < 1) return t(host, "just now");
+  if (minutes < 60) return t(host, minutes === 1 ? "{count} minute ago" : "{count} minutes ago", { count: minutes });
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
+  if (hours < 24) return t(host, hours === 1 ? "{count} hour ago" : "{count} hours ago", { count: hours });
   const days = Math.floor(hours / 24);
-  return `${days} day${days === 1 ? "" : "s"} ago`;
+  return t(host, days === 1 ? "{count} day ago" : "{count} days ago", { count: days });
 };
 
-const remoteShareConnectionSection = (lastSync) => {
+const remoteShareConnectionSection = (host, lastSync) => {
   const lastContact = Date.parse(lastSync || "");
   const connected = Number.isFinite(lastContact) && Date.now() - lastContact <= RECEIVER_CONTACT_TIMEOUT_MS;
-  const status = connected ? "Connected" : "Connection delayed";
+  const status = t(host, connected ? "Connected" : "Connection delayed");
   const detail = Number.isFinite(lastContact)
-    ? `Last connected ${relativeTime(lastSync)}`
-    : "Waiting for the first connection";
+    ? t(host, "Last connected {time}", { time: relativeTime(host, lastSync) })
+    : t(host, "Waiting for the first connection");
   return `<p data-remote-share-connection class="credential-share-source-status ${connected ? "connected" : "waiting"}"><span>${connected ? "🟢" : "🟡"}</span> <strong>${status}</strong> · ${escapeHtml(detail)}</p>`;
 };
 
 /** Refresh receiver connection status without rebuilding the Settings form. */
 export const updateRemoteShareConnectionStatus = (host, lastSync) => {
   const status = host.shadowRoot?.querySelector("[data-remote-share-connection]");
-  if (status) status.outerHTML = remoteShareConnectionSection(lastSync);
+  if (status) status.outerHTML = remoteShareConnectionSection(host, lastSync);
 };
 
-const pairedReceiversSection = (shares = []) => {
+const pairedReceiversSection = (host, shares = []) => {
   if (!shares.length) return "";
   return `<div class="credential-share-receivers settings-subsection">
     <p class="settings-list-label">Connected nodes</p>
@@ -588,10 +591,10 @@ const pairedReceiversSection = (shares = []) => {
       const status = pendingExpired ? "Pairing link expired" : share.revoked ? "Revoked" : !share.activated ? "Waiting to pair" : receiverIsConnected(share) ? "Connected" : "Disconnected";
       const statusClass = status === "Connected" ? "connected" : status === "Waiting to pair" ? "waiting" : "disconnected";
       const detail = status === "Waiting to pair"
-        ? `Pairing link expires in <span data-pairing-expiry="${expiresAt}">${formatPairingTimeRemaining(expiresAt - Date.now())}</span>`
-        : share.last_sync ? relativeContactTime(share.last_sync) : "Waiting for the first connection";
+        ? `${t(host, "Pairing link expires in")} <span data-pairing-expiry="${expiresAt}">${formatPairingTimeRemaining(expiresAt - Date.now())}</span>`
+        : share.last_sync ? relativeContactTime(host, share.last_sync) : t(host, "Waiting for the first connection");
       return `<div class="credential-share-receiver-row ${statusClass}">
-        <span class="credential-share-status"><span class="remote-node-indicator" aria-hidden="true"></span><span><strong>${escapeHtml(share.receiver_name)}</strong><small><em>${escapeHtml(status)}</em>${detail ? `<span class="credential-share-separator" aria-hidden="true">·</span><span>${detail}</span>` : ""}</small></span></span>
+        <span class="credential-share-status"><span class="remote-node-indicator" aria-hidden="true"></span><span><strong>${escapeHtml(share.receiver_name)}</strong><small><em>${escapeHtml(t(host, status))}</em>${detail ? `<span class="credential-share-separator" aria-hidden="true">·</span><span>${detail}</span>` : ""}</small></span></span>
         <span class="credential-share-actions"><button class="action credential-share-view-button" type="button" data-view-credential-share="${escapeHtml(share.share_id)}" aria-label="View paired Home Assistant" title="View paired Home Assistant">${icons.eye}</button>${share.revoked
           ? `<button class="danger key-menu-button" type="button" data-delete-credential-share="${escapeHtml(share.share_id)}" aria-label="Delete paired Home Assistant" title="Delete paired Home Assistant">${icons.trash}</button>`
           : `<button class="action" type="button" data-revoke-credential-share="${escapeHtml(share.share_id)}">Revoke</button>`}</span>
@@ -730,9 +733,16 @@ const requestShareAccess = (host, viewedShare = null) => new Promise((resolve) =
       !expires?.checked || (Number.isFinite(expiryTime) && expiryTime >= Date.now())
     );
   };
+  const isFirstStageReady = () => {
+    const name = receiverName?.value.trim() || "";
+    const expiryTime = Date.parse(expiry?.value || "");
+    return Boolean(name) && (!expires?.checked || (Number.isFinite(expiryTime) && expiryTime >= Date.now()));
+  };
   const updateConfirmState = () => {
     const hasSelectedPermission = permissionInputs.some((input) => input.checked);
-    if (nextButton) nextButton.disabled = !isFirstStageValid();
+    // Keep the step actionable once its required fields are complete. Duplicate
+    // names are reported after clicking Next, where the message is visible.
+    if (nextButton) nextButton.disabled = !isFirstStageReady();
     if (confirmButton) confirmButton.disabled = !isFirstStageValid() || !hasSelectedPermission;
   };
   const updateProgress = () => {
@@ -748,7 +758,7 @@ const requestShareAccess = (host, viewedShare = null) => new Promise((resolve) =
     if (nextButton) nextButton.hidden = stage === 3;
     if (confirmButton) confirmButton.hidden = stage !== 3;
     const description = dialog.querySelector("[data-share-stage-description]");
-    if (description) description.textContent = stageDescriptions[stage - 1];
+    if (description) description.textContent = t(host, stageDescriptions[stage - 1]);
     updateProgress();
     dialog.querySelector("[data-share-error]").hidden = true;
     updateConfirmState();
@@ -837,7 +847,7 @@ const requestShareAccess = (host, viewedShare = null) => new Promise((resolve) =
   }, { once: true });
   host._modalCount = (host._modalCount || 0) + 1;
   closeOnBackdrop(dialog);
-  host.shadowRoot.append(dialog); dialog.showModal();
+  host.shadowRoot.append(dialog); localizeElement(host, dialog); dialog.showModal();
 });
 
 const activityStorageLimitWarning = (settings) => {
@@ -929,6 +939,7 @@ const requestSipPdfPassword = (host) => new Promise((resolve) => {
   }, { once: true });
   closeOnBackdrop(dialog);
   host.shadowRoot.append(dialog);
+  localizeElement(host, dialog);
   dialog.showModal();
   form.querySelector("[data-sip-pdf-password]").focus();
 });
@@ -1023,7 +1034,7 @@ export const renderSettingsView = (host) => {
           <legend>${icons.hub}<span>Share Access With Another Instance</span></legend>
           <p class="settings-section-description">Securely bridge cameras, relays, activity history, call history, events and temporary keys with other Home Assistant instances.</p>
           <button class="action settings-inline-action" type="button" data-create-credential-share>${icons.externalLink}<span>Create pairing link</span></button>
-          ${pairedReceiversSection(settings.credential_shares)}
+          ${pairedReceiversSection(host, settings.credential_shares)}
         </fieldset>`}
 
         <fieldset class="settings-section">
@@ -1216,6 +1227,7 @@ export const bindSettingsEvents = (host) => {
         entry_id: host._activeAccount,
         password: credentials.password,
         password_confirmation: credentials.confirmation,
+        language: host._hass?.locale?.language || "en",
       });
       const binary = window.atob(pdf.data);
       const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));

@@ -4,6 +4,7 @@ import { closeOnBackdrop } from "../utils/dom.js";
 import { toIsoDateString } from "../utils/formatters.js";
 import { showNotice } from "./dialogs.js";
 import { icons } from "../utils/icons.js?v=20260927-validity-modal";
+import { localizeElement } from "../utils/i18n.js?v=20261003-hebrew-rtl";
 
 const pad = (value) => String(value).padStart(2, "0");
 const describeDuration = (count, unit) => {
@@ -75,6 +76,7 @@ export const showDateRangePicker = (host, targetForm, labelSelector = "[data-val
       (mode === "relative" && Number.isInteger(Number(amount)) && Number(amount) >= 0 && Number(amount) <= 1000) ||
       (mode === "absolute" && start && end);
     dialog.innerHTML = `<header class="range-dialog-header"><span class="range-dialog-icon">${icons.calendar}</span><div><h2>Select Validity Period</h2><p>Configure relative duration or an absolute calendar date & time range.</p></div><button type="button" class="range-dialog-close" data-range-cancel aria-label="Close">×</button></header><div class="range-dialog-body"><fieldset class="range-mode-options" aria-label="Validity type selection"><div class="range-mode-group ${mode === "relative" ? "selected" : ""}"><label class="range-mode-title"><input type="radio" name="range-mode" value="relative" ${mode === "relative" ? "checked" : ""}><span><strong>Relative Range</strong><small>Access valid for a set duration after activation or issuance.</small></span></label>${relativeContent}</div><div class="range-mode-group ${mode === "absolute" ? "selected" : ""}"><label class="range-mode-title"><input type="radio" name="range-mode" value="absolute" ${mode === "absolute" ? "checked" : ""}><span><strong>Absolute Range</strong><small>Explicit start and end calendar dates with time stamps.</small></span></label>${absoluteContent}</div></fieldset>${mode ? `<div class="range-times"><label><span>Start time</span><input data-range-start-time type="time" value="${startTime}"></label><label><span>End time</span><input data-range-end-time type="time" value="${endTime}"></label></div>` : ""}</div><div class="modal-actions"><button type="button" class="modal-cancel" data-range-cancel>Cancel</button><button type="button" class="modal-action" data-range-apply ${canApply ? "" : "disabled"}>Apply</button></div>`;
+    localizeElement(host, dialog);
     dialog.querySelectorAll('[name="range-mode"]').forEach((radio) => radio.addEventListener("change", () => { mode = radio.value; if (mode === "relative") { start = new Date(today); end = null; } render(); }));
     const updateRelativeAmount = (event) => {
       amount = event.target.value;
@@ -136,5 +138,5 @@ export const showDateRangePicker = (host, targetForm, labelSelector = "[data-val
   };
   render(); closeOnBackdrop(dialog);
   dialog.addEventListener("close", () => dialog.remove(), { once: true });
-  host.shadowRoot.append(dialog); dialog.showModal();
+  host.shadowRoot.append(dialog); localizeElement(host, dialog); dialog.showModal();
 };

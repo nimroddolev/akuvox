@@ -492,4 +492,22 @@ export const dialogStyles = `
       transform: rotate(360deg);
     }
   }
+  :host([dir="rtl"]) dialog,
+  :host([dir="rtl"]) dialog .modal-body,
+  :host([dir="rtl"]) dialog .modal-content,
+  :host([dir="rtl"]) dialog .key-create-dialog-body { text-align: right; }
+  :host([dir="rtl"]) dialog .modal-actions { margin-left: 0; margin-right: auto; }
+  :host([dir="rtl"]) dialog.door-notification-dialog .modal-actions {
+    box-sizing: border-box;
+    width: 100%;
+    margin-inline: 0;
+    justify-content: center;
+  }
+  :host([dir="rtl"]) .key-create-field input:not([type="hidden"]),
+  :host([dir="rtl"]) .key-form-extra-fields input,
+  :host([dir="rtl"]) dialog.key-create-dialog .date-range-field [data-validity-label] { text-align: right; }
+  :host([dir="rtl"]) input[type="number"],
+  :host([dir="rtl"]) input[name="code"],
+  :host([dir="rtl"]) input[name="passcode"] { direction: ltr; text-align: left; }
+
 `;

@@ -11,6 +11,7 @@ import {
 import { tableTimestampFormatter } from "../utils/formatters.js?v=20260820-table-timestamps";
 import { icons } from "../utils/icons.js";
 import { showActivityImageDialog } from "../components/image-dialog.js?v=20260909-instant-open";
+import { t } from "../utils/i18n.js?v=20261003-mobile-activity";
 import {
   ACTIVITY_INITIAL_PAGE_SIZE,
   nextActivityVisibleCount,
@@ -37,13 +38,13 @@ const formatStorageAmount = (bytes) => {
 };
 
 /** Convert a SmartPlus camelCase or PascalCase event type into title-cased words. */
-export const formatActivityEventType = (value) => String(value || "")
+export const formatActivityEventType = (value, host) => t(host, String(value || "")
   .replace(/([A-Z])/g, " $1")
   .trim()
   .split(/\s+/)
   .filter(Boolean)
   .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-  .join(" ");
+  .join(" "));
 
 const activityStorageWarning = (settings) => {
   const limitBytes = (Number(settings?.activity_history_max_storage_mb) || 0) * 1_000_000;
@@ -62,7 +63,7 @@ const filterValues = (items, key) => [
     ...new Set(items.map((item) => String(item[key] || "")).filter(Boolean)),
   ].sort((a, b) => a.localeCompare(b));
 
-const formatUpdatedAgo = (timestamp) => {
+const formatUpdatedAgo = (host, timestamp) => {
   const updatedAt = Date.parse(timestamp || "");
   if (Number.isNaN(updatedAt)) return "";
   const seconds = Math.max(0, Math.floor((Date.now() - updatedAt) / 1000));
@@ -75,12 +76,12 @@ const formatUpdatedAgo = (timestamp) => {
           ? [Math.floor(seconds / 3600), "h"]
           : [Math.floor(seconds / 86400), "d"];
   const indicator = seconds <= 5 ? "🟢" : seconds >= 30 ? "🔴" : "🟡";
-  return `${indicator} Updated ${amount}${unit} ago`;
+  return `${indicator} ${t(host, "Updated {amount}{unit} ago", { amount, unit })}`;
 };
 
 const updateActivityUpdatedLabel = (host) => {
   const label = host.shadowRoot.querySelector("[data-activity-updated-at]");
-  if (label) label.textContent = formatUpdatedAgo(label.dataset.activityUpdatedAt);
+  if (label) label.textContent = formatUpdatedAgo(host, label.dataset.activityUpdatedAt);
 };
 
 const parseActivityTimestamp = (value) => {
@@ -100,28 +101,28 @@ const parseActivityTimestamp = (value) => {
   return Number.isNaN(timestamp.getTime()) ? null : timestamp;
 };
 
-const formatActivityAge = (value) => {
+const formatActivityAge = (host, value) => {
   const timestamp = parseActivityTimestamp(value);
   if (!timestamp) return "";
   const now = new Date();
   const elapsedMinutes = Math.max(0, Math.floor((now - timestamp) / 60_000));
   const isToday = timestamp.toDateString() === now.toDateString();
-  const dayLabel = isToday ? "Today" : "";
+  const dayLabel = isToday ? t(host, "Today") : "";
   const withDayLabel = (age) => (dayLabel ? `${dayLabel} • ${age}` : age);
-  if (elapsedMinutes < 1) return withDayLabel("Just now");
+  if (elapsedMinutes < 1) return withDayLabel(t(host, "Just now"));
   if (elapsedMinutes < 60) {
-    return withDayLabel(`${elapsedMinutes} min${elapsedMinutes === 1 ? "" : "s"} ago`);
+    return withDayLabel(t(host, elapsedMinutes === 1 ? "{count} min ago" : "{count} mins ago", { count: elapsedMinutes }));
   }
   const elapsedHours = Math.floor(elapsedMinutes / 60);
   if (elapsedHours < 24) {
-    return withDayLabel(`${elapsedHours} hour${elapsedHours === 1 ? "" : "s"} ago`);
+    return withDayLabel(t(host, elapsedHours === 1 ? "{count} hour ago" : "{count} hours ago", { count: elapsedHours }));
   }
   const elapsedDays = Math.floor(elapsedHours / 24);
-  return `${elapsedDays} day${elapsedDays === 1 ? "" : "s"} ago`;
+  return t(host, elapsedDays === 1 ? "{count} day ago" : "{count} days ago", { count: elapsedDays });
 };
 
-const renderActivityTimestamp = (value, formatTimestamp) => {
-  const age = formatActivityAge(value);
+const renderActivityTimestamp = (host, value, formatTimestamp) => {
+  const age = formatActivityAge(host, value);
   return `<div class="activity-timestamp">
     <time>${escapeHtml(formatTimestamp(value))}</time>
     ${age ? `<span>${escapeHtml(age)}</span>` : ""}
@@ -156,25 +157,25 @@ export const visibleActivityEvents = (host, activity) => {
  * @returns {string}
  */
 const renderThumbnail = (host, item) => {
-  if (!item.has_image) return '<span class="muted">Unavailable</span>';
+  if (!item.has_image) return `<span class="muted">${t(host, "Unavailable")}</span>`;
 
   const imageKey = host._activityImageKey(item.CaptureTime);
   if (host._activityImageFailures.has(imageKey)) {
-    return '<span class="activity-thumbnail-error">Error</span>';
+    return `<span class="activity-thumbnail-error">${t(host, "Error")}</span>`;
   }
 
   const image = host._activityImages.get(imageKey);
   const ready = image && typeof image.then !== "function";
   if (!ready) {
     return `
-      <span class="activity-thumbnail loading" role="status" aria-label="Loading activity image">
+      <span class="activity-thumbnail loading" role="status" aria-label="${escapeHtml(t(host, "Loading activity image"))}">
         <span class="thumbnail-spinner" aria-hidden="true"></span>
       </span>
     `;
   }
 
   return `
-    <button class="activity-thumbnail" aria-label="View activity image" data-activity-image="${escapeHtml(item.CaptureTime)}">
+    <button class="activity-thumbnail" aria-label="${escapeHtml(t(host, "View activity image"))}" data-activity-image="${escapeHtml(item.CaptureTime)}">
       <img alt="" data-orientation="${activityOrientation(host, item)}" src="data:${image.content_type};base64,${image.data}">
       ${icons.searchThumbnail}
     </button>
@@ -191,13 +192,13 @@ export const renderActivityView = (host, account) => {
   const activity = account.activity || [];
   const { filtered, visible } = visibleActivityEvents(host, activity);
   const sortOptions = [
-    { value: "CaptureTime", label: "Time" },
-    { value: "Location", label: "Door" },
-    { value: "CaptureType", label: "Event" },
-    { value: "Initiator", label: "Initiator" },
+    { value: "CaptureTime", label: t(host, "Time") },
+    { value: "Location", label: t(host, "Door") },
+    { value: "CaptureType", label: t(host, "Event") },
+    { value: "Initiator", label: t(host, "Initiator") },
   ];
   const activeSortLabel =
-    sortOptions.find((option) => option.value === host._activitySort.key)?.label || "Time";
+    sortOptions.find((option) => option.value === host._activitySort.key)?.label || t(host, "Time");
   const filterCount = Object.values(host._activityFilters).reduce(
     (count, values) => count + values.length,
     0
@@ -212,37 +213,37 @@ export const renderActivityView = (host, account) => {
   return `
     <div class="card table-wrap activity-table-wrap">
       <div class="section-heading activity-heading">
-        <h2>Latest activity</h2>
+        <h2>${t(host, "Latest activity")}</h2>
         ${account.activity_updated_at ? `<span class="muted activity-updated" data-activity-updated-at="${escapeHtml(account.activity_updated_at)}"></span>` : ""}
       </div>
       ${activityStorageWarning(host._settings)}
-      <p class="muted">Recent SmartPlus activity is retained across Home Assistant restarts and refreshed by polling.</p>
+      <p class="muted">${t(host, "Recent SmartPlus activity is retained across Home Assistant restarts and refreshed by polling.")}</p>
       <div class="mobile-filter-toolbar">
-        <button type="button" class="mobile-filter-toggle" data-mobile-filter-toggle="activity" aria-expanded="${Boolean(host._mobileFiltersOpen.activity)}">Filter${filterCount ? ` <span class="mobile-filter-count">${filterCount}</span>` : ""}</button>
+        <button type="button" class="mobile-filter-toggle" data-mobile-filter-toggle="activity" aria-expanded="${Boolean(host._mobileFiltersOpen.activity)}">${t(host, "Filter")}${filterCount ? ` <span class="mobile-filter-count">${filterCount}</span>` : ""}</button>
       </div>
       <div class="activity-controls mobile-filter-panel ${host._mobileFiltersOpen.activity ? "mobile-filter-panel-open" : ""}">
-        ${renderMultiSelectFilter({ scope: "activity", key: "Location", label: "Door", allLabel: "All Doors", values: filterValues(activity, "Location"), selected: host._activityFilters.Location, openMenu: host._openFilterMenu })}
-        ${renderMultiSelectFilter({ scope: "activity", key: "CaptureType", label: "Event", allLabel: "All Events", values: filterValues(activity, "CaptureType"), selected: host._activityFilters.CaptureType, openMenu: host._openFilterMenu })}
-        ${renderMultiSelectFilter({ scope: "activity", key: "Initiator", label: "Initiator", allLabel: "All Initiators", values: filterValues(activity, "Initiator"), selected: host._activityFilters.Initiator, openMenu: host._openFilterMenu })}
+        ${renderMultiSelectFilter({ scope: "activity", key: "Location", label: t(host, "Door"), allLabel: t(host, "All Doors"), values: filterValues(activity, "Location"), selected: host._activityFilters.Location, openMenu: host._openFilterMenu })}
+        ${renderMultiSelectFilter({ scope: "activity", key: "CaptureType", label: t(host, "Event"), allLabel: t(host, "All Events"), values: filterValues(activity, "CaptureType"), selected: host._activityFilters.CaptureType, openMenu: host._openFilterMenu })}
+        ${renderMultiSelectFilter({ scope: "activity", key: "Initiator", label: t(host, "Initiator"), allLabel: t(host, "All Initiators"), values: filterValues(activity, "Initiator"), selected: host._activityFilters.Initiator, openMenu: host._openFilterMenu })}
         <div class="tile-sort-control">
           <details class="multi-select-filter" data-filter-menu="activity-sort" ${host._openFilterMenu === "activity-sort" ? "open" : ""}>
-            <summary><span>Sort By</span><span class="multi-select-filter-summary">${escapeHtml(activeSortLabel)}</span></summary>
-            <div class="multi-select-filter-options" role="radiogroup" aria-label="Sort latest activity by">
+            <summary><span>${t(host, "Sort by")}</span><span class="multi-select-filter-summary">${escapeHtml(activeSortLabel)}</span></summary>
+            <div class="multi-select-filter-options" role="radiogroup" aria-label="${escapeHtml(t(host, "Sort latest activity by"))}">
               ${sortOptions.map((option) => `<label><input type="radio" name="activity-sort" data-activity-sort-menu value="${option.value}" ${host._activitySort.key === option.value ? "checked" : ""}> ${option.label}</label>`).join("")}
             </div>
           </details>
-          <button type="button" class="tile-sort-direction" data-activity-sort-direction aria-label="Sort ${host._activitySort.direction === "asc" ? "ascending" : "descending"}" title="Sort ${host._activitySort.direction === "asc" ? "ascending" : "descending"}">${host._activitySort.direction === "asc" ? "↑" : "↓"}</button>
+          <button type="button" class="tile-sort-direction" data-activity-sort-direction aria-label="${escapeHtml(t(host, "Sort {direction}", { direction: t(host, host._activitySort.direction === "asc" ? "ascending" : "descending") }))}" title="${escapeHtml(t(host, "Sort {direction}", { direction: t(host, host._activitySort.direction === "asc" ? "ascending" : "descending") }))}">${host._activitySort.direction === "asc" ? "↑" : "↓"}</button>
         </div>
-        <button type="button" class="mobile-clear-filters" data-clear-mobile-filters>Clear filters</button>
+        <button type="button" class="mobile-clear-filters" data-clear-mobile-filters>${t(host, "Clear filters")}</button>
       </div>
       <table>
         <thead>
           <tr>
-            <th>${heading("Time", "CaptureTime")}</th>
-            <th>${heading("Door", "Location")}</th>
-            <th>${heading("Event", "CaptureType")}</th>
-            <th>${heading("Initiator", "Initiator")}</th>
-            <th>Image</th>
+            <th>${heading(t(host, "Time"), "CaptureTime")}</th>
+            <th>${heading(t(host, "Door"), "Location")}</th>
+            <th>${heading(t(host, "Event"), "CaptureType")}</th>
+            <th>${heading(t(host, "Initiator"), "Initiator")}</th>
+            <th>${t(host, "Image")}</th>
           </tr>
         </thead>
         <tbody>
@@ -251,21 +252,21 @@ export const renderActivityView = (host, account) => {
               .map(
                 (item) => `
               <tr>
-                <td>${renderActivityTimestamp(item.CaptureTime, formatTimestamp)}</td>
+                <td>${renderActivityTimestamp(host, item.CaptureTime, formatTimestamp)}</td>
                 <td>${escapeHtml(item.Location || "")}</td>
-                <td>${escapeHtml(formatActivityEventType(item.CaptureType))}</td>
+                <td>${escapeHtml(formatActivityEventType(item.CaptureType, host))}</td>
                 <td>${escapeHtml(item.Initiator || "")}</td>
                 <td class="activity-image-cell">${renderThumbnail(host, item)}</td>
               </tr>
             `
               )
-              .join("") || '<tr><td colspan="5">No matching activity.</td></tr>'
+              .join("") || `<tr><td colspan="5">${t(host, "No matching activity.")}</td></tr>`
           }
         </tbody>
       </table>
       ${
         hasMore
-          ? `<div class="activity-load-more" data-activity-load-more aria-live="polite">Scroll to load more activity</div>`
+          ? `<div class="activity-load-more" data-activity-load-more aria-live="polite">${t(host, "Scroll to load more activity")}</div>`
           : ""
       }
     </div>

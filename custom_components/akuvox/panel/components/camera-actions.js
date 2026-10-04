@@ -5,6 +5,7 @@
 import { findInComposedTree, escapeHtml } from "../utils/dom.js";
 import { icons } from "../utils/icons.js?v=20260926-device-preview-refresh";
 import { orientationTransform } from "../utils/orientation.js?v=20260820-camera-orientation";
+import { t } from "../utils/i18n.js?v=20261004-sip-pdf-hebrew";
 
 const installCameraStreamLoader = (host, cameraDialog, orientation, attempt = 0) => {
   const stream = findInComposedTree(cameraDialog.shadowRoot, "ha-camera-stream");
@@ -131,14 +132,22 @@ export const installCameraRelayActions = (host, relays, orientation = "none", at
 
   if (!relays.length) return;
 
+  // The host actions are Home Assistant-owned, but this particular camera
+  // action row only contains the snapshot action and our relay controls.
+  // Center the complete row rather than leaving either action against an edge.
+  actions.style.justifyContent = "center";
+
   const group = documentRef.createElement("div");
   group.className = "akuvox-camera-relay-actions";
   group.style.cssText =
-    "display:flex;flex-wrap:wrap;gap:8px;margin-right:auto;order:-1;";
+    "display:flex;flex-wrap:wrap;gap:8px;order:-1;";
 
   const labels = relays.map((relay) =>
     String(relay.door_name || relay.name || `Relay ${relay.relay_id}`)
   );
+  const unlockStyle = host.hasAttribute("dark")
+    ? "color:#fca5a5;background:#3f252b;"
+    : "color:#a12828;background:#ffebee;";
 
   relays.forEach((relay, index) => {
     const button =
@@ -146,7 +155,7 @@ export const installCameraRelayActions = (host, relays, orientation = "none", at
       documentRef.createElement("button");
     const duplicate =
       labels.filter((label) => label === labels[index]).length > 1;
-    const name = "Unlock";
+    const name = t(host, "Unlock");
     const accessibleName =
       relays.length === 1
         ? name
@@ -155,14 +164,15 @@ export const installCameraRelayActions = (host, relays, orientation = "none", at
     button.setAttribute("type", "button");
     button.removeAttribute("disabled");
     button.setAttribute("aria-label", accessibleName);
+    button.classList.add("device-action", "device-unlock-action");
     button.innerHTML = `${icons.unlock}<span>${escapeHtml(name)}</span>`;
-    button.style.cssText +=
-      ";min-height:36px;padding:8px 10px;border:0;border-radius:8px;color:#fff;background:linear-gradient(135deg,#ff3f3f,#ff6a4f);justify-content:center;text-align:center;";
-
-    if (!nativeSnapshotAction) {
-      button.style.cssText =
-        "display:inline-flex;align-items:center;justify-content:center;gap:5px;min-height:36px;padding:8px 10px;border:0;border-radius:8px;color:#fff;background:linear-gradient(135deg,#ff3f3f,#ff6a4f);font:500 14px/1 inherit;text-align:center;white-space:nowrap;cursor:pointer;";
-    }
+    // Mirror the panel tile action exactly rather than adopting Home
+    // Assistant's destructive red button treatment from the snapshot clone.
+    button.style.cssText =
+      `display:inline-flex;align-items:center;justify-content:center;gap:5px;` +
+      `box-sizing:border-box;min-height:38px;height:38px;padding:8px 10px;` +
+      `border:0;border-radius:8px;font:500 13px/1 inherit;text-align:center;` +
+      `white-space:nowrap;cursor:pointer;${unlockStyle}`;
     button.querySelector("svg").style.cssText =
       "width:20px;height:20px;flex:0 0 auto;fill:none;stroke:currentColor;stroke-width:2;";
 

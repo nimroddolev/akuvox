@@ -111,6 +111,8 @@ export const mainStyles = `
 
   .tab-navigation {
     display: flex;
+    /* Overflow arrows retain physical left/right positions in every locale. */
+    direction: ltr;
     align-items:stretch;
     box-sizing: border-box;
     max-width: 100%;
@@ -340,6 +342,11 @@ export const mainStyles = `
     border: 1px solid var(--panel-notice-outline);
     background: var(--panel-notice-bg);
     color: var(--panel-notice-text);
+  }
+  main > section > .notice {
+    width: min(100%, 520px);
+    margin: 32px auto;
+    text-align: center;
   }
   .share-access-dialog .share-error { background: #fde8e8; color: #9b1c1c; }
   .result-icon { display: grid; width: 58px; height: 58px; margin: 0 auto 14px; place-items: center; border-radius: 50%; color: #fff; font-size: 40px; font-weight: 800; line-height: 1; }
@@ -1010,12 +1017,57 @@ export const mainStyles = `
       top: 50%;
       left: 50%;
       display: block;
+      width: 78px;
       transform: translate(-50%, -50%) rotate(-90deg);
-      white-space: nowrap;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      line-height: 1.15;
+      text-align: center;
     }
     .share-access-table th,
     .share-access-table td { padding: 10px 3px; }
     .share-access-table .share-select-all-label { gap: 5px; }
     .share-access-table .share-select-all-label svg { width: 18px; height: 18px; }
+  }
+
+  /* Hebrew and other right-to-left content follows the reading direction,
+     while credentials, codes, and machine-readable links stay LTR. */
+  :host([dir="rtl"]) { direction: rtl; }
+  :host([dir="rtl"]) main { text-align: right; }
+  :host([dir="rtl"]) header select { margin-right: auto; margin-left: 0; }
+  /* Keep the scroller itself LTR so Safari reports a conventional, usable
+     scrollLeft value. The inner navigation remains RTL, preserving the
+     Hebrew tab order while allowing touch swipes to reveal overflow. */
+  :host([dir="rtl"]) .tab-scroll-viewport { direction: ltr; touch-action: pan-x; }
+  :host([dir="rtl"]) .tab-scroll-viewport nav { direction: rtl; }
+  :host([dir="rtl"]) .door-notification-close,
+  :host([dir="rtl"]) .share-access-close { right: auto; left: 28px; }
+  :host([dir="rtl"]) .remote-instances-section .settings-inline-action,
+  :host([dir="rtl"]) .sip-export { right: auto; left: 20px; }
+  :host([dir="rtl"]) .remote-instances-section .settings-section-description,
+  :host([dir="rtl"]) .sip-section .settings-section-description { padding-right: 0; padding-left: 210px; }
+  :host([dir="rtl"]) .remote-instances-section .settings-section-description { padding-left: 190px; }
+  :host([dir="rtl"]) .credential-share-receiver-row .credential-share-status > span:last-child,
+  :host([dir="rtl"]) .credential-share-receiver-row .credential-share-status strong,
+  :host([dir="rtl"]) .remote-instances-section .credential-share-status { margin-left: 0; margin-right: 4px; }
+  :host([dir="rtl"]) .remote-instances-section .credential-share-actions { margin-right: 0; margin-left: 10px; }
+  :host([dir="rtl"]) input,
+  :host([dir="rtl"]) .pairing-link-value,
+  :host([dir="rtl"]) code,
+  :host([dir="rtl"]) .share-link-input-wrap input { direction: ltr; text-align: left; }
+  :host([dir="rtl"]) .share-link-validation { right: auto; left: 12px; }
+  :host([dir="rtl"]) .share-link-input-wrap input { padding-right: 12px; padding-left: 38px; }
+  :host([dir="rtl"]) .activity-storage-progress-label { direction: ltr; unicode-bidi: isolate; }
+  :host([dir="rtl"]) .door-notification-dialog fieldset,
+  :host([dir="rtl"]) .door-picker-option,
+  :host([dir="rtl"]) .caller-picker-add-menu button { text-align: right; }
+  :host([dir="rtl"]) .door-notification-dialog legend { margin-left: 0; margin-right: 10px; }
+  :host([dir="rtl"]) .door-picker { left: auto; right: 0; }
+  :host([dir="rtl"]) .notification-service-picker-control .door-picker { right: auto; }
+
+  @media (max-width: 680px) {
+    :host([dir="rtl"]) .door-notification-close { right: auto; left: 16px; }
+    :host([dir="rtl"]) .remote-instances-section .settings-section-description,
+    :host([dir="rtl"]) .sip-section .settings-section-description { padding-left: 0; }
   }
 `;

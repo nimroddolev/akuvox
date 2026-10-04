@@ -19,11 +19,12 @@ import {
   tableTimestampFormatter,
 } from "../utils/formatters.js?v=20260820-table-timestamps";
 import { copyText } from "../utils/clipboard.js";
-import { showNotice, confirmModal, callWsWithBlocker } from "../components/dialogs.js";
-import { showDateRangePicker } from "../components/date-range-picker.js?v=20260927-validity-modal";
+import { showNotice, confirmModal, callWsWithBlocker } from "../components/dialogs.js?v=20261003-i18n-3";
+import { showDateRangePicker } from "../components/date-range-picker.js?v=20261003-i18n-modal";
 import { showTemporaryKeyQrDialog } from "../components/qr-dialog.js?v=20260928-qr-loading-modal-v2";
 import { showKeyActionsMenu, closeKeyActionsMenu } from "../components/key-menu.js?v=20260928-disabled-edit-muted";
 import { bindListOrdering, bindTileOrdering } from "../utils/tile-ordering.js?v=20260917-list-drop-position";
+import { localizeElement, t } from "../utils/i18n.js?v=20261003-hebrew-rtl-6";
 
 /**
  * Update visibility of validation error messages under vehicle registration and UHF card fields.
@@ -106,13 +107,13 @@ export const renderKeysView = (host, account) => {
     if (!match) return "";
     const [, year, month, day, hour, minute, second = "0"] = match;
     const remaining = new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute), Number(second)) - Date.now();
-    if (remaining <= 0) return "Expired";
+    if (remaining <= 0) return t(host, "Expired");
     const minutes = Math.max(1, Math.ceil(remaining / 60_000));
-    if (minutes < 60) return `${minutes} minute${minutes === 1 ? "" : "s"} left`;
+    if (minutes < 60) return t(host, minutes === 1 ? "{count} minute left" : "{count} minutes left", { count: minutes });
     const hours = Math.ceil(minutes / 60);
-    if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} left`;
+    if (hours < 24) return t(host, hours === 1 ? "{count} hour left" : "{count} hours left", { count: hours });
     const days = Math.ceil(hours / 24);
-    return `${days} day${days === 1 ? "" : "s"} left`;
+    return t(host, days === 1 ? "{count} day left" : "{count} days left", { count: days });
   };
   const isManualTileOrder =
     host._keySort.key === "manual" ||
@@ -255,7 +256,7 @@ export const renderKeysView = (host, account) => {
             <div><dt>${icons.calendar}<span>Valid to</span></dt><dd>${escapeHtml(formatTimestamp(key.end_time))}</dd></div>
           </dl>
           <div class="key-tile-usage">
-            <div><span>Usage: ${escapeHtml(key.access_times)} of ${escapeHtml(key.allowed_times)}</span><strong>${availablePercent}% available</strong></div>
+            <div><span>${escapeHtml(t(host, "Usage: {used} of {allowed}", { used: key.access_times, allowed: key.allowed_times }))}</span><strong>${escapeHtml(t(host, "{percent}% available", { percent: availablePercent }))}</strong></div>
             <i aria-hidden="true"><b style="width:${usedPercent}%"></b></i>
           </div>
         </article>
@@ -282,10 +283,8 @@ export const renderKeysView = (host, account) => {
         </div>
       </div>
       <div class="mobile-key-primary-controls">
-        <button type="button" class="mobile-filter-toggle" data-mobile-filter-toggle="keys" aria-expanded="${Boolean(host._mobileFiltersOpen.keys)}">Filter${filterCount ? ` <span class="mobile-filter-count">${filterCount}</span>` : ""}</button>
-        <button type="button" class="key-select-action ${host._selectingKeys ? "is-selecting" : ""}" data-toggle-key-selection aria-pressed="${Boolean(host._selectingKeys)}">${icons.checklist}<span>${host._selectingKeys ? "Cancel" : "Select"}</span></button>
-        ${selectedCount ? `<button type="button" class="danger" data-delete-selected>Delete (${selectedCount})</button>` : ""}
         ${canCreateKeys ? `<button class="add-key" data-create-key>${icons.plus}<span>Add Key</span></button>` : ""}
+        <button type="button" class="mobile-filter-toggle" data-mobile-filter-toggle="keys" aria-expanded="${Boolean(host._mobileFiltersOpen.keys)}">Filter${filterCount ? ` <span class="mobile-filter-count">${filterCount}</span>` : ""}</button>
       </div>
       <div class="activity-controls mobile-filter-panel key-filter-panel ${host._mobileFiltersOpen.keys ? "mobile-filter-panel-open" : ""}">
         <label>
@@ -618,6 +617,7 @@ export const showEditKeyDialog = (host, keyId) => {
   );
 
   host.shadowRoot.append(dialog);
+  localizeElement(host, dialog);
   dialog.showModal();
 };
 

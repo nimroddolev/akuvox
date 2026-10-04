@@ -1789,7 +1789,9 @@ class AkuvoxApiClient:
             ],
         }
 
-    async def async_export_sip_accounts_pdf(self, password: str) -> dict[str, str]:
+    async def async_export_sip_accounts_pdf(
+        self, password: str, language: str | None = None
+    ) -> dict[str, str]:
         """Create an encrypted PDF containing sensitive SIP account details."""
         if len(password) < 8:
             raise AkuvoxApiClientError(
@@ -1800,7 +1802,10 @@ class AkuvoxApiClient:
             raise AkuvoxApiClientError("No SIP account details are available yet")
         try:
             pdf_data = await self.hass.async_add_executor_job(
-                self._build_sip_accounts_pdf, sip_accounts, password
+                self._build_sip_accounts_pdf,
+                sip_accounts,
+                password,
+                language or self.hass.config.language,
             )
         except ImportError as error:
             raise AkuvoxApiClientError("The PDF export dependency is not available") from error
@@ -1811,7 +1816,9 @@ class AkuvoxApiClient:
         }
 
     @staticmethod
-    def _build_sip_accounts_pdf(sip_accounts: dict[str, Any], password: str) -> bytes:
+    def _build_sip_accounts_pdf(
+        sip_accounts: dict[str, Any], password: str, language: str = "en"
+    ) -> bytes:
         """Build an encrypted, text-only SIP credentials PDF off the event loop."""
         from bidi.algorithm import get_display
         from reportlab.lib.pagesizes import A4
@@ -1820,6 +1827,38 @@ class AkuvoxApiClient:
         from reportlab.pdfbase.ttfonts import TTFont
         from reportlab.pdfgen import canvas
 
+        language = str(language).lower().split("-", maxsplit=1)[0]
+        labels = {
+            "en": {
+                "title": "Akuvox SmartPlus SIP Accounts",
+                "warning": "Confidential - do not share these credentials with anyone else.",
+                "server": "SIP server", "transport": "Transport", "main_account": "Main account",
+                "main_password": "Main password", "device": "Device {index}", "mac": "MAC",
+                "account": "SIP account", "password": "SIP password",
+            },
+            "de": {
+                "title": "Akuvox SmartPlus SIP-Konten",
+                "warning": "Vertraulich – diese Zugangsdaten nicht an andere weitergeben.",
+                "server": "SIP-Server", "transport": "Transport", "main_account": "Hauptkonto",
+                "main_password": "Hauptpasswort", "device": "Gerät {index}", "mac": "MAC",
+                "account": "SIP-Konto", "password": "SIP-Passwort",
+            },
+            "he": {
+                "title": "חשבונות SIP של Akuvox SmartPlus",
+                "warning": "חסוי – אין לשתף פרטי גישה אלה עם אדם אחר.",
+                "server": "שרת SIP", "transport": "תעבורה", "main_account": "חשבון ראשי",
+                "main_password": "סיסמת חשבון ראשי", "device": "מכשיר {index}", "mac": "MAC",
+                "account": "חשבון SIP", "password": "סיסמת SIP",
+            },
+        }.get(language, {})
+        labels = labels or {
+            "title": "Akuvox SmartPlus SIP Accounts",
+            "warning": "Confidential - do not share these credentials with anyone else.",
+            "server": "SIP server", "transport": "Transport", "main_account": "Main account",
+            "main_password": "Main password", "device": "Device {index}", "mac": "MAC",
+            "account": "SIP account", "password": "SIP password",
+        }
+        is_rtl = language == "he"
         font_name = "AkuvoxUnicode"
         font_path = Path(__file__).with_name("fonts") / "DejaVuSans.ttf"
         pdfmetrics.registerFont(TTFont(font_name, str(font_path)))
@@ -1836,32 +1875,38 @@ class AkuvoxApiClient:
             """Return Unicode text in display order for bidirectional scripts."""
             return get_display(str(value or ""))
 
+        def draw_text(value: Any, size: int = 10) -> None:
+            """Draw a localized line with the correct paragraph alignment."""
+            display_value = safe_text(value)
+            document.setFont(font_name, size)
+            if is_rtl:
+                document.drawRightString(width - x, y, display_value)
+            else:
+                document.drawString(x, y, display_value)
+
         def line(label: str, value: Any) -> None:
             nonlocal y
             if y < 58:
                 document.showPage()
                 y = height - 52
-            document.setFont(font_name, 10)
-            document.drawString(x, y, f"{label}: {safe_text(value)}")
+            draw_text(f"{label}: {value}")
             y -= 16
 
-        document.setTitle("Akuvox SmartPlus SIP Accounts")
-        document.setFont(font_name, 16)
-        document.drawString(x, y, "Akuvox SmartPlus SIP Accounts")
+        document.setTitle(labels["title"])
+        draw_text(labels["title"], 16)
         y -= 24
-        document.setFont(font_name, 9)
-        document.drawString(x, y, "Confidential - do not share these credentials with anyone else.")
+        draw_text(labels["warning"], 9)
         y -= 24
-        line("SIP server", sip_accounts["server"])
-        line("Transport", sip_accounts["transport"])
-        line("Main account", sip_accounts["main"].get("account"))
-        line("Main password", sip_accounts["main"].get("password"))
+        line(labels["server"], sip_accounts["server"])
+        line(labels["transport"], sip_accounts["transport"])
+        line(labels["main_account"], sip_accounts["main"].get("account"))
+        line(labels["main_password"], sip_accounts["main"].get("password"))
         for index, device in enumerate(sip_accounts["devices"], start=1):
             y -= 6
-            line(f"Device {index}", device.get("name"))
-            line("  MAC", device.get("mac"))
-            line("  SIP account", device.get("account"))
-            line("  SIP password", device.get("password"))
+            line(labels["device"].format(index=index), device.get("name"))
+            line(labels["mac"], device.get("mac"))
+            line(labels["account"], device.get("account"))
+            line(labels["password"], device.get("password"))
         document.save()
         return output.getvalue()
 

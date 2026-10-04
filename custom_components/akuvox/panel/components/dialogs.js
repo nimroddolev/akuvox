@@ -4,6 +4,7 @@
 
 import { closeOnBackdrop } from "../utils/dom.js";
 import { icons } from "../utils/icons.js";
+import { t } from "../utils/i18n.js?v=20261003-hebrew-rtl";
 
 const titleCase = (title) => String(title).replace(/\b\w/g, (letter) => letter.toUpperCase());
 const isFailureTitle = (title) => /failed|could not|unavailable|required|invalid|error/i.test(title);
@@ -30,12 +31,12 @@ export const showNotice = (host, message, title = "Akuvox SmartPlus") => {
   const actions = documentRef.createElement("div");
   const closeButton = documentRef.createElement("button");
 
-  heading.textContent = titleCase(title);
-  text.textContent = message;
+  heading.textContent = titleCase(t(host, title));
+  text.textContent = t(host, message);
   actions.className = "modal-actions";
   closeButton.type = "button";
   closeButton.className = "modal-action";
-  closeButton.textContent = "OK";
+  closeButton.textContent = t(host, "OK");
   closeButton.addEventListener("click", () => dialog.close());
 
   actions.append(closeButton);
@@ -72,41 +73,41 @@ export const showPairingLinkNotice = (host, pairingLink) => new Promise((resolve
   const closeButton = documentRef.createElement("button");
   let copyResetTimer;
 
-  heading.textContent = "Pairing Link Created";
-  text.innerHTML = "Copy the link and provide it to the user of the remote Home Assistant instance.<br>This link will not be shown again once you close this dialogue.<br><br><span class=\"warning-icon\" aria-hidden=\"true\">!</span> Only share this link with someone you trust.";
+  heading.textContent = t(host, "Pairing Link Created");
+  text.innerHTML = t(host, "Copy the link and provide it to the user of the remote Home Assistant instance.<br>This link will not be shown again once you close this dialogue.<br><br><span class=\"warning-icon\" aria-hidden=\"true\">!</span> Only share this link with someone you trust.");
   linkRow.className = "pairing-link-row";
   linkInput.className = "pairing-link-value";
   linkInput.type = "text";
   linkInput.value = pairingLink;
   linkInput.readOnly = true;
-  linkInput.setAttribute("aria-label", "Pairing link");
+  linkInput.setAttribute("aria-label", t(host, "Pairing link"));
   actions.className = "modal-actions";
   copyButton.type = "button";
   copyButton.className = "pairing-link-copy";
-  copyButton.setAttribute("aria-label", "Copy pairing link");
-  copyButton.title = "Copy pairing link";
+  copyButton.setAttribute("aria-label", t(host, "Copy pairing link"));
+  copyButton.title = t(host, "Copy pairing link");
   copyButton.innerHTML = icons.copy;
   closeButton.type = "button";
   closeButton.className = "modal-action";
-  closeButton.textContent = "OK";
+  closeButton.textContent = t(host, "OK");
   copyButton.addEventListener("click", async () => {
     try {
       await documentRef.defaultView.navigator.clipboard.writeText(pairingLink);
       documentRef.defaultView.clearTimeout(copyResetTimer);
-      copyButton.innerHTML = `${icons.check}<span>Copied</span>`;
+      copyButton.innerHTML = `${icons.check}<span>${t(host, "Copied")}</span>`;
       copyButton.classList.add("is-copied");
-      copyButton.title = "Copied";
-      copyButton.setAttribute("aria-label", "Pairing link copied");
+      copyButton.title = t(host, "Copied");
+      copyButton.setAttribute("aria-label", t(host, "Pairing link copied"));
       linkInput.select();
       copyResetTimer = documentRef.defaultView.setTimeout(() => {
         copyButton.innerHTML = icons.copy;
         copyButton.classList.remove("is-copied");
-        copyButton.title = "Copy pairing link";
-        copyButton.setAttribute("aria-label", "Copy pairing link");
+        copyButton.title = t(host, "Copy pairing link");
+        copyButton.setAttribute("aria-label", t(host, "Copy pairing link"));
       }, 1000);
     } catch (_) {
       linkInput.select();
-      copyButton.title = "Copy manually from the selected link";
+      copyButton.title = t(host, "Copy manually from the selected link");
     }
   });
   closeButton.addEventListener("click", () => dialog.close());
@@ -148,17 +149,17 @@ export const confirmModal = (host, message, title, actionLabel) => {
     const actionButton = documentRef.createElement("button");
 
     let confirmed = false;
-    heading.textContent = title;
-    text.textContent = message;
+    heading.textContent = t(host, title);
+    text.textContent = t(host, message);
     actions.className = "modal-actions";
 
     cancelButton.type = "button";
     cancelButton.className = "modal-cancel";
-    cancelButton.textContent = "Cancel";
+    cancelButton.textContent = t(host, "Cancel");
 
     actionButton.type = "button";
     actionButton.className = "modal-action";
-    actionButton.textContent = actionLabel;
+    actionButton.textContent = t(host, actionLabel);
 
     cancelButton.addEventListener("click", () => dialog.close());
     actionButton.addEventListener("click", () => {
@@ -203,7 +204,7 @@ export const callWsWithBlocker = async (host, message) => {
   blocker.className = "page-blocker";
   blocker.setAttribute("aria-busy", "true");
   spinner.className = "page-blocker-spinner";
-  spinner.setAttribute("aria-label", "Saving");
+  spinner.setAttribute("aria-label", t(host, "Saving"));
   spinner.setAttribute("role", "status");
 
   blocker.append(spinner);

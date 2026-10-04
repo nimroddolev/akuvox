@@ -8,25 +8,26 @@ import { PANEL_TAG, TAB_HASHES, TAB_HASH_BY_ID, TABS } from "./utils/constants.j
 import { closeOnBackdrop, escapeHtml } from "./utils/dom.js";
 import { copyText } from "./utils/clipboard.js";
 import { settingsRenderSignature } from "./utils/settings-signature.js";
-import { getPanelStyles } from "./styles/index.js?v=20261001-sticky-settings-actions";
-import { showNotice, confirmModal, callWsWithBlocker } from "./components/dialogs.js";
-import { installCameraRelayActions } from "./components/camera-actions.js?v=20260928-camera-stream-loader-v4";
+import { getPanelStyles } from "./styles/index.js?v=20261004-centered-load-notice";
+import { showNotice, confirmModal, callWsWithBlocker } from "./components/dialogs.js?v=20261003-i18n-statuses";
+import { installCameraRelayActions } from "./components/camera-actions.js?v=20261004-tile-matched-unlock-action";
 import { closeKeyActionsMenu } from "./components/key-menu.js";
+import { isRtlLanguage, localizeElement } from "./utils/i18n.js?v=20261004-sip-pdf-hebrew";
 
-import { renderDevicesView, bindDevicesEvents } from "./views/devices-view.js?v=20261001-preview-click-opens-camera";
+import { renderDevicesView, bindDevicesEvents } from "./views/devices-view.js?v=20261004-still-refresh-rebuilt-v6";
 import {
   renderActivityView,
   bindActivityEvents,
   visibleActivityEvents,
-} from "./views/activity-view.js?v=20260926-mobile-filter-panel";
-import { renderCallsView, bindCallsEvents } from "./views/calls-view.js?v=20260926-mobile-filter-panel";
+} from "./views/activity-view.js?v=20261003-mobile-activity-2";
+import { renderCallsView, bindCallsEvents } from "./views/calls-view.js?v=20261003-hebrew-rtl-2";
 import {
   renderKeysView,
   bindKeysEvents,
   deleteSelectedKeys,
-} from "./views/keys-view.js?v=20260928-key-filter-controls-row";
-import { renderAutomationsView, bindAutomationsEvents } from "./views/automations-view.js?v=20261001-door-notification-management";
-import { renderSettingsView, bindSettingsEvents, updateActivityStorageProgress, updateRemoteShareConnectionStatus } from "./views/settings-view.js?v=20261001-settings-actions-visibility";
+} from "./views/keys-view.js?v=20261004-mobile-key-order";
+import { renderAutomationsView, bindAutomationsEvents } from "./views/automations-view.js?v=20261003-hebrew-rtl-2";
+import { renderSettingsView, bindSettingsEvents, updateActivityStorageProgress, updateRemoteShareConnectionStatus } from "./views/settings-view.js?v=20261004-localized-sip-pdf-user-locale";
 import { renderHelpView } from "./views/help-view.js";
 
 const ROW_VIEW_MODE_STORAGE_KEY = "akuvox-panel-row-view-mode";
@@ -254,7 +255,10 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
   }
 
   set hass(value) {
+    const previousLanguage = this._panelLanguage;
     this._hass = value;
+    this._panelLanguage = String(value?.locale?.language || "en");
+    this.setAttribute("dir", isRtlLanguage(this) ? "rtl" : "ltr");
     if (!this._hashListenerRegistered) {
       window.addEventListener("hashchange", this._onHashChange);
       this._hashListenerRegistered = true;
@@ -265,7 +269,7 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
       window.addEventListener("resize", this._onTabWindowResize);
       this._tabResizeListenerRegistered = true;
     }
-    this._requestLoad({ forceRender: true });
+    this._requestLoad({ forceRender: previousLanguage !== this._panelLanguage });
     if (!this._timer) {
       this._timer = window.setInterval(() => this._requestLoad(), 15000);
     }
@@ -983,7 +987,7 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
 
     this.shadowRoot.innerHTML = `
       ${getPanelStyles()}
-      <main>
+      <main dir="${isRtlLanguage(this) ? "rtl" : "ltr"}">
         <header>
           <button class="mobile-menu-toggle" type="button" data-mobile-menu aria-label="Open Home Assistant menu">
             <span></span><span></span><span></span>
@@ -1020,6 +1024,7 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
         </section>
       </main>
     `;
+    localizeElement(this, this.shadowRoot);
 
     // Tab navigation event listeners
     this.shadowRoot.querySelectorAll("[data-tab]").forEach((button) =>

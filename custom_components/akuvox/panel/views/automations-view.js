@@ -2,9 +2,10 @@
  * Door-event notification automations for the active Akuvox account.
  */
 
-import { confirmModal, showNotice } from "../components/dialogs.js";
+import { confirmModal, showNotice } from "../components/dialogs.js?v=20261003-i18n-3";
 import { escapeHtml } from "../utils/dom.js";
 import { icons } from "../utils/icons.js";
+import { t } from "../utils/i18n.js?v=20261003-hebrew-rtl-6";
 import {
   buildDoorNotificationAutomation,
   requestDoorNotificationAutomation,
@@ -151,9 +152,9 @@ const loadAutomations = async (host) => {
   }
 };
 
-const triggerLabels = (selection) => [
-  ...(selection.includeCalls ? ["Doorbell call"] : []),
-  ...(selection.includeOpened ? ["Door open / unlock"] : []),
+const triggerLabels = (host, selection) => [
+  ...(selection.includeCalls ? [t(host, "Doorbell call")] : []),
+  ...(selection.includeOpened ? [t(host, "Door open / unlock")] : []),
 ];
 
 /** Immediately reflect a saved automation while Home Assistant updates its registry. */
@@ -167,7 +168,7 @@ const upsertAutomation = (host, id, selection) => {
   );
 };
 
-const automationCard = (automation, doors) => {
+const automationCard = (host, automation, doors) => {
   const { selection } = automation;
   const isDisabled = selection.initialState === false;
   const doorNames = selection.doorIds.map((id) => doors.get(id) || "Unknown door");
@@ -179,8 +180,8 @@ const automationCard = (automation, doors) => {
       <div class="automation-row-title"><h3>${escapeHtml(name)}</h3><span class="automation-status${isDisabled ? " is-disabled" : ""}">${isDisabled ? "Disabled" : "Active"}</span></div>
       <p class="automation-doors">${escapeHtml(doorNames.join(", "))}</p>
       <div class="automation-metadata">
-        <span><b>Triggers</b>${escapeHtml(triggerLabels(selection).join(" · "))}</span>
-        <span><b>Notifications</b>${serviceCount} ${serviceCount === 1 ? "service" : "services"}</span>
+        <span><b>${t(host, "Triggers")}</b>${escapeHtml(triggerLabels(host, selection).join(" · "))}</span>
+        <span><b>${t(host, "Notifications")}</b>${escapeHtml(t(host, serviceCount === 1 ? "{count} service" : "{count} services", { count: serviceCount }))}</span>
       </div>
     </div>
     <div class="automation-row-actions">
@@ -201,12 +202,12 @@ export const renderAutomationsView = (host) => {
   const disabledCount = automations.length - activeCount;
   return `<div class="card automations-page">
     <div class="automations-heading">
-      <div><h2>Automations</h2><p>${activeCount} active${disabledCount ? ` · ${disabledCount} disabled` : ""} · ${automations.length} total</p><span>Create and manage notification automations for doors in this Akuvox account.</span></div>
+      <div><h2>${t(host, "Automations")}</h2><p>${escapeHtml(t(host, "{active} active · {disabled} disabled · {total} total", { active: activeCount, disabled: disabledCount, total: automations.length }))}</p><span>${t(host, "Create and manage notification automations for doors in this Akuvox account.")}</span></div>
       <button class="action" type="button" data-create-door-notification>${icons.plus}<span>Create automation</span></button>
     </div>
     ${host._doorNotificationAutomationsError ? `<p class="form-error">${escapeHtml(host._doorNotificationAutomationsError)}</p>` : ""}
     <div class="automation-list">
-      ${automations.map((automation) => automationCard(automation, doors)).join("") || `<section class="automation-empty">
+      ${automations.map((automation) => automationCard(host, automation, doors)).join("") || `<section class="automation-empty">
         <div class="automation-empty-icon" aria-hidden="true">${icons.automation}</div>
         <h3>No automations yet</h3>
         <p>Start with a notification for doorbell calls, door opens, or unlocks.</p>

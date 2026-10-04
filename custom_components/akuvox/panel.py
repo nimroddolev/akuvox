@@ -3,21 +3,23 @@ from __future__ import annotations
 
 import base64
 import asyncio
+import hmac
 import logging
 from pathlib import Path
 from typing import Any
 from datetime import datetime
+from urllib.parse import quote
 
 import aiohttp
 import voluptuous as vol
-from haffmpeg.tools import IMAGE_JPEG, ImageFrame
+from aiohttp import web
 from homeassistant.components import panel_custom, websocket_api
-from homeassistant.components.ffmpeg import get_ffmpeg_manager
+from homeassistant.components.camera import get_camera_from_entity_id
 from homeassistant.components.frontend import (
     add_extra_js_url,
     async_remove_panel,
 )
-from homeassistant.components.http import StaticPathConfig
+from homeassistant.components.http import HomeAssistantView, StaticPathConfig
 from homeassistant.components.logger.helpers import (
     DATA_LOGGER,
     LogPersistance,
@@ -65,7 +67,7 @@ from .sharing import (
 
 _PANEL_MODULE = "akuvox-panel.js"
 _PANEL_ICONSET = "akuvox-iconset.js"
-_PANEL_ASSET_VERSION = "20260928-camera-stream-loader-v151"
+_PANEL_ASSET_VERSION = "20261004-still-refresh-rebuilt-v154"
 DATA_CAMERA_PREVIEW_LOCK = f"{DOMAIN}_panel_camera_preview_lock"
 
 
@@ -114,6 +116,7 @@ async def async_refresh_panel(hass: HomeAssistant) -> None:
         )
         add_extra_js_url(hass, _panel_iconset_url())
         runtime[PANEL_RUNTIME_KEY] = True
+    _async_register_panel_camera_preview_view(hass)
 
     await panel_custom.async_register_panel(
         hass=hass,
@@ -177,6 +180,78 @@ def _client_for_entry(hass: HomeAssistant, entry_id: str) -> AkuvoxApiClient | N
     if isinstance(coordinator, AkuvoxDataUpdateCoordinator):
         return coordinator.client
     return None
+
+
+async def _async_capture_panel_camera_preview(
+    hass: HomeAssistant, entry_id: str, camera_name: str
+) -> bytes | None:
+    """Capture one new JPEG frame for a panel camera.
+
+    This deliberately bypasses the generic camera proxy, which is allowed to
+    reuse its previous still for a source URL that has not changed.
+    """
+    entity_id = er.async_get(hass).async_get_entity_id(
+        "camera", DOMAIN, f"{entry_id}:{camera_name}"
+    )
+    if not entity_id:
+        return None
+    # SmartPlus's cloud RTSP service permits one frame extraction at a time.
+    # This also makes captures deterministic when several panel cards refresh.
+    lock = hass.data.setdefault(DATA_CAMERA_PREVIEW_LOCK, asyncio.Lock())
+    async with lock:
+        try:
+            camera = get_camera_from_entity_id(hass, entity_id)
+            return await camera.async_camera_image()
+        except Exception as error:
+            LOGGER.debug("Unable to capture panel camera preview: %s", error)
+            return None
+
+
+class PanelCameraPreviewView(HomeAssistantView):
+    """Return a newly captured, authenticated camera still for the panel."""
+
+    url = "/api/akuvox/panel-camera-preview/{entry_id}/{camera_name}"
+    name = "api:akuvox:panel_camera_preview"
+    # Camera stills are rendered by <img>, which does not reliably attach the
+    # panel's authentication context. Authorize with the entity's existing
+    # Home Assistant camera token, exactly as camera_proxy does.
+    requires_auth = False
+
+    def __init__(self, hass: HomeAssistant) -> None:
+        self.hass = hass
+
+    async def get(
+        self, request: web.Request, entry_id: str, camera_name: str
+    ) -> web.Response:
+        entity_id = er.async_get(self.hass).async_get_entity_id(
+            "camera", DOMAIN, f"{entry_id}:{camera_name}"
+        )
+        state = self.hass.states.get(entity_id) if entity_id else None
+        expected_token = state.attributes.get("access_token") if state else None
+        supplied_token = request.query.get("token", "")
+        if not expected_token or not hmac.compare_digest(
+            str(expected_token), supplied_token
+        ):
+            return web.Response(status=403)
+        image = await _async_capture_panel_camera_preview(
+            self.hass, entry_id, camera_name
+        )
+        if not image:
+            return web.Response(status=404)
+        return web.Response(
+            body=image,
+            content_type="image/jpeg",
+            headers={"Cache-Control": "no-store, no-cache, max-age=0"},
+        )
+
+
+def _async_register_panel_camera_preview_view(hass: HomeAssistant) -> None:
+    """Register the panel's cache-free camera-still endpoint once."""
+    runtime = hass.data.setdefault(PANEL_RUNTIME_DOMAIN, {})
+    if runtime.get("_panel_camera_preview_view_registered"):
+        return
+    hass.http.register_view(PanelCameraPreviewView(hass))
+    runtime["_panel_camera_preview_view_registered"] = True
 
 
 @websocket_api.websocket_command({vol.Required("type"): "akuvox/panel_data"})
@@ -306,9 +381,18 @@ async def websocket_panel_data(
             )
             state = hass.states.get(entity_id) if entity_id else None
             token = state.attributes.get("access_token") if state else None
-            if entity_id and token:
+            if token:
+                # The initial image uses Home Assistant's standard proxy so
+                # the tile can render normally. Subsequent refreshes use the
+                # dedicated capture endpoint: it asks the camera for a new
+                # still and is never served from the proxy's stale-frame
+                # cache.
                 camera["preview_url"] = (
-                    f"/api/camera_proxy/{entity_id}?token={token}"
+                    f"/api/camera_proxy/{entity_id}?token={quote(str(token), safe='')}"
+                )
+                camera["refresh_url"] = (
+                    f"/api/akuvox/panel-camera-preview/{entry.entry_id}/"
+                    f"{quote(source_name, safe='')}?token={quote(str(token), safe='')}"
                 )
         for activity in panel_data["activity"]:
             source_name = str(activity.get("Location", "")).strip()
@@ -605,6 +689,7 @@ async def websocket_panel_settings(
         vol.Required("entry_id"): str,
         vol.Required("password"): str,
         vol.Required("password_confirmation"): str,
+        vol.Optional("language", default="en"): str,
     }
 )
 @websocket_api.async_response
@@ -624,7 +709,9 @@ async def websocket_panel_export_sip_accounts_pdf(
         connection.send_error(msg["id"], "invalid_password", "Passwords must match")
         return
     try:
-        result = await client.async_export_sip_accounts_pdf(msg["password"])
+        result = await client.async_export_sip_accounts_pdf(
+            msg["password"], msg["language"]
+        )
     except AkuvoxApiClientError as error:
         connection.send_error(msg["id"], "export_failed", str(error))
         return
@@ -933,26 +1020,9 @@ async def websocket_panel_camera_preview(
     """Capture a still from an authorised panel camera without exposing its URL."""
     if not _require_admin(connection, msg):
         return
-    client = _client_for_entry(hass, msg["entry_id"])
-    stream_url = client.get_stream_url(msg["camera_name"]) if client else None
-    if not stream_url:
-        connection.send_result(msg["id"], {"image": None})
-        return
-    # SmartPlus's cloud RTSP service permits one frame extraction at a time.
-    # Share this lock across every open panel tab so concurrent FFmpeg readers
-    # cannot cause all previews to time out.
-    lock = hass.data.setdefault(DATA_CAMERA_PREVIEW_LOCK, asyncio.Lock())
-    async with lock:
-        try:
-            ffmpeg = ImageFrame(get_ffmpeg_manager(hass).binary)
-            image = await ffmpeg.get_image(
-                f"-rtsp_transport udp -i {stream_url}",
-                output_format=IMAGE_JPEG,
-                timeout=8,
-            )
-        except Exception as error:
-            LOGGER.debug("Unable to capture panel camera preview: %s", error)
-            image = None
+    image = await _async_capture_panel_camera_preview(
+        hass, msg["entry_id"], msg["camera_name"]
+    )
     connection.send_result(
         msg["id"],
         {"image": base64.b64encode(image).decode("ascii") if image else None},

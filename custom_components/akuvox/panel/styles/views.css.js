@@ -589,7 +589,7 @@ export const viewStyles = `
     }
     .mobile-key-primary-controls {
       display: grid;
-      grid-template-columns: max-content max-content minmax(0, 1fr);
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       align-items: stretch;
       gap: 8px;
       margin: 14px 0 16px;
@@ -1316,4 +1316,15 @@ export const viewStyles = `
     outline: 2px solid #38bdf8;
     outline-offset: 2px;
   }
+  :host([dir="rtl"]) .activity-image-cell,
+  :host([dir="rtl"]) .activity-detail,
+  :host([dir="rtl"]) .call-detail,
+  :host([dir="rtl"]) .key-detail,
+  :host([dir="rtl"]) dialog .sip-warning { text-align: right; }
+  :host([dir="rtl"]) .activity-image-nav.previous { left: auto; right: 12px; }
+  :host([dir="rtl"]) .activity-image-nav.next { right: auto; left: 12px; }
+  :host([dir="rtl"]) .automation-card { border-left: 0; border-right: 4px solid var(--aqua); }
+  :host([dir="rtl"]) .automation-card-icon { margin-left: 0; margin-right: 8px; }
+  :host([dir="rtl"]) .key-status-badge { margin-left: 0; margin-right: 4px; }
+  :host([dir="rtl"]) .key-filter-toolbar { padding-left: 0; padding-right: 20px; }
 `;

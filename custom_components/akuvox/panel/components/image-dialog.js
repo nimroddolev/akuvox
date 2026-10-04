@@ -4,6 +4,7 @@
 
 import { closeOnBackdrop } from "../utils/dom.js";
 import { showNotice } from "./dialogs.js";
+import { localizeElement, t } from "../utils/i18n.js?v=20261003-hebrew-rtl";
 
 /**
  * Open the activity image carousel / lightbox dialog with previous/next navigation.
@@ -33,20 +34,20 @@ export const showActivityImageDialog = (
   const actions = documentRef.createElement("div");
   const closeButton = documentRef.createElement("button");
 
-  heading.textContent = "Activity image";
+  heading.textContent = t(host, "Activity image");
   details.className = "activity-image-details";
   previous.type = next.type = "button";
   previous.className = "activity-image-nav previous";
   next.className = "activity-image-nav next";
-  previous.setAttribute("aria-label", "Previous activity image");
-  next.setAttribute("aria-label", "Next activity image");
+  previous.setAttribute("aria-label", t(host, "Previous activity image"));
+  next.setAttribute("aria-label", t(host, "Next activity image"));
   previous.textContent = "‹";
   next.textContent = "›";
 
   actions.className = "modal-actions";
   closeButton.type = "button";
   closeButton.className = "modal-action";
-  closeButton.textContent = "Close";
+  closeButton.textContent = t(host, "Close");
 
   const renderEvent = async () => {
     if (index < 0) return;
@@ -93,6 +94,7 @@ export const showActivityImageDialog = (
   );
 
   host.shadowRoot.append(dialog);
+  localizeElement(host, dialog);
   dialog.showModal();
   closeButton.focus();
 
@@ -134,7 +136,7 @@ export const showCallImageDialog = async (host, callId) => {
     picture.src = `data:${image.content_type};base64,${image.data}`;
     picture.alt = "SmartPlus call image";
     close.className = "modal-action";
-    close.textContent = "Close";
+    close.textContent = t(host, "Close");
     close.addEventListener("click", () => dialog.close());
 
     dialog.append(picture, close);
@@ -151,6 +153,7 @@ export const showCallImageDialog = async (host, callId) => {
     );
 
     host.shadowRoot.append(dialog);
+    localizeElement(host, dialog);
     dialog.showModal();
   } catch (_) {
     showNotice(
