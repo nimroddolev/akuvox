@@ -75,11 +75,15 @@ Every detected door activity also fires an `akuvox_door_update` event. The paylo
 | Field | Meaning |
 | --- | --- |
 | `device_id` | Home Assistant device that corresponds to the door. |
-| `Location` | The door's Home Assistant display name. |
-| `CaptureType` | SmartPlus activity type, such as `Call` or `Face Unlock`. |
-| `Initiator` | The person or visitor associated with the activity. |
-| `RelayName` | Relay involved in an unlock, when reported. |
-| `PicUrl` | Event image URL, when available. |
+| `location` | The door's Home Assistant display name. |
+| `capture_type` | SmartPlus activity type, such as `Call` or `Face Unlock`. |
+| `initiator` | The person or visitor associated with the activity. |
+| `relay_name` | Relay involved in an unlock, when reported. |
+| `pic_url` | Event image URL, when available. |
+
+New automations should use these snake-case fields. The original `Location`,
+`CaptureType`, `Initiator`, `RelayName`, and `PicUrl` aliases are also included
+for compatibility with existing automations.
 
 For a no-code automation, use the **Door opened** device trigger exposed on each Akuvox device. For more control, trigger directly on the event:
 
@@ -89,13 +93,13 @@ triggers:
   - trigger: event
     event_type: akuvox_door_update
     event_data:
-      Location: Front Door
-      CaptureType: Call
+      location: Front Door
+      capture_type: Call
 actions:
   - action: notify.notify
     data:
       title: Someone is at the front door
-      message: "{{ trigger.event.data.Initiator | default('Visitor', true) }} rang the bell."
+      message: "{{ trigger.event.data.initiator | default('Visitor', true) }} rang the bell."
 mode: single
 ```
 

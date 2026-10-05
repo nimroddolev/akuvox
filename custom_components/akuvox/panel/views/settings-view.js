@@ -78,9 +78,9 @@ const familyMembers = (host) => [...new Set(
 const notificationAction = (service, withImage) => ({
   action: service,
   data: {
-    title: "{{ trigger.event.data.Location }} {% if trigger.event.data.CaptureType == 'Call' %}doorbell{% else %}opened{% endif %}",
-    message: "{{ 'Someone is calling from the ' ~ trigger.event.data.Location ~ ' door' if trigger.event.data.CaptureType == 'Call' else 'The ' ~ trigger.event.data.Location ~ ' door was opened by ' ~ (trigger.event.data.Initiator | default('Unknown', true)) }}",
-    ...(withImage ? { data: { image: "{{ trigger.event.data.PicUrl }}" } } : {}),
+    title: "{{ trigger.event.data.location }} {% if trigger.event.data.capture_type == 'Call' %}doorbell{% else %}opened{% endif %}",
+    message: "{{ 'Someone is calling from the ' ~ trigger.event.data.location ~ ' door' if trigger.event.data.capture_type == 'Call' else 'The ' ~ trigger.event.data.location ~ ' door was opened by ' ~ (trigger.event.data.initiator | default('Unknown', true)) }}",
+    ...(withImage ? { data: { image: "{{ trigger.event.data.pic_url }}" } } : {}),
   },
 });
 
@@ -140,11 +140,11 @@ export const buildDoorNotificationAutomation = ({ name, doors, services, include
   const callerConditions = [
     ...(allowedCallers.length ? [{
       condition: "template",
-      value_template: `{{ (trigger.event.data.Initiator | default('', true)) in ${JSON.stringify(allowedCallers)} }}`,
+      value_template: `{{ (trigger.event.data.initiator | default('', true)) in ${JSON.stringify(allowedCallers)} }}`,
     }] : []),
     ...(excludedCallers.length ? [{
       condition: "template",
-      value_template: `{{ (trigger.event.data.Initiator | default('', true)) not in ${JSON.stringify(excludedCallers)} }}`,
+      value_template: `{{ (trigger.event.data.initiator | default('', true)) not in ${JSON.stringify(excludedCallers)} }}`,
     }] : []),
   ];
   return {
@@ -160,13 +160,13 @@ export const buildDoorNotificationAutomation = ({ name, doors, services, include
     })),
     conditions: [{
       condition: "template",
-      value_template: `{{ trigger.event.data.CaptureType in ${JSON.stringify(captureTypes)} }}`,
+      value_template: `{{ trigger.event.data.capture_type in ${JSON.stringify(captureTypes)} }}`,
     }, ...callerConditions],
     actions: [{
       choose: [{
         conditions: [{
           condition: "template",
-          value_template: "{{ trigger.event.data.PicUrl | default('', true) != '' }}",
+          value_template: "{{ trigger.event.data.pic_url | default('', true) != '' }}",
         }],
         sequence: services.map((service) => notificationAction(service, true)),
       }],

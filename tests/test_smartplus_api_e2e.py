@@ -403,9 +403,14 @@ class TestSmartPlusApiE2E(unittest.IsolatedAsyncioTestCase):
             for call in self.hass.bus.async_fire.call_args_list
             if call.args[0] == "akuvox_door_update"
         )
+        self.assertEqual(door_event["location"], "Lobby")
+        self.assertEqual(door_event["initiator"], "Visitor")
+        self.assertEqual(door_event["capture_type"], "Face Unlock")
+        self.assertEqual(door_event["pic_url"], "https://images.example/event.jpg")
+        self.assertEqual(door_event["relay_name"], "Relay1")
         self.assertEqual(door_event["Location"], "Lobby")
-        self.assertEqual(door_event["Initiator"], "Visitor")
         self.assertEqual(door_event["CaptureType"], "Face Unlock")
+        self.assertEqual(door_event["Initiator"], "Visitor")
         self.assertEqual(door_event["PicUrl"], "https://images.example/event.jpg")
         self.assertEqual(door_event["RelayName"], "Relay1")
         panel_updates = [
@@ -453,6 +458,7 @@ class TestSmartPlusApiE2E(unittest.IsolatedAsyncioTestCase):
 
         await client.async_retrieve_personal_door_log()
 
+        self.assertEqual(received_events[0]["location"], "כניסה ראשית")
         self.assertEqual(received_events[0]["Location"], "כניסה ראשית")
 
     async def test_door_event_uses_the_home_assistant_device_name(self) -> None:
@@ -487,6 +493,11 @@ class TestSmartPlusApiE2E(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             event_data,
             {
+                "location": "Main entrance",
+                "capture_type": "Unlock on SmartPlus",
+                "initiator": "Resident",
+                "pic_url": "",
+                "relay_name": "",
                 "Location": "Main entrance",
                 "CaptureType": "Unlock on SmartPlus",
                 "Initiator": "Resident",

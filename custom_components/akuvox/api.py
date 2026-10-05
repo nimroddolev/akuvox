@@ -246,11 +246,20 @@ class AkuvoxApiClient:
                 display_name = device.name_by_user or device.name or door_name
 
         source_data = source_data or {}
+        normalized_capture_type = self._event_capture_type(capture_type)
+        pic_url = str(source_data.get("PicUrl", ""))
         event_data = {
+            "location": display_name,
+            "capture_type": normalized_capture_type,
+            "initiator": initiator,
+            "pic_url": pic_url,
+            "relay_name": relay_name,
+            # Retain the original event schema so existing automations continue
+            # to work while new automations use the snake-case field names.
             "Location": display_name,
-            "CaptureType": self._event_capture_type(capture_type),
+            "CaptureType": normalized_capture_type,
             "Initiator": initiator,
-            "PicUrl": str(source_data.get("PicUrl", "")),
+            "PicUrl": pic_url,
             "RelayName": relay_name,
         }
         # Device automations filter this event by the Home Assistant device ID.

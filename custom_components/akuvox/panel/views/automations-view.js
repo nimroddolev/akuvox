@@ -62,15 +62,15 @@ export const asDoorNotification = (config, doors) => {
   for (const condition of conditions) {
     if (condition?.condition !== "template") return null;
     const template = condition.value_template;
-    const captures = readJsonArray(template, /CaptureType\s+in\s+(\[[\s\S]*?\])/);
+    const captures = readJsonArray(template, /(?:capture_type|CaptureType)\s+in\s+(\[[\s\S]*?\])/);
     if (captures) {
       if (captureTypes) return null;
       captureTypes = captures;
       continue;
     }
-    const callers = readJsonArray(template, /Initiator[\s\S]*?\s+(?:not\s+)?in\s+(\[[\s\S]*?\])/);
+    const callers = readJsonArray(template, /(?:initiator|Initiator)[\s\S]*?\s+(?:not\s+)?in\s+(\[[\s\S]*?\])/);
     if (!callers) return null;
-    const operator = /Initiator[\s\S]*?\s+not\s+in\s+/.test(template) ? "is_not" : "is";
+    const operator = /(?:initiator|Initiator)[\s\S]*?\s+not\s+in\s+/.test(template) ? "is_not" : "is";
     callerRules.push(...callers.map((name) => ({ name, operator })));
   }
   const includeOpened = captureTypesForOpened.every((type) => captureTypes?.includes(type));
@@ -89,7 +89,7 @@ export const asDoorNotification = (config, doors) => {
   if (!services || !imageServices || services.join("\0") !== imageServices.join("\0") ||
       !Array.isArray(imageConditions) || imageConditions.length !== 1 ||
       imageConditions[0]?.condition !== "template" ||
-      !/trigger\.event\.data\.PicUrl/.test(imageConditions[0]?.value_template || "") ||
+      !/trigger\.event\.data\.(?:pic_url|PicUrl)/.test(imageConditions[0]?.value_template || "") ||
       (config.mode !== undefined && config.mode !== "parallel") ||
       (config.max !== undefined && config.max !== 10) || !String(config.alias || "").trim()) return null;
 

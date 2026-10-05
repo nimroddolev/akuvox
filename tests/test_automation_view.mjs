@@ -33,6 +33,42 @@ test("recognizes a wizard-compatible disabled notification automation", () => {
   });
 });
 
+test("builds notification automations with snake-case door-event fields", () => {
+  const config = automation();
+  const templates = [
+    ...config.conditions.map((condition) => condition.value_template),
+    config.actions[0].choose[0].conditions[0].value_template,
+    ...config.actions[0].choose[0].sequence.flatMap((action) => [
+      action.data.title,
+      action.data.message,
+      action.data.data.image,
+    ]),
+  ].join("\n");
+
+  for (const field of ["location", "capture_type", "initiator", "pic_url"]) {
+    assert.match(templates, new RegExp(`trigger\\.event\\.data\\.${field}`));
+  }
+  assert.doesNotMatch(templates, /trigger\.event\.data\.(Location|CaptureType|Initiator|PicUrl)/);
+});
+
+test("recognizes notification automations using legacy door-event fields", () => {
+  const legacyConfig = JSON.parse(JSON.stringify(automation())
+    .replaceAll("capture_type", "CaptureType")
+    .replaceAll("initiator", "Initiator")
+    .replaceAll("pic_url", "PicUrl"));
+
+  assert.deepEqual(asDoorNotification(legacyConfig, doors), {
+    name: "Front door notification",
+    doorIds: ["door-1"],
+    includeOpened: true,
+    includeCalls: true,
+    callerRules: [{ name: "Alex", operator: "is" }],
+    callerOperator: "is",
+    services: ["notify.mobile_app_phone"],
+    initialState: undefined,
+  });
+});
+
 test("does not list automations with behavior the wizard cannot preserve", () => {
   const config = automation();
   config.conditions.push({ condition: "state", entity_id: "input_boolean.awake", state: "on" });
