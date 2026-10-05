@@ -213,6 +213,23 @@ export const installCameraRelayActions = (host, relays, orientation = "none", at
       ["line-height", relayStyle.lineHeight],
       ["border-radius", relayStyle.borderRadius],
     ].forEach(([property, value]) => snapshotButton.style.setProperty(property, value, "important"));
+
+    // Keep the native download-snapshot control and every injected unlock
+    // control aligned, regardless of translated label length or icon size.
+    const actionWidth = Math.ceil(Math.max(
+      snapshotButton.getBoundingClientRect().width,
+      ...[...group.querySelectorAll("button")].map((button) => button.getBoundingClientRect().width),
+    ));
+    const width = `${actionWidth}px`;
+    snapshotButton.style.setProperty("width", width, "important");
+    snapshotButton.style.setProperty("min-width", width, "important");
+    nativeSnapshotAction.style.setProperty("width", width, "important");
+    nativeSnapshotAction.style.setProperty("min-width", width, "important");
+    group.querySelectorAll("button").forEach((button) => {
+      button.style.width = width;
+      button.style.minWidth = width;
+      button.style.flex = `0 0 ${width}`;
+    });
   }
 
 };
