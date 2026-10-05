@@ -1,5 +1,9 @@
 /** German translations for the custom panel. Keys are the English source strings. */
 export default {
+  "Enable": "Aktivieren",
+  "Disable": "Deaktivieren",
+  "Automation actions": "Automationsaktionen",
+  "Could not update automation state.": "Der Automatisierungsstatus konnte nicht aktualisiert werden.",
   "Link Copied": "Link kopiert",
   "This copies a credential-bearing RTSP link. Continue?": "Dadurch wird ein RTSP-Link mit Zugangsdaten kopiert. Fortfahren?",
   "Copy link": "Link kopieren",

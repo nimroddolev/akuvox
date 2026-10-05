@@ -1,5 +1,9 @@
 /** English source strings for the custom panel. Keys mirror every supported locale. */
 export default {
+  "Enable": "Enable",
+  "Disable": "Disable",
+  "Automation actions": "Automation actions",
+  "Could not update automation state.": "Could not update automation state.",
   "Link Copied": "Link Copied",
   "This copies a credential-bearing RTSP link. Continue?": "This copies a credential-bearing RTSP link. Continue?",
   "Copy link": "Copy link",

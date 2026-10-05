@@ -5,7 +5,7 @@
 import { confirmModal, showNotice } from "../components/dialogs.js?v=20261003-i18n-3";
 import { escapeHtml } from "../utils/dom.js";
 import { icons } from "../utils/icons.js";
-import { t } from "../utils/i18n.js?v=20261003-hebrew-rtl-6";
+import { t } from "../utils/i18n.js?v=20261005-automation-actions-menu";
 import {
   buildDoorNotificationAutomation,
   requestDoorNotificationAutomation,
@@ -140,7 +140,7 @@ const loadAutomations = async (host) => {
         if (selection && isDisabled(statesByEntityId.get(entityId))) {
           selection.initialState = false;
         }
-        return { id, selection };
+        return { id, entityId, selection };
       })
       .filter((automation) => automation.id && automation.selection)
       .sort((left, right) => left.selection.name.localeCompare(right.selection.name));
@@ -159,10 +159,13 @@ const triggerLabels = (host, selection) => [
 
 /** Immediately reflect a saved automation while Home Assistant updates its registry. */
 const upsertAutomation = (host, id, selection) => {
+  const existing = Array.isArray(host._doorNotificationAutomations)
+    ? host._doorNotificationAutomations.find((automation) => automation.id === id)
+    : undefined;
   const automations = Array.isArray(host._doorNotificationAutomations)
     ? host._doorNotificationAutomations.filter((automation) => automation.id !== id)
     : [];
-  automations.push({ id, selection });
+  automations.push({ id, entityId: existing?.entityId, selection });
   host._doorNotificationAutomations = automations.sort(
     (left, right) => left.selection.name.localeCompare(right.selection.name)
   );
@@ -185,11 +188,69 @@ const automationCard = (host, automation, doors) => {
       </div>
     </div>
     <div class="automation-row-actions">
-      <button type="button" class="settings-inline-action automation-icon-action" data-edit-automation="${escapeHtml(automation.id)}" aria-label="Edit ${escapeHtml(name)}">${icons.edit}<span class="sr-only">Edit</span></button>
-      <a class="settings-native-link automation-icon-action" href="/config/automation/edit/${encodeURIComponent(automation.id)}" aria-label="Open ${escapeHtml(name)} in the Home Assistant editor">${icons.externalLink}<span class="sr-only">Open in Home Assistant</span></a>
-      <button type="button" class="settings-inline-action automation-delete automation-icon-action" data-delete-automation="${escapeHtml(automation.id)}" aria-label="Delete ${escapeHtml(name)}">${icons.trash}<span class="sr-only">Delete</span></button>
+      <button type="button" class="settings-inline-action automation-menu-trigger" data-automation-menu="${escapeHtml(automation.id)}" aria-label="${escapeHtml(t(host, "Automation actions"))}" aria-haspopup="menu">⋯</button>
     </div>
   </article>`;
+};
+
+const closeAutomationActionsMenu = (host) => {
+  host._automationActionsMenu?.remove();
+  host._automationActionsMenu = undefined;
+  host._automationActionsMenuAbort?.abort();
+  host._automationActionsMenuAbort = undefined;
+};
+
+const showAutomationActionsMenu = (host, trigger, event, automation, { onEdit, onToggle, onDelete }) => {
+  event.stopPropagation();
+  if (host._automationActionsMenu?.dataset.automationId === automation.id) {
+    closeAutomationActionsMenu(host);
+    return;
+  }
+  closeAutomationActionsMenu(host);
+
+  const documentRef = host.shadowRoot.ownerDocument;
+  const menu = documentRef.createElement("div");
+  const bounds = trigger.getBoundingClientRect();
+  const disabled = automation.selection.initialState === false;
+  menu.dataset.automationId = automation.id;
+  menu.setAttribute("role", "menu");
+  menu.setAttribute("aria-label", t(host, "Automation actions"));
+  menu.style.cssText = `position:fixed;z-index:10001;top:${bounds.bottom + 8}px;left:12px;width:max-content;min-width:190px;max-width:calc(100vw - 24px);padding:8px;border:1px solid var(--divider-color,#d1d5db);border-radius:14px;color:var(--primary-text-color,#111);background:var(--card-background-color,#fff);box-shadow:0 14px 32px #0003;direction:${host.getAttribute("dir") === "rtl" ? "rtl" : "ltr"};`;
+  menu.innerHTML = `
+    <button type="button" role="menuitem" data-menu-edit>${icons.edit}<span>${escapeHtml(t(host, "Edit"))}</span></button>
+    <a role="menuitem" data-menu-open href="/config/automation/edit/${encodeURIComponent(automation.id)}">${icons.externalLink}<span>${escapeHtml(t(host, "Open in Home Assistant"))}</span></a>
+    <button type="button" role="menuitem" data-menu-toggle><i class="automation-menu-state-dot ${disabled ? "enable" : "disable"}" aria-hidden="true"></i><span>${escapeHtml(t(host, disabled ? "Enable" : "Disable"))}</span></button>
+    <button type="button" role="menuitem" data-menu-delete class="delete-action">${icons.trash}<span>${escapeHtml(t(host, "Delete"))}</span></button>
+  `;
+  menu.querySelectorAll("button, a").forEach((item) => {
+    item.style.cssText = "display:flex;align-items:center;gap:10px;width:100%;box-sizing:border-box;border:0;border-radius:9px;padding:11px 12px;color:inherit;background:transparent;font:600 14px/1.3 inherit;text-align:start;text-decoration:none;white-space:nowrap;cursor:pointer;";
+    item.addEventListener("mouseenter", () => { item.style.background = item.classList.contains("delete-action") ? "#dc2626" : "#55bfe6"; if (item.classList.contains("delete-action")) item.style.color = "#fff"; });
+    item.addEventListener("mouseleave", () => { item.style.background = "transparent"; if (item.classList.contains("delete-action")) item.style.color = "var(--error-color,#dc2626)"; });
+  });
+  menu.querySelectorAll("svg").forEach((icon) => { icon.style.cssText = "width:19px;height:19px;flex:0 0 auto;fill:none;stroke:currentColor;stroke-width:2;"; });
+  menu.querySelectorAll(".automation-menu-state-dot").forEach((dot) => {
+    dot.style.cssText = `width:12px;height:12px;flex:0 0 12px;border-radius:50%;background:${dot.classList.contains("enable") ? "#16803c" : "#dc2626"};`;
+  });
+  menu.querySelector(".delete-action").style.color = "var(--error-color,#dc2626)";
+  menu.querySelector("[data-menu-edit]").addEventListener("click", () => { closeAutomationActionsMenu(host); onEdit(); });
+  menu.querySelector("[data-menu-toggle]").addEventListener("click", () => { closeAutomationActionsMenu(host); void onToggle(); });
+  menu.querySelector("[data-menu-delete]").addEventListener("click", () => { closeAutomationActionsMenu(host); void onDelete(); });
+  menu.querySelector("[data-menu-open]").addEventListener("click", () => closeAutomationActionsMenu(host));
+
+  const abort = new AbortController();
+  // Defer outside-click dismissal until the opening click has fully settled.
+  // This avoids treating the trigger's originating pointer sequence as an
+  // outside interaction in browsers that dispatch it late.
+  window.setTimeout(() => documentRef.addEventListener("pointerdown", (outsideEvent) => {
+    const path = outsideEvent.composedPath();
+    if (!path.includes(menu) && !path.includes(trigger)) closeAutomationActionsMenu(host);
+  }, { capture: true, signal: abort.signal }), 0);
+  documentRef.addEventListener("keydown", (keyEvent) => { if (keyEvent.key === "Escape") closeAutomationActionsMenu(host); }, { signal: abort.signal });
+  host._automationActionsMenu = menu;
+  host._automationActionsMenuAbort = abort;
+  documentRef.body.append(menu);
+  const menuWidth = menu.getBoundingClientRect().width;
+  menu.style.left = `${Math.max(12, Math.min(bounds.right - menuWidth, window.innerWidth - menuWidth - 12))}px`;
 };
 
 export const renderAutomationsView = (host) => {
@@ -227,6 +288,46 @@ export const bindAutomationsEvents = (host) => {
     void refresh();
     return;
   }
+  const editAutomation = async (automation) => {
+    const selection = await requestDoorNotificationAutomation(host, automation.selection);
+    if (!selection) return;
+    try {
+      await host._hass.callApi("POST", `config/automation/config/${encodeURIComponent(automation.id)}`,
+        buildDoorNotificationAutomation(selection));
+      upsertAutomation(host, automation.id, selection);
+      host._render();
+      showDoorNotificationCreated(host, automation.id, true);
+    } catch (error) {
+      showNotice(host, error?.message || "Could not update the notification automation.", "Automation update failed");
+    }
+  };
+  const toggleAutomation = async (automation) => {
+    const disabled = automation.selection.initialState === false;
+    try {
+      await host._hass.callService("automation", disabled ? "turn_on" : "turn_off", {
+        entity_id: automation.entityId,
+      });
+      automation.selection.initialState = disabled ? undefined : false;
+      host._render();
+    } catch (error) {
+      showNotice(host, error?.message || "Could not update automation state.", "Automation update failed");
+    }
+  };
+  const deleteAutomation = async (automation) => {
+    if (!await confirmModal(
+      host,
+      "Delete automation?",
+      `Delete “${automation.selection.name || "this automation"}” from Home Assistant?`,
+      "Delete"
+    )) return;
+    try {
+      await host._hass.callApi("DELETE", `config/automation/config/${encodeURIComponent(automation.id)}`);
+      await refresh();
+      showNotice(host, "The automation was deleted.");
+    } catch (error) {
+      showNotice(host, error?.message || "Could not delete the notification automation.", "Automation deletion failed");
+    }
+  };
   host.shadowRoot.querySelectorAll("[data-create-door-notification]").forEach((button) => button.addEventListener("click", async () => {
     const selection = await requestDoorNotificationAutomation(host);
     if (!selection) return;
@@ -244,32 +345,19 @@ export const bindAutomationsEvents = (host) => {
   host.shadowRoot.querySelectorAll("[data-edit-automation]").forEach((button) => button.addEventListener("click", async () => {
     const automation = host._doorNotificationAutomations.find((item) => item.id === button.dataset.editAutomation);
     if (!automation) return;
-    const selection = await requestDoorNotificationAutomation(host, automation.selection);
-    if (!selection) return;
-    try {
-      await host._hass.callApi("POST", `config/automation/config/${encodeURIComponent(automation.id)}`,
-        buildDoorNotificationAutomation(selection));
-      upsertAutomation(host, automation.id, selection);
-      host._render();
-      showDoorNotificationCreated(host, automation.id, true);
-    } catch (error) {
-      showNotice(host, error?.message || "Could not update the notification automation.", "Automation update failed");
-    }
+    await editAutomation(automation);
   }));
   host.shadowRoot.querySelectorAll("[data-delete-automation]").forEach((button) => button.addEventListener("click", async () => {
     const automation = host._doorNotificationAutomations.find((item) => item.id === button.dataset.deleteAutomation);
-    if (!automation || !await confirmModal(
-      host,
-      "Delete automation?",
-      `Delete “${automation.selection.name || "this automation"}” from Home Assistant?`,
-      "Delete"
-    )) return;
-    try {
-      await host._hass.callApi("DELETE", `config/automation/config/${encodeURIComponent(automation.id)}`);
-      await refresh();
-      showNotice(host, "The automation was deleted.");
-    } catch (error) {
-      showNotice(host, error?.message || "Could not delete the notification automation.", "Automation deletion failed");
-    }
+    if (automation) await deleteAutomation(automation);
+  }));
+  host.shadowRoot.querySelectorAll("[data-automation-menu]").forEach((button) => button.addEventListener("click", (event) => {
+    const automation = host._doorNotificationAutomations.find((item) => item.id === button.dataset.automationMenu);
+    if (!automation) return;
+    showAutomationActionsMenu(host, button, event, automation, {
+      onEdit: () => editAutomation(automation),
+      onToggle: () => toggleAutomation(automation),
+      onDelete: () => deleteAutomation(automation),
+    });
   }));
 };

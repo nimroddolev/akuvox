@@ -1,5 +1,9 @@
 /** Hebrew translations for the custom panel. Keys are the English source strings. */
 export default {
+  "Enable": "הפעלה",
+  "Disable": "השבתה",
+  "Automation actions": "פעולות אוטומציה",
+  "Could not update automation state.": "לא ניתן היה לעדכן את מצב האוטומציה.",
   "Link Copied": "קישור הועתק",
   "This copies a credential-bearing RTSP link. Continue?": "פעולה זו מעתיקה קישור RTSP הכולל פרטי גישה. להמשיך?",
   "Copy link": "העתקת קישור",

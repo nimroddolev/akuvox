@@ -1,7 +1,7 @@
 /** Lightweight panel localization with English fallback. */
-import english from "../translations/en.js?v=20261004-rtsp-copy-dialog";
-import german from "../translations/de.js?v=20261004-rtsp-copy-dialog";
-import hebrew from "../translations/he.js?v=20261004-rtsp-copy-dialog";
+import english from "../translations/en.js?v=20261005-automation-actions-menu";
+import german from "../translations/de.js?v=20261005-automation-actions-menu";
+import hebrew from "../translations/he.js?v=20261005-automation-actions-menu";
 
 const catalogs = { en: english, de: german, he: hebrew };
 const translatedAttributes = ["aria-label", "title", "placeholder", "alt"];
