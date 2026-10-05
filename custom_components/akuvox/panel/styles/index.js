@@ -2,10 +2,10 @@
  * Aggregates all panel CSS modules.
  */
 
-import { mainStyles } from "./main.css.js?v=20261004-rtl-share-table";
-import { tableStyles } from "./tables.css.js?v=20261004-rtl-table-headings";
-import { dialogStyles } from "./dialogs.css.js?v=20261004-centered-automation-footer";
-import { viewStyles } from "./views.css.js?v=20261003-mobile-toolbar-fix-3";
+import { mainStyles } from "./main.css.js?v=20261005-storage-meter-clear";
+import { tableStyles } from "./tables.css.js?v=20261005-dynamic-view-toggle";
+import { dialogStyles } from "./dialogs.css.js?v=20261005-key-optional-visible";
+import { viewStyles } from "./views.css.js?v=20261005-dynamic-key-view-toggle";
 
 export const getPanelStyles = () => `
   <style>

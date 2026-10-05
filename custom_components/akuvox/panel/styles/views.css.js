@@ -293,8 +293,8 @@ export const viewStyles = `
   .add-key:hover { background: #00577f; }
 
   .key-heading-actions .view-mode-toggle {
-    flex-basis: 154px;
-    width: 154px;
+    flex-basis: auto;
+    width: fit-content;
     min-height: 38px;
     padding: 3px;
     border: 1px solid var(--divider-color, #8c99a3);
@@ -705,6 +705,8 @@ export const viewStyles = `
   .automation-metadata span { display: flex; gap: 5px; }
   .automation-metadata b { color: var(--primary-text-color); font-weight: 650; }
   .automation-row-actions { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+  .automation-menu-trigger { display: inline-grid; box-sizing: border-box; place-items: center; width: 36px; min-width: 36px; height: 36px; min-height: 36px; padding: 0; border: 0; border-radius: 8px; color: var(--panel-muted); background: transparent; font-size: 23px; font-weight: 700; line-height: 1; }
+  .automation-menu-trigger:hover { color: var(--panel-text); background: #efeded; }
   .automation-icon-action { display: inline-grid; box-sizing: border-box; place-items: center; width: 36px; min-width: 36px; height: 36px; min-height: 36px; padding: 7px; border: 0; border-radius: 8px; color: var(--panel-muted); background: transparent; }
   .automation-icon-action:hover { color: var(--panel-text); background: #efeded; }
   .automation-icon-action svg { width: 18px; height: 18px; }
@@ -730,6 +732,8 @@ export const viewStyles = `
   :host([dark]) .automation-status.is-disabled { color: var(--panel-muted); background: #252b34; }
   :host([dark]) .automation-icon-action { color: var(--panel-muted); background: transparent; }
   :host([dark]) .automation-icon-action:hover { color: var(--panel-text); background: #303a46; }
+  :host([dark]) .automation-menu-trigger { color: var(--panel-muted); background: transparent; }
+  :host([dark]) .automation-menu-trigger:hover { color: var(--panel-text); background: #303a46; }
   :host([dark]) .automation-delete { color: #fca5a5; }
   :host([dark]) .automation-delete:hover { color: #fecaca; background: #4a2028; }
 

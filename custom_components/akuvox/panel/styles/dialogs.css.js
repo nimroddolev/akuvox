@@ -418,13 +418,13 @@ export const dialogStyles = `
   dialog.key-create-dialog .date-range-field::before { display: none; }
   dialog.key-create-dialog .date-range-field [data-validity-label] { text-align: left; }
 
-  .key-optional-identifiers { box-sizing: border-box; border: 1px solid var(--panel-outline, var(--divider-color, #dbe2e8)); border-radius: 10px; overflow: visible; }
-  .key-optional-identifiers summary { display: flex; align-items: center; box-sizing: border-box; min-height: 48px; padding: 12px 14px; color: var(--panel-text, inherit); background: color-mix(in srgb, var(--panel-surface, #f8fafc) 70%, transparent); cursor: pointer; font-size: 12px; font-weight: 700; letter-spacing: .04em; line-height: 1.25; text-transform: uppercase; }
+  .key-optional-identifiers { box-sizing: border-box; border: 1px solid var(--panel-outline, var(--divider-color, #dbe2e8)); border-radius: 10px; overflow: visible; background: color-mix(in srgb, var(--panel-surface, #f8fafc) 55%, transparent); }
+  .key-optional-identifiers summary { display: flex; align-items: center; box-sizing: border-box; min-height: 48px; padding: 12px 14px; border-radius: 9px; color: var(--panel-text, inherit); background: color-mix(in srgb, var(--panel-surface, #f8fafc) 55%, transparent); cursor: pointer; font-size: 12px; font-weight: 700; letter-spacing: .04em; line-height: 1.25; text-transform: uppercase; }
   .key-optional-identifiers summary::before { width: 14px; flex: 0 0 14px; content: "▸"; font-size: 15px; line-height: 1; transition: transform 150ms ease; }
   .key-optional-identifiers:not([open]) .key-form-extra-fields { display: none !important; }
-  .key-optional-identifiers[open] summary { border-bottom: 1px solid var(--panel-outline, var(--divider-color, #dbe2e8)); }
+  .key-optional-identifiers[open] summary { border-bottom: 1px solid var(--panel-outline, var(--divider-color, #dbe2e8)); border-radius: 9px 9px 0 0; }
   .key-optional-identifiers[open] summary::before { transform: rotate(90deg); }
-  .key-form-extra-fields { display: grid; gap: 12px; padding: 14px; border-top: 1px solid var(--panel-outline, var(--divider-color, #dbe2e8)); }
+  .key-form-extra-fields { display: grid; gap: 12px; padding: 14px; background: color-mix(in srgb, var(--panel-surface, #f8fafc) 55%, transparent); }
   dialog.key-create-dialog .key-form-extra-fields > label { display: grid; grid-template-columns: 1fr; align-items: stretch; width: 100%; gap: 6px; margin: 0; color: var(--panel-muted, var(--secondary-text-color)); font-size: 12px; font-weight: 600; }
   .key-form-extra-fields input { box-sizing: border-box; width: 100%; min-height: 38px; padding: 8px 10px; border: 1px solid var(--panel-outline, var(--divider-color, #cbd5e1)); border-radius: 7px; color: var(--panel-text, inherit); background: var(--card-background-color, #fff); font: inherit; text-align: left; }
 
