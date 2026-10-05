@@ -1,0 +1,12 @@
+{
+  "title": "Akuvox SmartPlus SIP Accounts",
+  "warning": "Confidential - do not share these credentials with anyone else.",
+  "server": "SIP server",
+  "transport": "Transport",
+  "main_account": "Main account",
+  "main_password": "Main password",
+  "device": "Device {index}",
+  "mac": "MAC",
+  "account": "SIP account",
+  "password": "SIP password"
+}

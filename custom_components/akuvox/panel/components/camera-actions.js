@@ -5,7 +5,7 @@
 import { findInComposedTree, escapeHtml } from "../utils/dom.js";
 import { icons } from "../utils/icons.js?v=20260926-device-preview-refresh";
 import { orientationTransform } from "../utils/orientation.js?v=20260820-camera-orientation";
-import { t } from "../utils/i18n.js?v=20261004-sip-pdf-hebrew";
+import { t } from "../utils/i18n.js?v=20261005-pseudo-spanish";
 
 const installCameraStreamLoader = (host, cameraDialog, orientation, attempt = 0) => {
   const stream = findInComposedTree(cameraDialog.shadowRoot, "ha-camera-stream");
@@ -142,6 +142,17 @@ export const installCameraRelayActions = (host, relays, orientation = "none", at
         icon.querySelector("svg")?.setAttribute("style", "width:20px;height:20px;flex:0 0 auto;");
         snapshotButton.prepend(icon);
       }
+      const label = t(host, "Download snapshot");
+      const replaceLabel = (root) => {
+        const textNodes = [];
+        const walker = documentRef.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+        while (walker.nextNode()) textNodes.push(walker.currentNode);
+        textNodes.filter((node) => node.nodeValue.trim()).forEach((node) => { node.nodeValue = label; });
+      };
+      replaceLabel(nativeSnapshotAction);
+      replaceLabel(snapshotButton);
+      nativeSnapshotAction.setAttribute("aria-label", label);
+      snapshotButton.setAttribute("aria-label", label);
     }
   }
 

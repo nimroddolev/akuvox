@@ -1,0 +1,12 @@
+{
+  "title": "חשבונות SIP של Akuvox SmartPlus",
+  "warning": "חסוי – אין לשתף פרטי גישה אלה עם אדם אחר.",
+  "server": "שרת SIP",
+  "transport": "תעבורה",
+  "main_account": "חשבון ראשי",
+  "main_password": "סיסמת חשבון ראשי",
+  "device": "מכשיר {index}",
+  "mac": "MAC",
+  "account": "חשבון SIP",
+  "password": "סיסמת SIP"
+}

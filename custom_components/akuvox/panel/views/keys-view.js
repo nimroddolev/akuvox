@@ -24,7 +24,7 @@ import { showDateRangePicker } from "../components/date-range-picker.js?v=202610
 import { showTemporaryKeyQrDialog } from "../components/qr-dialog.js?v=20260928-qr-loading-modal-v2";
 import { showKeyActionsMenu, closeKeyActionsMenu } from "../components/key-menu.js?v=20260928-disabled-edit-muted";
 import { bindListOrdering, bindTileOrdering } from "../utils/tile-ordering.js?v=20260917-list-drop-position";
-import { localizeElement, t } from "../utils/i18n.js?v=20261004-key-table-titles";
+import { localizeElement, t } from "../utils/i18n.js?v=20261005-pseudo-spanish";
 
 /**
  * Update visibility of validation error messages under vehicle registration and UHF card fields.
@@ -723,9 +723,9 @@ export const deleteKey = async (host, tempKey) => {
   if (
     !(await confirmModal(
       host,
-      `Permanently delete temporary key ${name}?`,
+      t(host, "Permanently delete temporary key {name}?", { name }),
       "Delete temporary key",
-      "Delete key"
+      t(host, "Delete key")
     ))
   ) {
     return;

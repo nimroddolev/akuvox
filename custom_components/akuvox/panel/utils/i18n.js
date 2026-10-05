@@ -2,8 +2,9 @@
 import english from "../translations/en.js?v=20261005-automation-actions-menu";
 import german from "../translations/de.js?v=20261005-automation-actions-menu";
 import hebrew from "../translations/he.js?v=20261005-automation-actions-menu";
+import spanish from "../translations/es.js?v=20261005-spanish";
 
-const catalogs = { en: english, de: german, he: hebrew };
+const catalogs = { en: english, de: german, he: hebrew, es: spanish };
 const translatedAttributes = ["aria-label", "title", "placeholder", "alt"];
 
 export const languageFor = (host) => String(host?._hass?.locale?.language || "en")

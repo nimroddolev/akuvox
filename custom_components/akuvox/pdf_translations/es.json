@@ -1,0 +1,12 @@
+{
+  "title": "Cuentas SIP de Akuvox SmartPlus",
+  "warning": "Confidencial: no comparta estas credenciales con nadie más.",
+  "server": "Servidor SIP",
+  "transport": "Transporte",
+  "main_account": "Cuenta principal",
+  "main_password": "Contraseña principal",
+  "device": "Dispositivo {index}",
+  "mac": "MAC",
+  "account": "Cuenta SIP",
+  "password": "Contraseña SIP"
+}

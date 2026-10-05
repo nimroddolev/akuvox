@@ -6,7 +6,7 @@ import { closeOnBackdrop, escapeHtml } from "../utils/dom.js";
 import { icons } from "../utils/icons.js?v=20260930-notification-bell-v5";
 import { callWsWithBlocker, confirmModal, showNotice, showPairingLinkNotice } from "../components/dialogs.js?v=20261003-i18n-statuses";
 import { CAMERA_ORIENTATION_OPTIONS } from "../utils/orientation.js?v=20260830-combined-directional-labels";
-import { localizeElement, t } from "../utils/i18n.js?v=20261003-hebrew-rtl-4";
+import { localizeElement, t } from "../utils/i18n.js?v=20261005-pseudo-spanish";
 
 const RECEIVER_CONTACT_TIMEOUT_MS = 2 * 60 * 1000;
 
@@ -912,10 +912,21 @@ const requestSipPdfPassword = (host) => new Promise((resolve) => {
       <div class="modal-actions"><button class="modal-cancel" data-sip-pdf-cancel type="button">Cancel</button><button class="modal-action" value="export">Export PDF</button></div>
     </form>`;
   const form = dialog.querySelector("[data-sip-pdf-form]");
+  const passwordInput = form.querySelector("[data-sip-pdf-password]");
+  const updatePasswordHint = () => {
+    passwordInput.setCustomValidity(
+      passwordInput.value && passwordInput.value.length < 8
+        ? t(host, "Use a password containing at least 8 characters.")
+        : ""
+    );
+  };
+  passwordInput.addEventListener("input", updatePasswordHint);
+  passwordInput.addEventListener("invalid", updatePasswordHint);
   dialog.querySelector("[data-sip-pdf-cancel]").addEventListener("click", () => dialog.close("cancel"));
   form.addEventListener("submit", (event) => {
     if (event.submitter?.value !== "export") return;
-    const password = form.querySelector("[data-sip-pdf-password]").value;
+    updatePasswordHint();
+    const password = passwordInput.value;
     const confirmation = form.querySelector("[data-sip-pdf-confirm]").value;
     if (password.length < 8) {
       event.preventDefault();
@@ -941,7 +952,7 @@ const requestSipPdfPassword = (host) => new Promise((resolve) => {
   host.shadowRoot.append(dialog);
   localizeElement(host, dialog);
   dialog.showModal();
-  form.querySelector("[data-sip-pdf-password]").focus();
+  passwordInput.focus();
 });
 
 /** Update the usage indicator without replacing any unsaved form values. */

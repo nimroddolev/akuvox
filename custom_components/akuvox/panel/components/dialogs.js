@@ -6,7 +6,6 @@ import { closeOnBackdrop } from "../utils/dom.js";
 import { icons } from "../utils/icons.js";
 import { t } from "../utils/i18n.js?v=20261004-rtsp-copy-dialog";
 
-const titleCase = (title) => String(title).replace(/\b\w/g, (letter) => letter.toUpperCase());
 const isFailureTitle = (title) => /failed|could not|unavailable|required|invalid|error/i.test(title);
 
 const addResultIcon = (dialog, successful) => {
@@ -31,7 +30,7 @@ export const showNotice = (host, message, title = "Akuvox SmartPlus") => {
   const actions = documentRef.createElement("div");
   const closeButton = documentRef.createElement("button");
 
-  heading.textContent = titleCase(t(host, title));
+  heading.textContent = t(host, title);
   text.textContent = t(host, message);
   actions.className = "modal-actions";
   closeButton.type = "button";

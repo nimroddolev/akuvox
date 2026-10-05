@@ -88,6 +88,44 @@ from .const import (
 )
 
 
+SIP_PDF_TRANSLATIONS_DIRECTORY = Path(__file__).with_name("pdf_translations")
+SIP_PDF_LABEL_KEYS = frozenset(
+    {
+        "title",
+        "warning",
+        "server",
+        "transport",
+        "main_account",
+        "main_password",
+        "device",
+        "mac",
+        "account",
+        "password",
+    }
+)
+
+
+def _load_sip_pdf_labels(language: str) -> dict[str, str]:
+    """Load server-side PDF labels, falling back to English when needed."""
+    normalized_language = str(language).lower().split("-", maxsplit=1)[0]
+
+    for candidate_language in (normalized_language, "en"):
+        translation_path = SIP_PDF_TRANSLATIONS_DIRECTORY / f"{candidate_language}.json"
+        try:
+            with translation_path.open(encoding="utf-8") as translation_file:
+                labels = json.load(translation_file)
+        except (OSError, json.JSONDecodeError):
+            continue
+        if (
+            isinstance(labels, dict)
+            and SIP_PDF_LABEL_KEYS.issubset(labels)
+            and all(isinstance(labels[key], str) for key in SIP_PDF_LABEL_KEYS)
+        ):
+            return labels
+
+    raise RuntimeError("The English SIP PDF translation file is unavailable or invalid")
+
+
 def get_config_entry_device(
     hass: HomeAssistant, entry: ConfigEntry, identifier: tuple[str, str]
 ) -> Any | None:
@@ -1828,36 +1866,7 @@ class AkuvoxApiClient:
         from reportlab.pdfgen import canvas
 
         language = str(language).lower().split("-", maxsplit=1)[0]
-        labels = {
-            "en": {
-                "title": "Akuvox SmartPlus SIP Accounts",
-                "warning": "Confidential - do not share these credentials with anyone else.",
-                "server": "SIP server", "transport": "Transport", "main_account": "Main account",
-                "main_password": "Main password", "device": "Device {index}", "mac": "MAC",
-                "account": "SIP account", "password": "SIP password",
-            },
-            "de": {
-                "title": "Akuvox SmartPlus SIP-Konten",
-                "warning": "Vertraulich – diese Zugangsdaten nicht an andere weitergeben.",
-                "server": "SIP-Server", "transport": "Transport", "main_account": "Hauptkonto",
-                "main_password": "Hauptpasswort", "device": "Gerät {index}", "mac": "MAC",
-                "account": "SIP-Konto", "password": "SIP-Passwort",
-            },
-            "he": {
-                "title": "חשבונות SIP של Akuvox SmartPlus",
-                "warning": "חסוי – אין לשתף פרטי גישה אלה עם אדם אחר.",
-                "server": "שרת SIP", "transport": "תעבורה", "main_account": "חשבון ראשי",
-                "main_password": "סיסמת חשבון ראשי", "device": "מכשיר {index}", "mac": "MAC",
-                "account": "חשבון SIP", "password": "סיסמת SIP",
-            },
-        }.get(language, {})
-        labels = labels or {
-            "title": "Akuvox SmartPlus SIP Accounts",
-            "warning": "Confidential - do not share these credentials with anyone else.",
-            "server": "SIP server", "transport": "Transport", "main_account": "Main account",
-            "main_password": "Main password", "device": "Device {index}", "mac": "MAC",
-            "account": "SIP account", "password": "SIP password",
-        }
+        labels = _load_sip_pdf_labels(language)
         is_rtl = language == "he"
         font_name = "AkuvoxUnicode"
         font_path = Path(__file__).with_name("fonts") / "DejaVuSans.ttf"

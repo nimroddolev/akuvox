@@ -316,14 +316,14 @@ export const bindAutomationsEvents = (host) => {
   const deleteAutomation = async (automation) => {
     if (!await confirmModal(
       host,
-      "Delete automation?",
-      `Delete “${automation.selection.name || "this automation"}” from Home Assistant?`,
+      "",
+      t(host, "Delete {name} from Home Assistant?", { name: `“${automation.selection.name || t(host, "this automation")}”` }),
       "Delete"
     )) return;
     try {
       await host._hass.callApi("DELETE", `config/automation/config/${encodeURIComponent(automation.id)}`);
       await refresh();
-      showNotice(host, "The automation was deleted.");
+      showNotice(host, "", "Automation Deleted");
     } catch (error) {
       showNotice(host, error?.message || "Could not delete the notification automation.", "Automation deletion failed");
     }

@@ -693,10 +693,10 @@ export const mainStyles = `
   .credential-share-view-button { display: inline-flex; align-items: center; justify-content: center; min-width: 38px; min-height: 38px; padding: 8px; }
   .credential-share-view-button svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
   .remote-instances-section, .sip-section { position: relative; }
-  .remote-instances-section .settings-inline-action { position: absolute; top: 16px; right: 20px; background: var(--navy); }
-  .remote-instances-section .settings-section-description { padding-right: 190px; }
-  .sip-export { position: absolute; top: 16px; right: 20px; color: var(--panel-text); background: #eee; }
-  .sip-export:hover { background: #e0e0e0; }
+  .remote-instances-section .settings-inline-action, .sip-export { background: var(--navy); }
+  .remote-instances-section .settings-inline-action { display: flex; width: fit-content; max-width: 100%; margin: 12px 0 16px auto; }
+  .remote-instances-section .settings-section-description { padding-right: 0; }
+  .sip-export { position: absolute; top: 16px; right: 20px; color: white; }
   .sip-section .settings-section-description { padding-right: 210px; }
   .sip-warning { margin: 16px 0 18px; padding: 12px 14px; border-radius: 7px; background: #fff0ef; }
   .sip-details-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
@@ -1046,11 +1046,10 @@ export const mainStyles = `
   :host([dir="rtl"]) .tab-scroll-viewport nav { direction: rtl; }
   :host([dir="rtl"]) .door-notification-close,
   :host([dir="rtl"]) .share-access-close { right: auto; left: 28px; }
-  :host([dir="rtl"]) .remote-instances-section .settings-inline-action,
   :host([dir="rtl"]) .sip-export { right: auto; left: 20px; }
   :host([dir="rtl"]) .remote-instances-section .settings-section-description,
   :host([dir="rtl"]) .sip-section .settings-section-description { padding-right: 0; padding-left: 210px; }
-  :host([dir="rtl"]) .remote-instances-section .settings-section-description { padding-left: 190px; }
+  :host([dir="rtl"]) .remote-instances-section .settings-section-description { padding-left: 0; }
   :host([dir="rtl"]) .credential-share-receiver-row .credential-share-status > span:last-child,
   :host([dir="rtl"]) .credential-share-receiver-row .credential-share-status strong,
   :host([dir="rtl"]) .remote-instances-section .credential-share-status { margin-left: 0; margin-right: 4px; }

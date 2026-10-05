@@ -1,0 +1,12 @@
+{
+  "title": "Akuvox SmartPlus SIP-Konten",
+  "warning": "Vertraulich – diese Zugangsdaten nicht an andere weitergeben.",
+  "server": "SIP-Server",
+  "transport": "Transport",
+  "main_account": "Hauptkonto",
+  "main_password": "Hauptpasswort",
+  "device": "Gerät {index}",
+  "mac": "MAC",
+  "account": "SIP-Konto",
+  "password": "SIP-Passwort"
+}

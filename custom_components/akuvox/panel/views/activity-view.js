@@ -11,7 +11,7 @@ import {
 import { tableTimestampFormatter } from "../utils/formatters.js?v=20260820-table-timestamps";
 import { icons } from "../utils/icons.js";
 import { showActivityImageDialog } from "../components/image-dialog.js?v=20260909-instant-open";
-import { t } from "../utils/i18n.js?v=20261003-mobile-activity";
+import { t } from "../utils/i18n.js?v=20261005-pseudo-spanish";
 import {
   ACTIVITY_INITIAL_PAGE_SIZE,
   nextActivityVisibleCount,
