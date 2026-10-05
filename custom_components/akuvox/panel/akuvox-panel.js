@@ -8,13 +8,13 @@ import { PANEL_TAG, TAB_HASHES, TAB_HASH_BY_ID, TABS } from "./utils/constants.j
 import { closeOnBackdrop, escapeHtml } from "./utils/dom.js";
 import { copyText } from "./utils/clipboard.js";
 import { settingsRenderSignature } from "./utils/settings-signature.js";
-import { getPanelStyles } from "./styles/index.js?v=20261004-rtl-share-table";
+import { getPanelStyles } from "./styles/index.js?v=20261005-key-optional-visible";
 import { showNotice, confirmModal, callWsWithBlocker } from "./components/dialogs.js?v=20261004-rtsp-copy-dialog";
 import { installCameraRelayActions } from "./components/camera-actions.js?v=20261004-snapshot-action-icon";
 import { closeKeyActionsMenu } from "./components/key-menu.js";
 import { isRtlLanguage, localizeElement } from "./utils/i18n.js?v=20261004-relay-confirmation";
 
-import { renderDevicesView, bindDevicesEvents } from "./views/devices-view.js?v=20261004-still-refresh-rebuilt-v6";
+import { renderDevicesView, bindDevicesEvents } from "./views/devices-view.js?v=20261005-persistent-device-stills";
 import {
   renderActivityView,
   bindActivityEvents,
@@ -26,7 +26,7 @@ import {
   bindKeysEvents,
   deleteSelectedKeys,
 } from "./views/keys-view.js?v=20261004-key-table-titles";
-import { renderAutomationsView, bindAutomationsEvents } from "./views/automations-view.js?v=20261003-hebrew-rtl-2";
+import { renderAutomationsView, bindAutomationsEvents } from "./views/automations-view.js?v=20261005-automation-state-dots";
 import { renderSettingsView, bindSettingsEvents, updateActivityStorageProgress, updateRemoteShareConnectionStatus } from "./views/settings-view.js?v=20261004-localized-sip-pdf-user-locale";
 import { renderHelpView } from "./views/help-view.js";
 
@@ -281,10 +281,8 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
     this.ownerDocument.removeEventListener("touchmove", this._onModalTouchMove, true);
     this._modalScrollLocked = false;
     window.clearInterval(this._timer);
-    window.clearInterval(this._devicePreviewRefreshTimer);
     closeKeyActionsMenu(this);
     this._timer = undefined;
-    this._devicePreviewRefreshTimer = undefined;
     this._multiFilterOutsideAbort?.abort();
     this._copiedKeyCodes.forEach((timeout) => window.clearTimeout(timeout));
     this._copiedKeyCodes.clear();

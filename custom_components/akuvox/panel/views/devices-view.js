@@ -3,13 +3,9 @@
  */
 
 import { escapeHtml } from "../utils/dom.js";
-import { icons } from "../utils/icons.js?v=20260926-device-preview-refresh";
+import { icons } from "../utils/icons.js?v=20261005-persistent-device-stills";
 import { bindListOrdering, bindTileOrdering } from "../utils/tile-ordering.js?v=20260917-list-drop-position";
 import { t } from "../utils/i18n.js?v=20261003-hebrew-rtl-2";
-
-// One scheduler per panel instance. It survives normal Home Assistant
-// re-renders and always queries the current tile DOM before fetching.
-const previewRefreshSchedulers = new WeakMap();
 
 const unlockButton = (host, relays, relay) => {
   const label =
@@ -117,7 +113,7 @@ export const renderDevicesView = (host, account) => {
           <div class="device-preview ${status.className}" ${device.camera ? `data-camera-preview-stream="${escapeHtml(device.camera.source_name || device.camera.name)}"` : ""} aria-label="${escapeHtml(device.camera ? t(host, "Camera preview from {name}", { name: device.name }) : t(host, "No camera preview available"))}">
             <span class="device-preview-placeholder" aria-hidden="true">${icons.webcam}</span>
             <p class="device-status ${status.className}" data-camera-status>${status.label}</p>
-            ${device.camera?.preview_url ? `<img data-camera-key="${escapeHtml(cameraKey)}" data-camera-preview-url="${escapeHtml(device.camera.preview_url)}" data-camera-refresh-url="${escapeHtml(device.camera.refresh_url || device.camera.preview_url)}" src="${escapeHtml(device.camera.preview_url)}" alt="" loading="eager">` : ""}
+            ${device.camera?.preview_url ? `<img data-camera-key="${escapeHtml(cameraKey)}" src="${escapeHtml(device.camera.preview_url)}" alt="" loading="eager">` : ""}
             ${device.camera ? `<button type="button" class="device-preview-play device-monitor-action" data-stream="${escapeHtml(device.camera.source_name || device.camera.name)}" data-mode="open" aria-label="${escapeHtml(t(host, "Monitor {name}", { name: device.name }))}">${icons.play}</button>` : ""}
           </div>
           <div class="tile-actions">
@@ -223,88 +219,4 @@ export const bindDevicesEvents = (host) => {
     )
   );
 
-  if (!previewRefreshSchedulers.has(host)) {
-    const scheduler = { running: false, timer: undefined };
-    previewRefreshSchedulers.set(host, scheduler);
-
-    const scheduleNext = () => {
-      scheduler.timer = window.setTimeout(refreshCameraPreviews, 5000);
-    };
-
-    const refreshOnePreview = async (image) => {
-      const sourceUrl = image.dataset.cameraRefreshUrl;
-      const preview = image.closest(".device-preview");
-      if (!sourceUrl || !preview || !image.isConnected) return;
-      // The existing image is deliberately left in place while this detached
-      // image downloads. It is replaced only after the new image is decoded
-      // and is known to differ from the image currently on screen.
-      const snapshotUrl = new URL(sourceUrl, window.location.href);
-      snapshotUrl.searchParams.set("_", `${Date.now()}-${Math.random().toString(36).slice(2)}`);
-      let response;
-      try {
-        response = await fetch(snapshotUrl, { cache: "no-store", credentials: "same-origin" });
-      } catch (_) {
-        return;
-      }
-      if (!response.ok) return;
-
-      const blob = await response.blob();
-      const digest = await crypto.subtle.digest("SHA-256", await blob.arrayBuffer());
-      const hash = [...new Uint8Array(digest)]
-        .map((byte) => byte.toString(16).padStart(2, "0"))
-        .join("");
-      if (hash === image.dataset.cameraPreviewHash) return;
-
-      const blobUrl = URL.createObjectURL(blob);
-      const nextSnapshot = new Image();
-      nextSnapshot.className = "device-preview-refresh";
-      nextSnapshot.dataset.cameraKey = image.dataset.cameraKey || "";
-      nextSnapshot.dataset.cameraPreviewUrl = image.dataset.cameraPreviewUrl || "";
-      nextSnapshot.dataset.cameraRefreshUrl = sourceUrl;
-      nextSnapshot.dataset.cameraPreviewHash = hash;
-      nextSnapshot.dataset.cameraPreviewObjectUrl = blobUrl;
-      nextSnapshot.alt = image.alt;
-
-      await new Promise((resolve) => {
-        const finish = () => resolve();
-        nextSnapshot.addEventListener("load", async () => {
-          try { await nextSnapshot.decode?.(); } catch (_) { /* load is enough */ }
-          if (!image.isConnected || !nextSnapshot.naturalWidth) return finish();
-          preview.append(nextSnapshot);
-          nextSnapshot.classList.add("is-ready");
-          window.requestAnimationFrame(() => {
-            window.requestAnimationFrame(() => {
-              if (image.dataset.cameraPreviewObjectUrl) {
-                URL.revokeObjectURL(image.dataset.cameraPreviewObjectUrl);
-              }
-              image.remove();
-              finish();
-            });
-          });
-        }, { once: true });
-        nextSnapshot.addEventListener("error", () => {
-          URL.revokeObjectURL(blobUrl);
-          finish();
-        }, { once: true });
-        nextSnapshot.src = blobUrl;
-      });
-    };
-
-    const refreshCameraPreviews = async () => {
-      if (scheduler.running) return;
-      scheduler.running = true;
-      try {
-        // Sequential requests prevent a slow camera from creating overlapping
-        // fetches. The next five-second delay starts only after this full pass.
-        const images = [...host.shadowRoot.querySelectorAll(
-          ".device-preview.ready img[data-camera-refresh-url]"
-        )];
-        for (const image of images) await refreshOnePreview(image);
-      } finally {
-        scheduler.running = false;
-        scheduleNext();
-      }
-    };
-    scheduleNext();
-  }
 };

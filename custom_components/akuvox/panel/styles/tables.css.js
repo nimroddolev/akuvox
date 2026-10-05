@@ -41,8 +41,8 @@ export const tableStyles = `
 
   .view-mode-toggle {
     display: inline-flex;
-    flex: 0 0 161px;
-    width: 161px;
+    flex: 0 0 auto;
+    width: fit-content;
     min-height: 36px;
     gap: 0;
     padding: 4px;
@@ -54,7 +54,7 @@ export const tableStyles = `
 
   .view-mode-toggle .action {
     display: inline-flex;
-    flex: 1;
+    flex: 0 0 auto;
     align-items: center;
     justify-content: center;
     min-height: 28px;
@@ -279,23 +279,13 @@ export const tableStyles = `
     object-position: center center;
   }
 
-  .device-preview img.device-preview-refresh {
-    position: absolute;
-    z-index: 2;
-    opacity: 0;
-  }
-
-  .device-preview img.device-preview-refresh.is-ready {
-    opacity: 1;
-  }
-
   .device-preview-play {
     position: absolute;
     z-index: 3;
     display: grid;
     place-items: center;
-    width: 48px;
-    height: 48px;
+    width: 96px;
+    height: 96px;
     padding: 0;
     border: 0 !important;
     border-radius: 999px;
@@ -324,8 +314,8 @@ export const tableStyles = `
   }
 
   .device-preview-play svg {
-    width: 25px;
-    height: 25px;
+    width: 50px;
+    height: 50px;
     display: block;
     margin: 0;
     transform: translateX(-1px);
