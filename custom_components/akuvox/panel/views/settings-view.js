@@ -1018,8 +1018,8 @@ export const renderSettingsView = (host) => {
               <span class="activity-storage-limit-unit" data-activity-storage-limit-unit ${Number(storageLimitValue) >= 1 ? "" : "hidden"}>MB</span></span>
               <span class="activity-storage-limit-description" data-activity-storage-limit-description ${Number(settings.activity_history_max_storage_mb) > 0 ? "hidden" : ""}>Local activity storage limit in MB (0 = unlimited)</span>
             </label>
-            <div data-activity-storage-progress>${activityStorageProgress(settings)}</div>
-            <div class="storage-actions"><button class="activity-storage-action activity-storage-clear" type="button" data-clear-activity-storage>${icons.trash}<span>Delete</span></button><span class="activity-storage-transfer-actions"><button class="activity-storage-action activity-storage-download" type="button" data-export-activity-storage>${icons.download}<span>Export</span></button><button class="activity-storage-action activity-storage-import" type="button" data-import-activity-storage>${icons.upload}<span>Import</span></button></span><input data-import-activity-file type="file" accept=".zip,application/zip" hidden></div>
+            <div class="storage-meter-row"><div data-activity-storage-progress>${activityStorageProgress(settings)}</div><button class="activity-storage-action activity-storage-clear" type="button" data-clear-activity-storage aria-label="Delete" title="Delete">${icons.trash}<span class="sr-only">Delete</span></button></div>
+            <div class="storage-actions"><span class="activity-storage-transfer-actions"><button class="activity-storage-action activity-storage-download" type="button" data-export-activity-storage>${icons.download}<span>Export</span></button><button class="activity-storage-action activity-storage-import" type="button" data-import-activity-storage>${icons.upload}<span>Import</span></button></span><input data-import-activity-file type="file" accept=".zip,application/zip" hidden></div>
           </div>
         </fieldset>
         </div>

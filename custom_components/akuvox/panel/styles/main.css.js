@@ -264,6 +264,7 @@ export const mainStyles = `
     border-radius: 8px;
     color: var(--panel-text);
     background: transparent;
+    font-size: 13px;
     font-weight: 600;
   }
 
@@ -653,7 +654,8 @@ export const mainStyles = `
   .door-selection-badge > span:nth-child(2) { font-size: 18px; font-weight: 700; line-height: .7; }
   .door-selection-badge:hover, .door-selection-badge:focus-visible { background: color-mix(in srgb, var(--aqua) 30%, var(--panel-card)); outline: 2px solid var(--aqua); outline-offset: 2px; }
   .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
-  [data-activity-storage-progress] { display: block; width: 100%; margin-top: 12px; }
+  .storage-meter-row { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+  .storage-meter-row [data-activity-storage-progress] { display: block; flex: 1 1 auto; min-width: 0; margin: 0; }
   [data-activity-storage-progress] .activity-storage-progress { width: 100%; max-width: none; margin: 0; }
   .storage-limit-input { display: flex; align-items: center; justify-content: space-between; gap: 24px; min-height: 48px; padding: 13px 0; border-top: 1px solid var(--panel-outline); color: var(--panel-muted); font-size: 12px; }
   .storage-limit-value { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 10px; direction: ltr; }
@@ -664,7 +666,9 @@ export const mainStyles = `
     transition: width 160ms ease;
   }
   .storage-limit-input .activity-storage-limit-description { margin-left: auto; }
-  .storage-section .storage-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-rows: 44px; gap: 8px; margin-top: 14px; }
+  .storage-meter-row .activity-storage-clear { display: grid; flex: 0 0 44px; place-items: center; width: 44px; height: 34px; min-width: 44px; min-height: 34px; padding: 0; }
+  .storage-meter-row .activity-storage-clear svg { width: 18px; height: 18px; }
+  .storage-section .storage-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: 44px; gap: 8px; margin-top: 14px; }
   .storage-section .storage-actions .activity-storage-transfer-actions { display: contents; }
   .storage-section .storage-actions .activity-storage-action { box-sizing: border-box; width: 100%; height: 100%; min-width: 0; padding: 0 8px; }
   .credential-share-receiver-row { padding: 12px; border: 0; border-radius: 7px; background: #f4f4f4; }
