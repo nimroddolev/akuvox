@@ -1148,7 +1148,6 @@ export const viewStyles = `
   }
 
   :host([dark]) .settings-discard,
-  :host([dark]) .sip-export,
   :host([dark]) .camera-copy-rtsp,
   :host([dark]) .key-select-action,
   :host([dark]) .mobile-filter-toggle,
@@ -1159,10 +1158,16 @@ export const viewStyles = `
   }
 
   :host([dark]) .settings-discard:hover:not(:disabled),
-  :host([dark]) .sip-export:hover,
   :host([dark]) .camera-copy-rtsp:hover,
   :host([dark]) .key-select-action:hover {
     background: #303a46;
+  }
+
+  :host([dark]) .sip-export,
+  :host([dark]) .sip-export:hover {
+    border-color: transparent;
+    color: white;
+    background: var(--navy);
   }
 
   :host([dark]) .view-mode-toggle .action {

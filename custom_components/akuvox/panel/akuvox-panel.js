@@ -8,7 +8,7 @@ import { PANEL_TAG, TAB_HASHES, TAB_HASH_BY_ID, TABS } from "./utils/constants.j
 import { closeOnBackdrop, escapeHtml } from "./utils/dom.js";
 import { copyText } from "./utils/clipboard.js";
 import { settingsRenderSignature } from "./utils/settings-signature.js";
-import { getPanelStyles } from "./styles/index.js?v=20261005-key-optional-visible";
+import { getPanelStyles } from "./styles/index.js?v=20261005-shared-sip-export-action";
 import { showNotice, confirmModal, callWsWithBlocker } from "./components/dialogs.js?v=20261004-rtsp-copy-dialog";
 import { installCameraRelayActions } from "./components/camera-actions.js?v=20261004-snapshot-action-icon";
 import { closeKeyActionsMenu } from "./components/key-menu.js";
