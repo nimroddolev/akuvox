@@ -70,22 +70,25 @@ The sidebar panel and its sensitive controls are available only to Home Assistan
 
 ### Automations and events
 
-Every detected door activity also fires an `akuvox_door_update` event. The payload includes:
+For each newly detected door activity, the integration emits an
+`akuvox_door_update` event. Existing history loaded during the initial refresh
+does not emit events. Use the **Door opened** device trigger for the simplest
+no-code automation; use the event directly when you need to filter by activity
+type, caller, relay, or image.
 
-| Field | Meaning |
-| --- | --- |
-| `device_id` | Home Assistant device that corresponds to the door. |
-| `location` | The door's Home Assistant display name. |
-| `capture_type` | SmartPlus activity type, such as `Call` or `Face Unlock`. |
-| `initiator` | The person or visitor associated with the activity. |
-| `relay_name` | Relay involved in an unlock, when reported. |
-| `pic_url` | Event image URL, when available. |
+New automations should use the snake-case fields below. The original aliases
+remain in every payload for compatibility with existing automations.
 
-New automations should use these snake-case fields. The original `Location`,
-`CaptureType`, `Initiator`, `RelayName`, and `PicUrl` aliases are also included
-for compatibility with existing automations.
+| Canonical field | Legacy alias | Availability | Meaning |
+| --- | --- | --- | --- |
+| `location` | `Location` | Always | Home Assistant display name for the door. |
+| `capture_type` | `CaptureType` | Always | Activity type. Common values are `Call`, `Face Unlock`, and `Unlock on SmartPlus`. Unrecognized SmartPlus values are passed through. |
+| `initiator` | `Initiator` | Always | Person or visitor associated with the activity; may be empty. |
+| `relay_name` | `RelayName` | Always | Relay involved in the unlock, when reported; otherwise empty. |
+| `pic_url` | `PicUrl` | Always | SmartPlus event-image URL, or an empty string when no image is available. Treat this URL as private. |
+| `device_id` | — | When the door has a matching Home Assistant device | Home Assistant device ID for filtering an event trigger to one door. |
 
-For a no-code automation, use the **Door opened** device trigger exposed on each Akuvox device. For more control, trigger directly on the event:
+For more control, trigger directly on the event:
 
 ```yaml
 alias: Notify when someone rings the front door
