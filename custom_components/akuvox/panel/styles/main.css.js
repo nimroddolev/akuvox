@@ -823,7 +823,10 @@ export const mainStyles = `
     }
     main > header {
       position: sticky;
-      top: 0;
+      /* The companion app already lays panel content below its native safe
+       * area. Keeping the bar at its normal height avoids counting that inset
+       * twice, while the sticky offset keeps the title below a cutout. */
+      top: env(safe-area-inset-top, 0px);
       z-index: 10;
       box-sizing: border-box;
       display: grid;
@@ -834,6 +837,9 @@ export const mainStyles = `
       margin: 0 -12px;
       padding: 0 12px;
       border-radius: 0;
+      /* Paint the companion app's safe-area gap as part of the top bar so
+       * scrolling content cannot show through above it. */
+      box-shadow: 0 calc(0px - env(safe-area-inset-top, 0px)) 0 env(safe-area-inset-top, 0px) var(--app-header-background-color, var(--panel-card));
       text-align: initial;
     }
     .mobile-menu-toggle {
@@ -873,9 +879,6 @@ export const mainStyles = `
       margin-left: 0;
       padding: 6px;
       font-size: 13px;
-    }
-    @media (max-width: 440px) {
-      header select { display: none; }
     }
   }
   .share-access-dialog {

@@ -8,7 +8,7 @@ import { PANEL_TAG, TAB_HASHES, TAB_HASH_BY_ID, TABS } from "./utils/constants.j
 import { closeOnBackdrop, escapeHtml } from "./utils/dom.js";
 import { copyText } from "./utils/clipboard.js";
 import { settingsRenderSignature } from "./utils/settings-signature.js";
-import { getPanelStyles } from "./styles/index.js?v=20261005-shared-sip-export-action";
+import { getPanelStyles } from "./styles/index.js?v=20261006-always-show-account-selector";
 import { showNotice, confirmModal, callWsWithBlocker } from "./components/dialogs.js?v=20261004-rtsp-copy-dialog";
 import { installCameraRelayActions } from "./components/camera-actions.js?v=20261004-snapshot-action-icon";
 import { closeKeyActionsMenu } from "./components/key-menu.js";
@@ -993,20 +993,20 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
           <div class="panel-page-title">
             <h1>Akuvox SmartPlus</h1>
           </div>
-          ${
-            this._accounts.length > 1
-              ? `<select aria-label="Akuvox account" data-account>
-                  ${this._accounts
-                    .map(
-                      (item) =>
-                        `<option value="${escapeHtml(item.entry_id)}" ${item.entry_id === this._activeAccount ? "selected" : ""}>
-                          ${escapeHtml(item.title || item.project_name || "SmartPlus account")}
-                        </option>`
-                    )
-                    .join("")}
-                </select>`
-              : ""
-          }
+          <select aria-label="Akuvox account" data-account ${this._accounts.length ? "" : "disabled"}>
+            ${
+              this._accounts.length
+                ? this._accounts
+                  .map(
+                    (item) =>
+                      `<option value="${escapeHtml(item.entry_id)}" ${item.entry_id === this._activeAccount ? "selected" : ""}>
+                        ${escapeHtml(item.title || item.project_name || "SmartPlus account")}
+                      </option>`
+                  )
+                  .join("")
+                : "<option>Loading accounts…</option>"
+            }
+          </select>
         </header>
         ${
           `<div class="tab-navigation">
