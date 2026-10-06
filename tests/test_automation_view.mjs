@@ -51,6 +51,25 @@ test("builds notification automations with snake-case door-event fields", () => 
   assert.doesNotMatch(templates, /trigger\.event\.data\.(Location|CaptureType|Initiator|PicUrl)/);
 });
 
+test("filters temporary-key unlocks by the stable temporary key ID", () => {
+  const config = buildDoorNotificationAutomation({
+    name: "Guest access",
+    doors: [{ deviceId: "door-1", name: "Front door" }],
+    services: ["notify.mobile_app_phone"],
+    includeOpened: true,
+    includeCalls: false,
+    callerRules: [{ type: "temporary_key", keyId: "key-42", name: "Guest", operator: "is" }],
+  });
+  const templates = config.conditions.map((condition) => condition.value_template).join("\n");
+
+  assert.match(templates, /"Temp Key Unlock"/);
+  assert.match(templates, /trigger\.event\.data\.temporary_key_id/);
+  assert.match(templates, /"key-42"/);
+  assert.deepEqual(asDoorNotification(config, doors)?.callerRules, [
+    { type: "temporary_key", keyId: "key-42", name: "key-42", operator: "is" },
+  ]);
+});
+
 test("recognizes notification automations using legacy door-event fields", () => {
   const legacyConfig = JSON.parse(JSON.stringify(automation())
     .replaceAll("capture_type", "CaptureType")

@@ -20,6 +20,7 @@ export const icons = {
   bell: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg>',
   link: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.1.1l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1"/><path d="M14 11a5 5 0 0 0-7.1-.1l-2 2A5 5 0 0 0 12 20l1.1-1.1"/></svg>',
   key: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="7" cy="12" r="3.5"/><path d="M10.5 12H21M17 12v3M20 12v2"/></svg>',
+  user: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.5"/><path d="M4.5 20c.9-4.1 3.4-6.2 7.5-6.2s6.6 2.1 7.5 6.2"/></svg>',
   idCard: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8" cy="12" r="2"/><path d="M12 10h5M12 14h5M6 16c.7-1.3 3.3-1.3 4 0"/></svg>',
   door: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V4a1 1 0 0 1 1-1h11a1 1 0 0 1 1 1v17"/><path d="M5 21h14"/><circle cx="14.5" cy="12" r="1.15"/></svg>',
   bug: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="8" height="10" rx="4"/><path d="M12 4v4M5 9h3M16 9h3M5 15h3M16 15h3M6 20l2-2m10 2-2-2"/></svg>',

@@ -507,6 +507,23 @@ class TestSmartPlusApiE2E(unittest.IsolatedAsyncioTestCase):
             },
         )
 
+    async def test_temp_key_unlock_event_uses_the_matching_key_id(self) -> None:
+        """A temporary-key automation can survive a key description change."""
+        client = self._client([])
+        received_events = []
+        client._data.door_keys_data = [{"key_id": "guest-key", "description": "Guest"}]
+        client.async_subscribe_to_door_unlocks("Lobby", received_events.append)
+
+        client.async_publish_door_unlock(
+            "Lobby",
+            initiator="Guest",
+            capture_type="Temp Key Unlock",
+        )
+
+        self.assertEqual(received_events[0]["capture_type"], "Temp Key Unlock")
+        self.assertEqual(received_events[0]["temporary_key_id"], "guest-key")
+        self.assertEqual(received_events[0]["TemporaryKeyId"], "guest-key")
+
     async def test_first_door_log_response_is_never_published(self) -> None:
         """The API boundary suppresses startup data even if the parser returns it."""
         client = self._client([])

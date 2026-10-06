@@ -75,6 +75,21 @@ const familyMembers = (host) => [...new Set(
     .filter(Boolean)
 )].sort((left, right) => left.localeCompare(right));
 
+const temporaryKeys = (host) => {
+  const keys = (host._account?.()?.temporary_keys || [])
+    .filter((key) => key && !key.expired && key.key_id && String(key.description || "").trim())
+    .map((key) => ({
+      keyId: String(key.key_id),
+      name: String(key.description).trim(),
+    }));
+  const names = new Map();
+  keys.forEach((key) => names.set(key.name, (names.get(key.name) || 0) + 1));
+  // SmartPlus door logs identify a temporary key by its description. Do not
+  // offer an ambiguous key that cannot be resolved safely to its stable ID.
+  return keys.filter((key) => names.get(key.name) === 1)
+    .sort((left, right) => left.name.localeCompare(right.name));
+};
+
 const notificationAction = (service, withImage) => ({
   action: service,
   data: {
@@ -132,19 +147,32 @@ const callerConditionSummary = (rules) => {
 
 export const buildDoorNotificationAutomation = ({ name, doors, services, includeOpened, includeCalls, callerRules = [], initialState }) => {
   const captureTypes = [
-    ...(includeOpened ? ["Face Unlock", "Unlock on SmartPlus"] : []),
+    ...(includeOpened ? ["Face Unlock", "Unlock on SmartPlus", "Temp Key Unlock"] : []),
     ...(includeCalls ? ["Call"] : []),
   ];
-  const allowedCallers = callerRules.filter((rule) => rule.operator === "is").map((rule) => rule.name);
-  const excludedCallers = callerRules.filter((rule) => rule.operator === "is_not").map((rule) => rule.name);
+  const identities = (operator, type) => callerRules
+    .filter((rule) => rule.operator === operator && (rule.type || "family") === type)
+    .map((rule) => type === "temporary_key" ? rule.keyId : rule.name)
+    .filter(Boolean);
+  const allowedCallers = identities("is", "family");
+  const excludedCallers = identities("is_not", "family");
+  const allowedKeys = identities("is", "temporary_key");
+  const excludedKeys = identities("is_not", "temporary_key");
+  const identityExpression = (callers, keys, operator) => {
+    const comparisons = [
+      ...(callers.length ? [`(trigger.event.data.initiator | default('', true)) ${operator} ${JSON.stringify(callers)}`] : []),
+      ...(keys.length ? [`(trigger.event.data.temporary_key_id | default('', true)) ${operator} ${JSON.stringify(keys)}`] : []),
+    ];
+    return comparisons.join(operator === "in" ? " or " : " and ");
+  };
   const callerConditions = [
-    ...(allowedCallers.length ? [{
+    ...(allowedCallers.length || allowedKeys.length ? [{
       condition: "template",
-      value_template: `{{ (trigger.event.data.initiator | default('', true)) in ${JSON.stringify(allowedCallers)} }}`,
+      value_template: `{{ ${identityExpression(allowedCallers, allowedKeys, "in")} }}`,
     }] : []),
-    ...(excludedCallers.length ? [{
+    ...(excludedCallers.length || excludedKeys.length ? [{
       condition: "template",
-      value_template: `{{ (trigger.event.data.initiator | default('', true)) not in ${JSON.stringify(excludedCallers)} }}`,
+      value_template: `{{ ${identityExpression(excludedCallers, excludedKeys, "not in")} }}`,
     }] : []),
   ];
   return {
@@ -235,6 +263,7 @@ const requestDoorNotificationStep = (host, { title = "Create Automation", descri
 export const requestDoorNotificationAutomation = async (host, existing = null) => {
   const doors = notificationDoors(host);
   const members = familyMembers(host);
+  const keys = temporaryKeys(host);
   const services = notificationServices(host);
   const editing = Boolean(existing);
   const selection = {
@@ -242,6 +271,11 @@ export const requestDoorNotificationAutomation = async (host, existing = null) =
     callerOperator: "is", services: [], name: "", initialState: undefined,
     ...existing,
   };
+  selection.callerRules = selection.callerRules.map((rule) => {
+    if (rule.type !== "temporary_key") return rule;
+    const key = keys.find((item) => item.keyId === rule.keyId);
+    return { ...rule, name: key?.name || rule.name || rule.keyId };
+  });
   const title = editing ? "Edit Automation" : "Create Automation";
   let step = 0;
   let progressFromStage = 0;
@@ -319,9 +353,9 @@ export const requestDoorNotificationAutomation = async (host, existing = null) =
       result = await requestDoorNotificationStep(host, {
         title,
         stage: 3, progressFromStage, description: "Who should trigger the automation?", backLabel: "Back", nextLabel: "Next",
-        content: members.length
-          ? `<div class="caller-picker"><div class="caller-picker-add" data-caller-picker-add><button class="caller-picker-add-button" type="button" data-add-caller aria-label="Add family member" aria-expanded="false"><span aria-hidden="true">+</span></button><div class="caller-picker-add-menu" data-add-caller-menu role="menu" hidden></div></div><div class="caller-condition-summary muted" data-caller-condition-summary hidden></div></div>`
-          : '<p class="muted">No associated family members are available. Continue to notify for every caller.</p>',
+        content: members.length || keys.length
+          ? `<div class="caller-picker"><div class="caller-picker-add" data-caller-picker-add><button class="caller-picker-add-button" type="button" data-add-caller aria-label="Add a person or temporary key" aria-expanded="false"><span aria-hidden="true">+</span></button><div class="caller-picker-add-menu" data-add-caller-menu role="menu" hidden></div></div><div class="caller-condition-summary muted" data-caller-condition-summary hidden></div></div>`
+          : '<p class="muted">No family members or active temporary keys are available. Continue to notify for every initiator.</p>',
         bind: (dialog) => {
           const addCaller = dialog.querySelector("[data-add-caller]");
           const addCallerPicker = dialog.querySelector("[data-caller-picker-add]");
@@ -329,10 +363,12 @@ export const requestDoorNotificationAutomation = async (host, existing = null) =
           const summary = dialog.querySelector("[data-caller-condition-summary]");
           if (!addCaller || !summary) return;
           const render = () => {
-            const selectedNames = new Set(selection.callerRules.map((rule) => rule.name));
-            const availableMembers = members.filter((name) => !selectedNames.has(name));
-            addCallerPicker.hidden = availableMembers.length === 0;
-            addCallerMenu.innerHTML = availableMembers.map((name) => `<button type="button" role="menuitem" data-add-caller-name="${escapeHtml(name)}">${escapeHtml(name)}</button>`).join("");
+            const selectedMembers = new Set(selection.callerRules.filter((rule) => (rule.type || "family") === "family").map((rule) => rule.name));
+            const selectedKeys = new Set(selection.callerRules.filter((rule) => rule.type === "temporary_key").map((rule) => rule.keyId));
+            const availableMembers = members.filter((name) => !selectedMembers.has(name));
+            const availableKeys = keys.filter((key) => !selectedKeys.has(key.keyId));
+            addCallerPicker.hidden = availableMembers.length + availableKeys.length === 0;
+            addCallerMenu.innerHTML = `${availableMembers.length ? `<div class="caller-picker-menu-heading">Family members</div>${availableMembers.map((name) => `<button type="button" role="menuitem" data-add-caller-name="${escapeHtml(name)}"><span class="caller-picker-identity-icon" aria-hidden="true">${icons.user}</span><span>${escapeHtml(name)}</span></button>`).join("")}` : ""}${availableKeys.length ? `<div class="caller-picker-menu-heading">Temporary keys</div>${availableKeys.map((key) => `<button type="button" role="menuitem" data-add-key-id="${escapeHtml(key.keyId)}" data-add-key-name="${escapeHtml(key.name)}"><span class="caller-picker-identity-icon" aria-hidden="true">${icons.key}</span><span>${escapeHtml(key.name)}</span></button>`).join("")}` : ""}`;
             const plural = selection.callerRules.length !== 1;
             const callerRuleLabel = (isNot) => {
               if (selection.includeOpened && !selection.includeCalls) {
@@ -358,17 +394,26 @@ export const requestDoorNotificationAutomation = async (host, existing = null) =
                   : index === selection.callerRules.length - 2
                     ? ` ${separator} `
                     : ", ";
-                return `<button class="door-selection-badge" type="button" data-remove-caller="${escapeHtml(rule.name)}"><span>${escapeHtml(rule.name)}</span><span aria-hidden="true">×</span><span class="sr-only">${escapeHtml(t(host, "Remove {name}", { name: rule.name }))}</span></button>${punctuation ? `<span class="caller-condition-punctuation">${punctuation}</span>` : ""}`;
+                const label = rule.name;
+                const identity = rule.type === "temporary_key" ? rule.keyId : rule.name;
+                const icon = rule.type === "temporary_key" ? icons.key : icons.user;
+                return `<button class="door-selection-badge${rule.type === "temporary_key" ? " is-temporary-key" : ""}" type="button" data-remove-caller="${escapeHtml(identity)}"><span class="caller-picker-selected-identity">${icon}<span>${escapeHtml(label)}</span></span><span aria-hidden="true">×</span><span class="sr-only">${escapeHtml(t(host, "Remove {name}", { name: label }))}</span></button>${punctuation ? `<span class="caller-condition-punctuation">${punctuation}</span>` : ""}`;
               }).join("");
               summary.innerHTML = `<span>${t(host, "Triggered when")}</span><span class="door-picker-badges" aria-label="${escapeHtml(t(host, "Selected family members"))}">${badges}</span><span class="caller-picker-rule"><select data-caller-operator aria-label="${escapeHtml(t(host, "Caller rule"))}"><option value="is" ${selection.callerOperator === "is" ? "selected" : ""}>${callerRuleLabel(false)}</option><option value="is_not" ${selection.callerOperator === "is_not" ? "selected" : ""}>${callerRuleLabel(true)}</option></select></span>`;
             }
             const badges = summary.querySelector("[aria-label='Selected family members']");
             badges?.querySelectorAll("[data-remove-caller]").forEach((button) => button.addEventListener("click", () => {
-              selection.callerRules = selection.callerRules.filter((rule) => rule.name !== button.dataset.removeCaller);
+              selection.callerRules = selection.callerRules.filter((rule) => (rule.type === "temporary_key" ? rule.keyId : rule.name) !== button.dataset.removeCaller);
               render();
             }));
             addCallerMenu.querySelectorAll("[data-add-caller-name]").forEach((button) => button.addEventListener("click", () => {
               selection.callerRules.push({ name: button.dataset.addCallerName, operator: selection.callerOperator });
+              addCallerMenu.hidden = true;
+              addCaller.setAttribute("aria-expanded", "false");
+              render();
+            }));
+            addCallerMenu.querySelectorAll("[data-add-key-id]").forEach((button) => button.addEventListener("click", () => {
+              selection.callerRules.push({ type: "temporary_key", keyId: button.dataset.addKeyId, name: button.dataset.addKeyName, operator: selection.callerOperator });
               addCallerMenu.hidden = true;
               addCaller.setAttribute("aria-expanded", "false");
               render();

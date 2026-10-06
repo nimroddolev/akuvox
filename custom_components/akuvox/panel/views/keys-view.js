@@ -102,6 +102,10 @@ export const renderKeysView = (host, account) => {
       label: relay.name || relay.door_name || `Door ${relay.relay_id}`,
     }))
     .sort((left, right) => left.label.localeCompare(right.label));
+  const relayNames = new Map((account.relays || []).map((relay) => [
+    `${relay.mac}|${relay.relay_id}`,
+    relay.name || relay.door_name || `Door ${relay.relay_id}`,
+  ]));
   const formatTimeLeft = (endTime) => {
     const match = String(endTime || "").match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?/);
     if (!match) return "";
@@ -234,6 +238,14 @@ export const renderKeysView = (host, account) => {
       const usedUses = Math.max(0, Number(key.access_times) || 0);
       const usedPercent = allowedUses ? Math.min(100, (usedUses / allowedUses) * 100) : 0;
       const availablePercent = allowedUses ? Math.max(0, Math.round(100 - usedPercent)) : 100;
+      const usageHue = Math.round(120 - usedPercent * 1.2);
+      const usageColor = `hsl(${usageHue} 68% 42%)`;
+      const permittedDoors = [...new Set((key.doors || []).map((door) =>
+        relayNames.get(`${door.mac}|${door.relay}`) || door.name || door.door_name || `Door ${door.relay}`
+      ).filter(Boolean))];
+      const doorBadges = permittedDoors.length
+        ? `<div class="key-tile-door-badges" aria-label="Permitted doors">${permittedDoors.map((door) => `<span class="key-tile-door-badge">${icons.door}<span>${escapeHtml(door)}</span></span>`).join("")}</div>`
+        : "";
       const timeLeft = key.expired ? "" : formatTimeLeft(key.end_time);
       return `
         <article class="tile-card key-tile ${key.expired ? "key-tile-expired" : "key-tile-active"} ${selected ? "key-row-selected" : ""}" data-tile-order-id="${escapeHtml(key.key_id)}">
@@ -250,12 +262,12 @@ export const renderKeysView = (host, account) => {
               ${menu}
             </div>
           </div>
-          <div class="key-tile-code"><div><span>Passcode</span><strong>${code}${copyButton}${viewQrButton}</strong></div></div>
+          <div class="key-tile-code"><div><span>Passcode</span><strong>${code}${copyButton}${viewQrButton}</strong>${doorBadges}</div></div>
           <dl class="key-tile-validity">
             <div><dt>${icons.calendar}<span>Valid from</span></dt><dd>${escapeHtml(formatTimestamp(key.begin_time))}</dd></div>
             <div><dt>${icons.calendar}<span>Valid to</span></dt><dd>${escapeHtml(formatTimestamp(key.end_time))}</dd></div>
           </dl>
-          <div class="key-tile-usage">
+          <div class="key-tile-usage" style="--key-usage-color:${usageColor}">
             <div><span>${escapeHtml(t(host, "Usage: {used} of {allowed}", { used: key.access_times, allowed: key.allowed_times }))}</span><strong>${escapeHtml(t(host, "{percent}% available", { percent: availablePercent }))}</strong></div>
             <i aria-hidden="true"><b style="width:${usedPercent}%"></b></i>
           </div>
@@ -267,9 +279,12 @@ export const renderKeysView = (host, account) => {
   return `
     <div class="card table-wrap">
       <div class="section-heading key-heading">
-        <div class="key-heading-copy">
-          <h2>Temporary keys</h2>
-          <p class="muted">Create and manage your temporary access keys.</p>
+        <div class="key-heading-top">
+          <div class="key-heading-copy">
+            <h2>Temporary keys</h2>
+            <p class="muted">Create and manage your temporary access keys.</p>
+          </div>
+          ${canCreateKeys ? `<button class="add-key" data-create-key>${icons.plus}<span>Add Key</span></button>` : ""}
         </div>
         <div class="key-heading-actions">
           ${selectedCount ? `<button type="button" class="danger" data-delete-selected>Delete Selected (${selectedCount})</button>` : ""}
@@ -279,11 +294,9 @@ export const renderKeysView = (host, account) => {
             <button type="button" class="action ${host._rowViewMode === "tiles" ? "active" : ""}" data-row-view-mode="tiles" aria-pressed="${host._rowViewMode === "tiles"}">${icons.grid}<span>Tiles</span></button>
             <button type="button" class="action ${host._rowViewMode === "tiles" ? "" : "active"}" data-row-view-mode="table" aria-pressed="${host._rowViewMode !== "tiles"}">${icons.table}<span>Table</span></button>
           </div>
-          ${canCreateKeys ? `<button class="add-key" data-create-key>${icons.plus}<span>Add Key</span></button>` : ""}
         </div>
       </div>
       <div class="mobile-key-primary-controls">
-        ${canCreateKeys ? `<button class="add-key" data-create-key>${icons.plus}<span>Add Key</span></button>` : ""}
         <button type="button" class="mobile-filter-toggle" data-mobile-filter-toggle="keys" aria-expanded="${Boolean(host._mobileFiltersOpen.keys)}">Filter${filterCount ? ` <span class="mobile-filter-count">${filterCount}</span>` : ""}</button>
       </div>
       <div class="activity-controls mobile-filter-panel key-filter-panel ${host._mobileFiltersOpen.keys ? "mobile-filter-panel-open" : ""}">

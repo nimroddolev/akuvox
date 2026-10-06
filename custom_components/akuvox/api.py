@@ -262,6 +262,19 @@ class AkuvoxApiClient:
             "PicUrl": pic_url,
             "RelayName": relay_name,
         }
+        # The door log identifies a temporary-key use by its display name, not
+        # its key ID. Resolve it while the key list is current so automations
+        # can filter on a stable ID rather than an editable description.
+        if normalized_capture_type == "Temp Key Unlock" and self._data is not None:
+            matching_keys = [
+                key for key in self._data.door_keys_data
+                if str(key.get("description", "")).strip() == initiator.strip()
+                and key.get("key_id") is not None
+            ]
+            if len(matching_keys) == 1:
+                temporary_key_id = str(matching_keys[0]["key_id"])
+                event_data["temporary_key_id"] = temporary_key_id
+                event_data["TemporaryKeyId"] = temporary_key_id
         # Device automations filter this event by the Home Assistant device ID.
         # Include it whenever the source door has a registered HA device so the
         # generated Door Opened trigger can match the event it receives.
@@ -290,6 +303,8 @@ class AkuvoxApiClient:
         return {
             "call": "Call",
             "faceunlock": "Face Unlock",
+            "tempkeyunlock": "Temp Key Unlock",
+            "temporarykeyunlock": "Temp Key Unlock",
             "remoteopendoor": "Unlock on SmartPlus",
             "unlockonsmartplus": "Unlock on SmartPlus",
         }.get(normalised, capture_type)

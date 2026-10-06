@@ -625,6 +625,33 @@ export const tableStyles = `
 
   .key-tile-code .copied-code svg { display: block; }
 
+  .key-tile-door-badges {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 5px;
+    margin-top: 7px;
+  }
+
+  .key-tile-code .key-tile-door-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 7px;
+    border: 0;
+    border-radius: 999px;
+    color: #006493;
+    background: color-mix(in srgb, #006493 10%, transparent);
+    font-size: 11px;
+    font-weight: 650;
+    letter-spacing: 0;
+    line-height: 1.2;
+    text-transform: none;
+  }
+
+  .key-tile-code .key-tile-door-badge svg { width: 13px; height: 13px; flex: 0 0 auto; fill: none; stroke: currentColor; stroke-width: 2; }
+  .key-tile-code .key-tile-door-badge > span { display: inline; color: inherit; font: inherit; letter-spacing: inherit; text-transform: inherit; }
+
   .key-tile-validity {
     display: grid;
     gap: 6px;
@@ -678,9 +705,7 @@ export const tableStyles = `
     font-weight: 500;
   }
 
-  .key-tile-usage strong { color: #18733d; font-weight: 600; }
-
-  .key-tile-expired .key-tile-usage strong { color: #59656e; }
+  .key-tile-usage strong { color: var(--key-usage-color, #18733d); font-weight: 600; }
 
   .key-tile-usage > i {
     display: block;
@@ -695,7 +720,7 @@ export const tableStyles = `
     display: block;
     height: 100%;
     border-radius: inherit;
-    background: #03a9f4;
+    background: var(--key-usage-color, #03a9f4);
   }
 
   .key-tile-select {

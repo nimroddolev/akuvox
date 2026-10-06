@@ -13,6 +13,7 @@ import {
 } from "./settings-view.js";
 
 const captureTypesForOpened = ["Face Unlock", "Unlock on SmartPlus"];
+const temporaryKeyCaptureType = "Temp Key Unlock";
 const isDisabled = (value) => ["off", "false", "disabled"].includes(String(value).toLowerCase());
 
 const accountDoors = (host) => {
@@ -69,14 +70,22 @@ export const asDoorNotification = (config, doors) => {
       continue;
     }
     const callers = readJsonArray(template, /(?:initiator|Initiator)[\s\S]*?\s+(?:not\s+)?in\s+(\[[\s\S]*?\])/);
-    if (!callers) return null;
-    const operator = /(?:initiator|Initiator)[\s\S]*?\s+not\s+in\s+/.test(template) ? "is_not" : "is";
-    callerRules.push(...callers.map((name) => ({ name, operator })));
+    const temporaryKeys = readJsonArray(template, /(?:temporary_key_id|TemporaryKeyId)[\s\S]*?\s+(?:not\s+)?in\s+(\[[\s\S]*?\])/);
+    if (!callers && !temporaryKeys) return null;
+    const operator = /(?:initiator|Initiator|temporary_key_id|TemporaryKeyId)[\s\S]*?\s+not\s+in\s+/.test(template) ? "is_not" : "is";
+    callerRules.push(
+      ...(callers || []).map((name) => ({ name, operator })),
+      ...(temporaryKeys || []).map((keyId) => ({ type: "temporary_key", keyId, name: keyId, operator })),
+    );
   }
   const includeOpened = captureTypesForOpened.every((type) => captureTypes?.includes(type));
   const includeCalls = captureTypes?.includes("Call");
+  const expectedCaptureTypes = [
+    ...(includeOpened ? [...captureTypesForOpened, temporaryKeyCaptureType] : []),
+    ...(includeCalls ? ["Call"] : []),
+  ];
   if (!captureTypes || (!includeOpened && !includeCalls) ||
-      captureTypes.length !== (includeOpened ? 2 : 0) + (includeCalls ? 1 : 0) ||
+      !captureTypes.every((type) => expectedCaptureTypes.includes(type)) ||
       new Set(callerRules.map((rule) => rule.operator)).size > 1) return null;
 
   const actions = config.actions || config.action;
@@ -219,7 +228,7 @@ const showAutomationActionsMenu = (host, trigger, event, automation, { onEdit, o
   menu.innerHTML = `
     <button type="button" role="menuitem" data-menu-edit>${icons.edit}<span>${escapeHtml(t(host, "Edit"))}</span></button>
     <a role="menuitem" data-menu-open href="/config/automation/edit/${encodeURIComponent(automation.id)}">${icons.externalLink}<span>${escapeHtml(t(host, "Open in Home Assistant"))}</span></a>
-    <button type="button" role="menuitem" data-menu-toggle><i class="automation-menu-state-dot ${disabled ? "enable" : "disable"}" aria-hidden="true"></i><span>${escapeHtml(t(host, disabled ? "Enable" : "Disable"))}</span></button>
+    <button type="button" role="menuitem" data-menu-toggle><i class="automation-menu-state-switch ${disabled ? "enable" : "disable"}" aria-hidden="true"><span></span></i><span>${escapeHtml(t(host, disabled ? "Enable" : "Disable"))}</span></button>
     <button type="button" role="menuitem" data-menu-delete class="delete-action">${icons.trash}<span>${escapeHtml(t(host, "Delete"))}</span></button>
   `;
   menu.querySelectorAll("button, a").forEach((item) => {
@@ -228,8 +237,10 @@ const showAutomationActionsMenu = (host, trigger, event, automation, { onEdit, o
     item.addEventListener("mouseleave", () => { item.style.background = "transparent"; if (item.classList.contains("delete-action")) item.style.color = "var(--error-color,#dc2626)"; });
   });
   menu.querySelectorAll("svg").forEach((icon) => { icon.style.cssText = "width:19px;height:19px;flex:0 0 auto;fill:none;stroke:currentColor;stroke-width:2;"; });
-  menu.querySelectorAll(".automation-menu-state-dot").forEach((dot) => {
-    dot.style.cssText = `width:12px;height:12px;flex:0 0 12px;border-radius:50%;background:${dot.classList.contains("enable") ? "#16803c" : "#dc2626"};`;
+  menu.querySelectorAll(".automation-menu-state-switch").forEach((toggle) => {
+    const enabled = toggle.classList.contains("enable");
+    toggle.style.cssText = `position:relative;display:inline-flex;width:28px;height:16px;flex:0 0 28px;align-items:center;border-radius:999px;background:${enabled ? "#16803c" : "#dc2626"};`;
+    toggle.firstElementChild.style.cssText = `position:absolute;width:12px;height:12px;border-radius:50%;background:#fff;box-shadow:0 1px 2px #0005;transform:translateX(${enabled ? "14px" : "2px"});`;
   });
   menu.querySelector(".delete-action").style.color = "var(--error-color,#dc2626)";
   menu.querySelector("[data-menu-edit]").addEventListener("click", () => { closeAutomationActionsMenu(host); onEdit(); });
@@ -263,8 +274,13 @@ export const renderAutomationsView = (host) => {
   const disabledCount = automations.length - activeCount;
   return `<div class="card automations-page">
     <div class="automations-heading">
-      <div><h2>${t(host, "Automations")}</h2><p>${escapeHtml(t(host, "{active} active · {disabled} disabled · {total} total", { active: activeCount, disabled: disabledCount, total: automations.length }))}</p><span>${t(host, "Create and manage notification automations for doors in this Akuvox account.")}</span></div>
-      <button class="action" type="button" data-create-door-notification>${icons.plus}<span>Create automation</span></button>
+      <div class="automations-heading-copy">
+        <div class="automations-heading-primary">
+          <div><h2>${t(host, "Automations")}</h2><span>${t(host, "Create and manage notification automations for doors in this Akuvox account.")}</span></div>
+          <button class="action" type="button" data-create-door-notification>${icons.plus}<span>Create automation</span></button>
+        </div>
+        <p>${escapeHtml(t(host, "{active} active · {disabled} disabled · {total} total", { active: activeCount, disabled: disabledCount, total: automations.length }))}</p>
+      </div>
     </div>
     ${host._doorNotificationAutomationsError ? `<p class="form-error">${escapeHtml(host._doorNotificationAutomationsError)}</p>` : ""}
     <div class="automation-list">
@@ -272,7 +288,6 @@ export const renderAutomationsView = (host) => {
         <div class="automation-empty-icon" aria-hidden="true">${icons.automation}</div>
         <h3>No automations yet</h3>
         <p>Start with a notification for doorbell calls, door opens, or unlocks.</p>
-        <button class="settings-inline-action" type="button" data-create-door-notification>${icons.plus}<span>Create your first automation</span></button>
       </section>`}
     </div>
   </div>`;
