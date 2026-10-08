@@ -527,6 +527,7 @@ class TestDisabledDevicePanelVisibilityE2E(unittest.TestCase):
     """Verify a disabled Home Assistant device has no panel representation."""
 
     def test_disabled_device_is_removed_with_its_related_data(self) -> None:
+        """Exclude a disabled device and every related panel item."""
         entry = SimpleNamespace(entry_id="entry-id")
         hass = MagicMock()
         enabled = SimpleNamespace(disabled_by=None)

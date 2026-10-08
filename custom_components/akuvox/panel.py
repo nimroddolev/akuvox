@@ -218,11 +218,13 @@ class PanelCameraPreviewView(HomeAssistantView):
     requires_auth = False
 
     def __init__(self, hass: HomeAssistant) -> None:
+        """Initialize the view with its Home Assistant instance."""
         self.hass = hass
 
     async def get(
         self, request: web.Request, entry_id: str, camera_name: str
     ) -> web.Response:
+        """Return a fresh camera still after validating its access token."""
         entity_id = er.async_get(self.hass).async_get_entity_id(
             "camera", DOMAIN, f"{entry_id}:{camera_name}"
         )
