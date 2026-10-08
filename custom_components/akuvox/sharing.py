@@ -40,6 +40,8 @@ DEFAULT_SYNC_INTERVAL = 15
 # for a brief restart or network hiccup before presenting it as disconnected.
 REMOTE_RECEIVER_CONNECTED_WINDOW = timedelta(minutes=2)
 RUNTIME_KEY = f"{DOMAIN}_credential_sharing"
+_CREDENTIAL_SHARE_RESPONSE_HEADER = "X-Akuvox-Credential-Share"
+_CREDENTIAL_SHARE_REVOKED = "revoked"
 
 
 def _store(hass: HomeAssistant) -> Store[dict[str, Any]]:
@@ -76,6 +78,22 @@ def _source_account_label(entry: ConfigEntry, source_client: Any | None) -> str:
         if isinstance(project_name, str) and project_name.strip():
             return project_name.strip()
     return entry.title
+
+
+def _source_device_data(entry: ConfigEntry, source_client: Any | None) -> dict[str, Any]:
+    """Return current source devices, retaining a usable cached inventory.
+
+    SmartPlus can briefly return an account payload without its device lists.
+    The source panel already treats its saved entry data as a fallback in that
+    case.  A remote share must do the same, otherwise one transient response
+    clears every device and temporary key on its receivers.
+    """
+    current = source_client.get_devices_json() if source_client is not None else {}
+    current = dict(current) if isinstance(current, dict) else {}
+    for key in ("camera_data", "door_relay_data", "door_keys_data"):
+        if not current.get(key):
+            current[key] = entry.data.get(key, [])
+    return current
 
 
 def _filter_shared_devices(
@@ -379,8 +397,14 @@ async def async_fetch_shared_snapshot(
             return None, response.headers.get("ETag", etag)
         if response.status == 410:
             raise PermissionError("The pairing link has expired. Generate a new link from the host Home Assistant.")
-        if response.status in (401, 403, 404):
+        if (
+            response.status == 403
+            and response.headers.get(_CREDENTIAL_SHARE_RESPONSE_HEADER)
+            == _CREDENTIAL_SHARE_REVOKED
+        ):
             raise PermissionError("The credential share is unavailable or has been revoked")
+        if response.status in (401, 403, 404):
+            raise OSError("The credential source could not be reached")
         response.raise_for_status()
         payload = await response.json()
         if not isinstance(payload, dict) or not isinstance(payload.get("credentials"), dict):
@@ -462,7 +486,10 @@ class CredentialShareView(HomeAssistantView):
         except (AttributeError, TypeError, ValueError):
             expired = True
         if not share or share.get("revoked") or not supplied:
-            return web.Response(status=403)
+            return web.Response(
+                status=403,
+                headers={_CREDENTIAL_SHARE_RESPONSE_HEADER: _CREDENTIAL_SHARE_REVOKED},
+            )
         supplied_hash = _digest(supplied)
         # Shares created before one-time links were introduced retain their
         # original receiver secret. New shares exchange their pairing secret
@@ -483,10 +510,16 @@ class CredentialShareView(HomeAssistantView):
             )
         )
         if not (using_receiver_secret or using_legacy_secret or using_pairing_secret):
-            return web.Response(status=403)
+            return web.Response(
+                status=403,
+                headers={_CREDENTIAL_SHARE_RESPONSE_HEADER: _CREDENTIAL_SHARE_REVOKED},
+            )
         if using_pairing_secret and share.get("activated"):
             # The pairing URI has already exchanged its one-time secret.
-            return web.Response(status=403)
+            return web.Response(
+                status=403,
+                headers={_CREDENTIAL_SHARE_RESPONSE_HEADER: _CREDENTIAL_SHARE_REVOKED},
+            )
         if expired and not share.get("activated"):
             return web.Response(status=410)
         try:
@@ -515,12 +548,7 @@ class CredentialShareView(HomeAssistantView):
         # Preserve it in each share snapshot so a receiver can keep the right
         # account label even while the source is temporarily unreachable.
         account_label = _source_account_label(entry, source_client)
-        device_data = (
-            source_client.get_devices_json() if source_client is not None else {
-                key: entry.data.get(key, [])
-                for key in ("camera_data", "door_relay_data", "door_keys_data")
-            }
-        )
+        device_data = _source_device_data(entry, source_client)
         device_data = filter_disabled_device_data(self.hass, entry, device_data)
         temporary_key_relays = _permission_relay_ids(
             share, "view_key_relay_ids", "allow_view_keys"

@@ -31,6 +31,7 @@ from custom_components.akuvox.sharing import (
     _filter_shared_devices,
     _permission_relay_ids,
     _source_account_label,
+    _source_device_data,
     CredentialShareView,
     _digest,
     async_apply_remote_share_link,
@@ -361,6 +362,29 @@ class TestSharedDeviceScopingE2E(unittest.TestCase):
         self.assertEqual(scoped["door_relay_data"], [source["door_relay_data"][0]])
         self.assertEqual([key["key_id"] for key in scoped["door_keys_data"]], ["only-lobby"])
 
+    def test_snapshot_uses_source_cache_when_live_devices_are_empty(self) -> None:
+        """A transient empty cloud response must not empty remote receivers."""
+        entry = MagicMock()
+        entry.data = {
+            "camera_data": [{"name": "Lobby"}],
+            "door_relay_data": [{"name": "Lobby", "mac": "AA", "relay_id": "0"}],
+            "door_keys_data": [{"key_id": "lobby"}],
+        }
+        client = MagicMock()
+        client.get_devices_json.return_value = {
+            "host": "api.example",
+            "camera_data": [],
+            "door_relay_data": [],
+            "door_keys_data": [],
+        }
+
+        device_data = _source_device_data(entry, client)
+
+        self.assertEqual(device_data["host"], "api.example")
+        self.assertEqual(device_data["camera_data"], entry.data["camera_data"])
+        self.assertEqual(device_data["door_relay_data"], entry.data["door_relay_data"])
+        self.assertEqual(device_data["door_keys_data"], entry.data["door_keys_data"])
+
     def test_create_permission_only_includes_explicitly_permitted_relays(self) -> None:
         """A receiver cannot offer relays that were excluded from key creation."""
         share = {
@@ -587,6 +611,7 @@ class TestOneTimePairingLinkE2E(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(first.status, 200)
         self.assertIn("receiver_secret", payload)
         self.assertEqual(second.status, 403)
+        self.assertEqual(second.headers["X-Akuvox-Credential-Share"], "revoked")
         self.assertEqual(receiver.status, 200)
 
     async def test_concurrent_pairing_requests_redeem_only_once(self) -> None:
