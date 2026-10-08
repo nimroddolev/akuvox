@@ -1228,8 +1228,10 @@ export const renderSettingsView = (host) => {
         </fieldset>` : `
         <fieldset class="settings-section remote-instances-section">
           <legend>${icons.hub}<span>Share Access With Another Instance</span></legend>
-          <p class="settings-section-description">Securely bridge cameras, relays, activity history, call history, events and temporary keys with other Home Assistant instances.</p>
-          <button class="action settings-inline-action" type="button" data-create-credential-share>${icons.externalLink}<span>Create pairing link</span></button>
+          <div class="credential-share-intro">
+            <p class="settings-section-description">Securely bridge cameras, relays, activity history, call history, events and temporary keys with other Home Assistant instances.</p>
+            <button class="action settings-inline-action" type="button" data-create-credential-share>${icons.externalLink}<span>Create pairing link</span></button>
+          </div>
           ${pairedReceiversSection(host, settings.credential_shares)}
         </fieldset>`}
 

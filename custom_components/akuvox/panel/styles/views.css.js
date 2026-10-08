@@ -721,8 +721,8 @@ export const viewStyles = `
   .automation-empty p { max-width: 380px; margin: 6px 0 16px; color: var(--panel-muted); }
 
   @media (max-width: 600px) {
-    .automations-heading-primary { align-items: stretch; flex-direction: column; }
-    .automations-heading-primary .action { align-self: flex-start; }
+    .automations-heading-primary { align-items: flex-start; flex-direction: row; }
+    .automations-heading-primary .action { align-self: auto; margin-inline-start: auto; }
     .automation-row { grid-template-columns: auto minmax(0, 1fr); align-items: start; }
     .automation-row-actions { justify-content: flex-end; }
     .automation-row-actions { grid-column: 1 / -1; }

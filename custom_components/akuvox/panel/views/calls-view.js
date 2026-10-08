@@ -87,16 +87,6 @@ export const renderCallsView = (host, account) => {
   const calls = (account.calls || []).filter((call, index, all) =>
     all.findIndex((candidate) => visibleCallKey(candidate) === visibleCallKey(call)) === index
   );
-  const sortOptions = [
-    { value: "startTime", label: "Time" },
-    { value: "callerName", label: "Caller" },
-    { value: "calleeName", label: "Callee" },
-    { value: "status", label: "Status" },
-    { value: "callDuration", label: "Duration" },
-    { value: "image", label: "Image" },
-  ];
-  const activeSortLabel =
-    sortOptions.find((option) => option.value === host._callSort.key)?.label || "Time";
   const filterCount = Object.values(host._callFilters).reduce(
     (count, values) => count + values.length,
     0
@@ -124,17 +114,31 @@ export const renderCallsView = (host, account) => {
       );
     });
 
+  const hasImages = filtered.some((call) => call.has_image);
+  const sortOptions = [
+    { value: "startTime", label: "Time" },
+    { value: "callerName", label: "Caller" },
+    { value: "calleeName", label: "Callee" },
+    { value: "status", label: "Status" },
+    { value: "callDuration", label: "Duration" },
+    ...(hasImages ? [{ value: "image", label: "Image" }] : []),
+  ];
+  const activeSortLabel =
+    sortOptions.find((option) => option.value === host._callSort.key)?.label || "Time";
+
   const heading = (label, key) =>
     `<button class="sort-button ${host._callSort.key === key ? "active" : ""}" data-call-sort="${key}" data-direction="${host._callSort.direction === "asc" ? "↑" : "↓"}">${label}</button>`;
   const formatTimestamp = tableTimestampFormatter(filtered.map((call) => call.startTime));
 
   return `
-    <div class="card table-wrap">
-      <h2>Call history</h2>
-      <p class="muted">The latest SmartPlus call history is refreshed alongside activity polling and retained across restarts.</p>
-      <div class="mobile-filter-toolbar">
-        <button type="button" class="mobile-filter-toggle" data-mobile-filter-toggle="calls" aria-expanded="${Boolean(host._mobileFiltersOpen.calls)}">Filter${filterCount ? ` <span class="mobile-filter-count">${filterCount}</span>` : ""}</button>
+    <div class="card table-wrap calls-table-wrap">
+      <div class="section-heading calls-heading">
+        <h2>Call history</h2>
+        <div class="mobile-filter-toolbar">
+          <button type="button" class="mobile-filter-toggle" data-mobile-filter-toggle="calls" aria-expanded="${Boolean(host._mobileFiltersOpen.calls)}">Filter${filterCount ? ` <span class="mobile-filter-count">${filterCount}</span>` : ""}</button>
+        </div>
       </div>
+      <p class="muted">The latest SmartPlus call history is refreshed alongside activity polling and retained across restarts.</p>
       <div class="activity-controls mobile-filter-panel ${host._mobileFiltersOpen.calls ? "mobile-filter-panel-open" : ""}">
         ${renderMultiSelectFilter({ scope: "call", key: "callerName", label: "Caller", allLabel: "All Callers", values: callFilterValues(calls, "callerName"), selected: host._callFilters.callerName, openMenu: host._openFilterMenu })}
         ${renderMultiSelectFilter({ scope: "call", key: "calleeName", label: "Callee", allLabel: "All Callees", values: callFilterValues(calls, "calleeName"), selected: host._callFilters.calleeName, openMenu: host._openFilterMenu })}
@@ -158,7 +162,7 @@ export const renderCallsView = (host, account) => {
             <th>${heading("Callee", "calleeName")}</th>
             <th>${heading("Status", "status")}</th>
             <th>${heading("Duration", "callDuration")}</th>
-            <th>${heading("Image", "image")}</th>
+            ${hasImages ? `<th>${heading("Image", "image")}</th>` : ""}
           </tr>
         </thead>
         <tbody>
@@ -176,17 +180,15 @@ export const renderCallsView = (host, account) => {
                   </span>
                 </td>
                 <td>${escapeHtml(call.isAnswer ? call.callDuration || "-" : "-")}</td>
-                <td>
-                  ${
-                    call.has_image
-                      ? `<button class="action activity-image-button" data-call-image="${escapeHtml(call.id)}">View</button>`
-                      : '<span class="muted">Unavailable</span>'
-                  }
-                </td>
+                ${hasImages ? `<td>${
+                  call.has_image
+                    ? `<button class="action activity-image-button" data-call-image="${escapeHtml(call.id)}">View</button>`
+                    : '<span class="muted">Unavailable</span>'
+                }</td>` : ""}
               </tr>
             `
               )
-              .join("") || '<tr><td colspan="6">No matching calls.</td></tr>'
+              .join("") || `<tr><td colspan="${hasImages ? 6 : 5}">No matching calls.</td></tr>`
           }
         </tbody>
       </table>

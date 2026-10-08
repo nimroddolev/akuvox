@@ -392,6 +392,13 @@ export const mainStyles = `
     text-decoration: none;
   }
 
+  .auth-notice-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+
   .help-attention-notice { margin: 28px auto 24px; }
 
   .share-link-input-wrap { position: relative; display: block; }
@@ -536,7 +543,9 @@ export const mainStyles = `
     justify-content: flex-end;
   }
 
-  .remote-instances-section .settings-inline-action { margin-top: -2px; }
+  .credential-share-intro { display: flex; align-items: flex-start; gap: 16px; }
+  .credential-share-intro .settings-section-description { flex: 1 1 auto; min-width: 0; }
+  .credential-share-intro .settings-inline-action { flex: 0 0 auto; }
   .remote-instances-section .credential-share-receivers { margin-top: 12px; }
   .settings-list-label { margin: 0 0 6px; color: var(--panel-muted); font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
 
@@ -701,7 +710,7 @@ export const mainStyles = `
   .credential-share-view-button svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
   .remote-instances-section, .sip-section { position: relative; }
   .remote-instances-section .settings-inline-action, .sip-export { background: var(--navy); }
-  .remote-instances-section .settings-inline-action { display: flex; width: fit-content; max-width: 100%; margin: 12px 0 16px auto; }
+  .remote-instances-section .settings-inline-action { display: flex; width: fit-content; max-width: 100%; margin: 0; }
   .remote-instances-section .settings-section-description { padding-right: 0; }
   .sip-export { position: absolute; top: 16px; right: 20px; color: white; }
   .sip-section .settings-section-description { padding-right: 210px; }
@@ -742,6 +751,8 @@ export const mainStyles = `
     .settings-switch { margin-top: 3px; }
     .settings-two-column, .sip-details-grid { grid-template-columns: 1fr; }
     .remote-instances-section .settings-inline-action, .sip-export { position: static; margin-top: 8px; }
+    .credential-share-intro { flex-direction: column; gap: 0; }
+    .credential-share-intro .settings-inline-action { align-self: flex-end; }
     .remote-instances-section .settings-section-description, .sip-section .settings-section-description { padding-right: 0; }
   }
 

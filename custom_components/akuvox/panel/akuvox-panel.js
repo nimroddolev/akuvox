@@ -19,8 +19,8 @@ import {
   renderActivityView,
   bindActivityEvents,
   visibleActivityEvents,
-} from "./views/activity-view.js?v=20261003-mobile-activity-2";
-import { renderCallsView, bindCallsEvents } from "./views/calls-view.js?v=20261003-hebrew-rtl-2";
+} from "./views/activity-view.js?v=20261006-activity-filter-alignment";
+import { renderCallsView, bindCallsEvents } from "./views/calls-view.js?v=20261006-conditional-image-column";
 import {
   renderKeysView,
   bindKeysEvents,
@@ -786,8 +786,10 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
       <div class="card auth-notice help-attention-notice">
         <h2>${details.title}</h2>
         <p>${details.text}</p>
-        <button class="action" type="button" data-refresh-shared-credentials>Refresh shared credentials</button>
-        ${problem === "unreachable" ? '<button class="action" type="button" data-apply-remote-share-link>Apply new share link</button>' : ""}
+        <div class="auth-notice-actions">
+          <button class="action" type="button" data-refresh-shared-credentials>Refresh shared credentials</button>
+          ${problem === "unreachable" ? '<button class="action" type="button" data-apply-remote-share-link>Apply new share link</button>' : ""}
+        </div>
         <p class="muted">Re-authentication must be completed in the Akuvox integration on the host Home Assistant.</p>
       </div>
     `;

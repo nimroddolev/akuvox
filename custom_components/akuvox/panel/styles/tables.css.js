@@ -707,6 +707,8 @@ export const tableStyles = `
 
   .key-tile-usage strong { color: var(--key-usage-color, #18733d); font-weight: 600; }
 
+  .key-tile-expired .key-tile-usage strong { color: inherit; }
+
   .key-tile-usage > i {
     display: block;
     height: 6px;
@@ -1114,6 +1116,18 @@ export const tableStyles = `
       border-radius: 0;
     }
 
+    .activity-table-wrap .activity-thumbnail {
+      width: 42px;
+      height: 29px;
+    }
+
+    .calls-table-wrap {
+      margin-inline: -12px;
+      padding-inline: 0;
+      border-inline-width: 0;
+      border-radius: 0;
+    }
+
     .row-view-heading {
       align-items: flex-start;
     }
@@ -1152,6 +1166,31 @@ export const tableStyles = `
 
     .tile-details { grid-template-columns: 1fr; }
 
+  }
+
+  .calls-heading,
+  .activity-heading { margin-bottom: 0; }
+
+  .calls-heading .mobile-filter-toolbar,
+  .activity-heading .mobile-filter-toolbar {
+    display: flex;
+    margin: 0;
+    margin-inline-start: auto;
+  }
+
+  .calls-table-wrap .activity-controls.mobile-filter-panel,
+  .activity-table-wrap .activity-controls.mobile-filter-panel {
+    display: none;
+    margin: 10px 0 12px;
+    padding: 12px;
+    border: 1px solid var(--divider-color, #8c99a3);
+    border-radius: 10px;
+    background: var(--secondary-background-color, #f7f8f9);
+  }
+
+  .calls-table-wrap .activity-controls.mobile-filter-panel.mobile-filter-panel-open,
+  .activity-table-wrap .activity-controls.mobile-filter-panel.mobile-filter-panel-open {
+    display: flex;
   }
   /* Physical offsets in tiles and tables must be mirrored for RTL locales. */
   :host([dir="rtl"]) .table-wrap table th,

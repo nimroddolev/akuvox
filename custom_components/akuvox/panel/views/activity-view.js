@@ -215,12 +215,12 @@ export const renderActivityView = (host, account) => {
       <div class="section-heading activity-heading">
         <h2>${t(host, "Latest activity")}</h2>
         ${account.activity_updated_at ? `<span class="muted activity-updated" data-activity-updated-at="${escapeHtml(account.activity_updated_at)}"></span>` : ""}
+        <div class="mobile-filter-toolbar">
+          <button type="button" class="mobile-filter-toggle" data-mobile-filter-toggle="activity" aria-expanded="${Boolean(host._mobileFiltersOpen.activity)}">${t(host, "Filter")}${filterCount ? ` <span class="mobile-filter-count">${filterCount}</span>` : ""}</button>
+        </div>
       </div>
       ${activityStorageWarning(host._settings)}
       <p class="muted">${t(host, "Recent SmartPlus activity is retained across Home Assistant restarts and refreshed by polling.")}</p>
-      <div class="mobile-filter-toolbar">
-        <button type="button" class="mobile-filter-toggle" data-mobile-filter-toggle="activity" aria-expanded="${Boolean(host._mobileFiltersOpen.activity)}">${t(host, "Filter")}${filterCount ? ` <span class="mobile-filter-count">${filterCount}</span>` : ""}</button>
-      </div>
       <div class="activity-controls mobile-filter-panel ${host._mobileFiltersOpen.activity ? "mobile-filter-panel-open" : ""}">
         ${renderMultiSelectFilter({ scope: "activity", key: "Location", label: t(host, "Door"), allLabel: t(host, "All Doors"), values: filterValues(activity, "Location"), selected: host._activityFilters.Location, openMenu: host._openFilterMenu })}
         ${renderMultiSelectFilter({ scope: "activity", key: "CaptureType", label: t(host, "Event"), allLabel: t(host, "All Events"), values: filterValues(activity, "CaptureType"), selected: host._activityFilters.CaptureType, openMenu: host._openFilterMenu })}
