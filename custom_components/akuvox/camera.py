@@ -1,6 +1,7 @@
 """Camera platform for akuvox."""
 
 from collections.abc import Callable, Awaitable
+from contextvars import ContextVar
 
 from homeassistant.helpers import storage
 from homeassistant.helpers.entity import DeviceInfo
@@ -9,6 +10,10 @@ from homeassistant.core import HomeAssistant
 from homeassistant.components.generic.camera import GenericCamera
 
 from .const import DOMAIN, LOGGER, NAME, VERSION, DATA_STORAGE_KEY
+
+# Set while HA's own stream worker asks for the source, which needs the plain
+# RTSP URL rather than the go2rtc ffmpeg form.
+_DIRECT_SOURCE: ContextVar[bool] = ContextVar("akuvox_direct_source", default=False)
 
 
 async def async_setup_entry(hass: HomeAssistant,
@@ -88,3 +93,21 @@ class AkuvoxCameraEntity(GenericCamera):
             manufacturer=NAME,
         )
 
+    async def async_create_stream(self):
+        """Create the HA stream worker from the plain RTSP source."""
+        token = _DIRECT_SOURCE.set(True)
+        try:
+            return await super().async_create_stream()
+        finally:
+            _DIRECT_SOURCE.reset(token)
+
+    async def stream_source(self) -> str | None:
+        """Return the stream source."""
+        source = await super().stream_source()
+        if (source and not _DIRECT_SOURCE.get()
+                and "go2rtc" in self.hass.config.components):
+            # The SmartPlus RTSP relay only offers UDP transport, which
+            # go2rtc's native RTSP client cannot use; have go2rtc pull it
+            # through ffmpeg over UDP instead.
+            return f"ffmpeg:{source}#input=rtsp/udp"
+        return source
