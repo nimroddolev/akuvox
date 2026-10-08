@@ -89,8 +89,42 @@ export const asDoorNotification = (config, doors) => {
       new Set(callerRules.map((rule) => rule.operator)).size > 1) return null;
 
   const actions = config.actions || config.action;
-  if (!Array.isArray(actions) || actions.length !== 1) return null;
-  const imageChoice = actions[0];
+  if (!Array.isArray(actions) || !actions.length) return null;
+  let imageChoice = actions[0];
+  let includeRelayAction = false;
+  let requireActionAuthentication = false;
+  if (actions.length > 1) {
+    const [variables, notification, waitForAction, relayChoice] = actions;
+    const actionVariables = variables?.variables;
+    const actionNames = actionVariables && Object.keys(actionVariables);
+    const waitTriggers = waitForAction?.wait_for_trigger;
+    const relayChoices = relayChoice?.choose;
+    const validRelayActions = Array.isArray(actionNames) && actionNames.length > 0 &&
+      actionNames.every((name, index) => (
+        name === `akuvox_relay_action_${index}` &&
+        actionVariables[name] === `AKUVOX_OPEN_RELAY_${index}_{{ context.id }}`
+      )) &&
+      Array.isArray(waitTriggers) && waitTriggers.length === actionNames.length &&
+      waitTriggers.every((trigger, index) => (
+        trigger?.trigger === "event" && trigger?.event_type === "mobile_app_notification_action" &&
+        trigger?.event_data?.action === `{{ akuvox_relay_action_${index} }}`
+      )) &&
+      waitForAction?.timeout === "00:05:00" && waitForAction?.continue_on_timeout === false &&
+      Array.isArray(relayChoices) && relayChoices.length === actionNames.length &&
+      relayChoices.every((choice, index) => (
+        choice?.conditions?.[0]?.condition === "template" &&
+        choice.conditions[0].value_template === `{{ wait.trigger.event.data.action == akuvox_relay_action_${index} }}` &&
+        choice?.sequence?.length === 1 && choice.sequence[0]?.action === "button.press" &&
+        typeof choice.sequence[0]?.target?.entity_id === "string"
+      ));
+    if (!validRelayActions || actions.length !== 4) return null;
+    const notificationChoice = notification?.choose?.[0];
+    if (!Array.isArray(notification?.choose) || !notification.choose.length ||
+        !Array.isArray(notificationChoice?.sequence) || notificationChoice.sequence.length !== 1 ||
+        !/trigger\.event\.data\.device_id/.test(notificationChoice.conditions?.[0]?.value_template || "")) return null;
+    imageChoice = notificationChoice.sequence[0];
+    includeRelayAction = true;
+  }
   if (!Array.isArray(imageChoice?.choose) || imageChoice.choose.length !== 1) return null;
   const imageConditions = imageChoice.choose[0]?.conditions;
   const imageServices = notificationServices(imageChoice.choose[0]?.sequence);
@@ -102,6 +136,22 @@ export const asDoorNotification = (config, doors) => {
       (config.mode !== undefined && config.mode !== "parallel") ||
       (config.max !== undefined && config.max !== 10) || !String(config.alias || "").trim()) return null;
 
+  const representativeNotification = [
+    ...(imageChoice.choose[0]?.sequence || []),
+    ...(imageChoice.default || []),
+  ].find((action) => String(action?.action || action?.service || "").startsWith("notify.mobile_app_"));
+  const notificationData = representativeNotification?.data?.data || {};
+  requireActionAuthentication = Boolean(notificationData.actions?.some(
+    (action) => action?.authenticationRequired === true
+  ));
+  const sound = notificationData?.push?.sound;
+  const priorityAlert = Boolean(sound && typeof sound === "object" && sound.critical);
+  const iosSound = typeof sound === "string" ? sound : priorityAlert ? String(sound.name || "") : "";
+  const androidChannel = notificationData.channel === "alarm_stream" ? "" : String(notificationData.channel || "");
+  const includeImage = Boolean(imageChoice.choose[0]?.sequence?.some(
+    (action) => action?.data?.data?.image
+  ));
+
   return {
     name: String(config.alias || ""),
     doorIds,
@@ -110,6 +160,12 @@ export const asDoorNotification = (config, doors) => {
     callerRules,
     callerOperator: callerRules[0]?.operator || "is",
     services,
+    ...(includeRelayAction ? { includeRelayAction } : {}),
+    ...(requireActionAuthentication ? { requireActionAuthentication } : {}),
+    ...(!includeImage ? { includeImage } : {}),
+    ...(iosSound ? { iosSound } : {}),
+    ...(androidChannel ? { androidChannel } : {}),
+    ...(priorityAlert ? { priorityAlert } : {}),
     initialState: isDisabled(config.initial_state) ? false : undefined,
   };
 };

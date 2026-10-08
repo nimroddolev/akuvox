@@ -26,7 +26,7 @@ import {
   bindKeysEvents,
   deleteSelectedKeys,
 } from "./views/keys-view.js?v=20261004-key-table-titles";
-import { renderAutomationsView, bindAutomationsEvents } from "./views/automations-view.js?v=20261005-automation-state-dots";
+import { renderAutomationsView, bindAutomationsEvents } from "./views/automations-view.js?v=20261006-create-action-alignment";
 import { renderSettingsView, bindSettingsEvents, updateActivityStorageProgress, updateRemoteShareConnectionStatus } from "./views/settings-view.js?v=20261004-localized-sip-pdf-user-locale";
 import { renderHelpView } from "./views/help-view.js";
 
