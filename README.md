@@ -4,91 +4,129 @@
 
 # Akuvox SmartPlus for Home Assistant
 
-Bring an Akuvox SmartPlus account into Home Assistant: view door cameras, unlock relays, manage temporary access, review door and call history, and build automations around door activity.
+Bring your Akuvox SmartPlus account into Home Assistant to view door cameras, unlock relays, review activity, and build automations around door events.
 
-> This is an unofficial, community-maintained integration. It communicates with SmartPlus's private cloud API and is not affiliated with Akuvox. The service or its authentication can change without notice.
+> This is an unofficial community integration that uses SmartPlus's private cloud API. Akuvox or SmartPlus may change that API or its authentication without notice.
 
-## What it does
+## What you get
 
-- Creates Home Assistant camera, relay-button, temporary-key sensor, and door-open event entities.
-- Adds an administrator-only **Akuvox SmartPlus** sidebar panel for cameras, relays, temporary keys, activity, calls, and account settings.
-- Supports SMS sign-in or email/username, password, and email verification. Passwords are used only to sign in and are not stored.
-- Refreshes supported SmartPlus sessions automatically and guides you through reauthentication when needed.
-- Records recent door activity and calls locally; activity storage is optional, size-limited, and can be cleared, exported, or imported from the panel.
-- Lets you create, edit, delete, inspect, and fetch QR codes for temporary keys.
-- Provides camera-stream and activity-image orientation controls, plus per-camera event-image waiting.
-- Includes a device automation trigger for a detected door opening and emits the `akuvox_door_update` event with useful metadata.
-- Can share a deliberately scoped SmartPlus view with another Home Assistant instance using a one-time pairing link.
-- Displays SIP account mappings and can export them as a password-protected PDF.
+- Door camera and relay entities in Home Assistant.
+- An administrator-only **Akuvox SmartPlus** sidebar panel for devices, activity, temporary key management, automations, settings, and advanced account tools.
+- Door-opening events (with event properties) to trigger custom automations.
+- Automatic session refresh and a guided reauthentication flow when SmartPlus requires it.
+- Optional local history, image & camera rotation, scoped account sharing, temporary keys, and SIP exports.
 
-## Install
+## Before you start
 
-### HACS (recommended)
+You need:
+
+- A SmartPlus account that already has access to the doors or devices you want to use.
+- A Home Assistant administrator account.
+- HACS installed in Home Assistant.
+
+## Install with HACS
 
 1. Install [HACS](https://hacs.xyz/docs/installation/manual) if needed.
-2. Add this repository as an Integration:
+2. Add this repository as an **Integration**:
+
    [![Open HACS repository](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=nimroddolev&repository=akuvox&category=integration)
-3. Download **Akuvox SmartPlus**, then restart Home Assistant.
 
-### Manual installation
+3. Download **Akuvox SmartPlus** from HACS.
+4. Restart Home Assistant.
 
-Copy the repository's `custom_components/akuvox` directory to:
+For a manual installation, copy `custom_components/akuvox` into `<your Home Assistant config>/custom_components/akuvox`, then restart Home Assistant. Repeat the copy when updating.
 
-```text
-<your Home Assistant config>/custom_components/akuvox
-```
+## Connect your SmartPlus account
 
-Restart Home Assistant after copying the files.
+1. Go to **Settings → Devices & services → Add integration → Akuvox SmartPlus**, or use:
 
-## Set up an account
+    [![Add Akuvox SmartPlus](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=akuvox)
 
-Open **Settings → Devices & services → Add integration → Akuvox SmartPlus**, or use:
+2. Choose the sign-in method that fits how you use SmartPlus:
 
-[![Add Akuvox SmartPlus](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=akuvox)
+    - **Email/username and password** - Enter your account's email and password to receive the emailed verification code to sign in securely.
+    - **SMS** - Select your country & phone number to receive an SMS code to sign in securely.
+    - **Credentials from another Home Assistant** - Use a restricted pairing link created by another Home Assistant instance running the integration. See [Share an account](#share-an-account).
 
-Choose one of these methods:
+The country selector chooses the SmartPlus region in most cases. If it does not, select the regional API subdomain manually during setup.
 
-- **SMS** — Select your country, enter the phone number without its country prefix, then enter the SMS code. SmartPlus can allow only one active SMS session, so this may sign the mobile app out.
-- **Email/username and password** — Enter the SmartPlus account name and password, then the emailed verification code. This is generally the best choice when you also use the mobile app.
-- **Credentials from another Home Assistant** — Paste a pairing link created by a trusted source instance. See [Share an account](#share-an-account).
+## Features
 
-The country selector normally chooses the right SmartPlus region. If discovery fails, choose the regional API subdomain manually in the configuration flow or integration options.
+Your SmartPlus account becomes a Home Assistant hub with camera and relay devices. Open **Akuvox SmartPlus** in the sidebar for the full experience.
 
-## Use the integration
-
-Each configured account is a hub. Its cameras and relays appear as Home Assistant devices, while the **Akuvox SmartPlus** sidebar panel provides the fuller SmartPlus experience.
-
-| Area | Use it for |
+| Area | What you can do |
 | --- | --- |
-| Devices | Open live camera streams, view still previews, and unlock relays. |
-| Temporary Keys | Review QR/PIN keys and create, edit, or remove access within the permissions of the account. |
-| Latest Activity | Review door events and images. Optionally retain history locally with a configurable storage limit. |
-| Call History | Review recent SmartPlus calls and their available images. |
-| Settings | Adjust image orientation, event-image timing, logging, storage, credential sharing, and SIP export. |
+| [Devices](#devices) | View live streams and unlock relays. |
+| [Latest Activity](#latest-activity) | Browse realtime door activity, including available images. |
+| [Call History](#call-history) | Review recent SmartPlus calls and their available images. |
+| [Automations](#automations) | Create and manage door-notification automations without YAML. |
+| [Temporary Keys](#temporary-keys) | Manage your temporary keys and view their usage. |
+| [Settings](#settings) | Configure events, local storage, cameras image options, account sharing and SIP account details. |
 
-The sidebar panel and its sensitive controls are available only to Home Assistant administrators.
+Only Home Assistant administrators can open the panel and use its sensitive controls.
 
-### Automations and events
+### Devices
 
-For each newly detected door activity, the integration emits an
-`akuvox_door_update` event. Existing history loaded during the initial refresh
-does not emit events. Use the **Door opened** device trigger for the simplest
-no-code automation; use the event directly when you need to filter by activity
-type, caller, relay, or image.
+View live streams and still previews, open RTSP links, and unlock relays from the **Devices** tab.
 
-New automations should use the snake-case fields below. The original aliases
-remain in every payload for compatibility with existing automations.
+[![Devices tab with a front-door camera preview and relay controls](docs/images/devices-preview.png)](docs/images/devices-preview.png)
 
-| Canonical field | Legacy alias | Availability | Meaning |
-| --- | --- | --- | --- |
-| `location` | `Location` | Always | Home Assistant display name for the door. |
-| `capture_type` | `CaptureType` | Always | Activity type. Common values are `Call`, `Face Unlock`, and `Unlock on SmartPlus`. Unrecognized SmartPlus values are passed through. |
-| `initiator` | `Initiator` | Always | Person or visitor associated with the activity; may be empty. |
-| `relay_name` | `RelayName` | Always | Relay involved in the unlock, when reported; otherwise empty. |
-| `pic_url` | `PicUrl` | Always | SmartPlus event-image URL, or an empty string when no image is available. Treat this URL as private. |
-| `device_id` | — | When the door has a matching Home Assistant device | Home Assistant device ID for filtering an event trigger to one door. |
+### Latest Activity
 
-For more control, trigger directly on the event:
+Browse and filter recent door activity and its available images from the **Latest Activity** tab.
+
+[![Latest Activity tab with filters and a chronological door-event list](docs/images/latest-activity-preview.png)](docs/images/latest-activity-preview.png)
+
+### Call History
+
+Review recent SmartPlus calls and their available images from the **Call History** tab.
+
+### Temporary keys
+
+Create, edit, delete, copy, and retrieve QR codes for temporary access from **Akuvox SmartPlus → Temporary Keys**. What you can manage depends on the permissions of the connected SmartPlus account.
+
+[![Temporary Keys tab with generic, masked access codes](docs/images/temporary-keys-preview.png)](docs/images/temporary-keys-preview.png)
+
+When editing a key, you can review its validity, usage limit, optional identifiers, and permitted relays.
+
+[![Edit Temporary Key dialog with a masked access ID and generic relay permissions](docs/images/temporary-key-edit-preview.png)](docs/images/temporary-key-edit-preview.png)
+
+### Automations
+
+#### Automations Wizard
+
+Use **Akuvox SmartPlus → Automations** to build automations with a UI that allows you to easily construct triggers that target specific doors, event types & family members, and build notification events that take advantage of the event data (such as door/person names, live camera images, etc.).
+
+[![Automations tab with a no-code front-door notification workflow](docs/images/automations-preview.png)](docs/images/automations-preview.png)
+
+The six-step wizard selects doors, event types, optional people or temporary keys, notification services, delivery options, and a name before creating the automation.
+
+<p align="center">
+  <a href="docs/images/automations-wizard-step-1.png"><img src="docs/images/automations-wizard-step-1.png" width="33%" alt="Create Automation — choose doors"></a>
+  <a href="docs/images/automations-wizard-step-2.png"><img src="docs/images/automations-wizard-step-2.png" width="33%" alt="Create Automation — choose events"></a>
+  <a href="docs/images/automations-wizard-step-3.png"><img src="docs/images/automations-wizard-step-3.png" width="33%" alt="Create Automation — choose people or keys"></a>
+</p>
+<p align="center">
+  <a href="docs/images/automations-wizard-step-4.png"><img src="docs/images/automations-wizard-step-4.png" width="33%" alt="Create Automation — choose notification services"></a>
+  <a href="docs/images/automations-wizard-step-5.png"><img src="docs/images/automations-wizard-step-5.png" width="33%" alt="Create Automation — notification options"></a>
+  <a href="docs/images/automations-wizard-step-6.png"><img src="docs/images/automations-wizard-step-6.png" width="33%" alt="Create Automation — name the automation"></a>
+</p>
+
+#### Automations via UI/YAML
+
+For full control you can also use the **Door opened** device trigger or listen for `akuvox_door_update` directly in your automations via Home Assistant's UI or YAML.
+
+| Event property | Description | Possible or example values |
+| --- | --- | --- |
+| `location` | Home Assistant display name of the door that produced the event. | `Front Door`, `Garage` |
+| `capture_type` | Type of SmartPlus activity. Known types are normalized; unrecognized SmartPlus values are passed through unchanged. | `Call`, `Face Unlock`, `Temp Key Unlock`, `Unlock on SmartPlus` |
+| `initiator` | Person, visitor, or temporary-key name associated with the activity. May be empty. | `Visitor`, `Resident`, `Guest access`, `""` |
+| `relay_name` | Relay involved in the action, when SmartPlus reports one. | `Relay1`, `1`, `""` |
+| `pic_url` | Private SmartPlus URL for the event image, when available. | `https://…/event.jpg`, `""` |
+| `device_id` | Home Assistant device ID for the matching door; present only when the door has a registered Home Assistant device. | Home Assistant device ID string |
+| `temporary_key_id` | Stable SmartPlus key ID; present only for a temporary-key unlock when the key name resolves to exactly one configured key. | `guest-key-123` |
+
+For compatibility, the original capitalized aliases (`Location`, `CaptureType`, `Initiator`, `RelayName`, `PicUrl`, and, when present, `TemporaryKeyId`) are emitted alongside their snake-case equivalents.
 
 ```yaml
 alias: Notify when someone rings the front door
@@ -106,34 +144,50 @@ actions:
 mode: single
 ```
 
-By default the integration waits for an event image before publishing an event. Disable that setting—or override it for a specific camera—when faster notifications matter more than an accompanying image.
+By default, the integration waits for an event image before it publishes an event. In **Settings → Door Events**, change that globally or for an individual camera when faster alerts matter more than including an image.
 
-## Share an account
+## Settings
 
-An administrator can give another Home Assistant instance a restricted, revocable view of an account.
+Use **Akuvox SmartPlus → Settings** to configure event-image timing, local history, camera image options, account sharing, SIP account details, and debug logging.
+
+### Share an account
+
+Give another Home Assistant instance a restricted, revocable view without exposing your SmartPlus credentials.
 
 1. On the source instance, open **Akuvox SmartPlus → Settings → Create pairing link**.
-2. Choose the cameras, relays, temporary-key permissions, family-member activity, call history, and optional access expiry to share.
-3. Transfer the generated link securely. It is valid for 10 minutes and can be used once.
-4. On the receiving instance, choose **Credentials from another Home Assistant** during setup and paste the link.
+2. Choose the cameras, relays, key permissions, activity, calls, and optional expiry to share.
+3. Transfer the one-time link securely. It expires after 10 minutes.
+4. On the receiving instance, choose **Credentials from another Home Assistant** and paste the link.
 
-The source can review connection status, revoke a receiver immediately, or delete a revoked pairing. Shared receivers get only the selected data and permissions; their account never performs a direct SmartPlus login.
+Recipients receive only the data and permissions you select; they never sign in to SmartPlus directly. The source instance can review or revoke access at any time. Pairing requires a working HTTPS external URL.
 
-Pairing requires a working HTTPS external URL in Home Assistant. Treat pairing links and shared SIP information like passwords.
+### SIP export and local history
+
+The panel can export SIP account mappings as a password-protected PDF. It can also retain local activity history, which defaults to a 5 MB limit. You can limit, clear, export, or import this history; set the limit to `0` for unlimited storage.
 
 ## Security and privacy
 
-- Authentication tokens, pairing secrets, and SIP credentials are stored in Home Assistant's private storage rather than sent to the browser panel.
-- Temporary-key and activity images are retrieved only when requested and are authorized per account or pairing scope.
-- Local activity storage defaults to 5 MB and can be disabled, limited, cleared, exported, or imported from the panel. A limit of `0` means unlimited storage.
-- SIP exports are password-protected, but still contain powerful credentials—store them carefully.
+- Tokens, pairing secrets, and SIP credentials stay in Home Assistant's private storage and are not sent to the browser panel.
+- Images are fetched only when requested and remain limited by the connected account or pairing permissions.
+- Treat pairing links, private image URLs, SIP exports, and exported data like passwords.
 
-## Troubleshooting
+## Contributing and testing
 
-- **Sign-in or refresh fails:** Reconfigure the integration and authenticate again. Email sign-in avoids the mobile-app SMS-session conflict.
-- **No cameras or relays after setup:** Wait for the initial cloud refresh, then reload the integration. Confirm the same account can see the devices in SmartPlus.
-- **Events are late:** In panel settings, disable waiting for an event image or change the affected camera's override.
-- **A remote instance is stale:** Check the source's external HTTPS URL, then use **Refresh shared credentials** on the receiver. The source panel shows each receiver's connection status.
-- **Need more help:** Search or post in the [Home Assistant community discussion](https://community.home-assistant.io/t/akuvox-smartplus-view-door-camera-feeds-open-doors-and-manage-temporary-keys/623187), or open a [GitHub issue](https://github.com/nimroddolev/akuvox/issues) with Home Assistant version, integration version, relevant logs, and steps to reproduce. Never include passwords, tokens, pairing links, SIP credentials, or private image URLs.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines. To run the test suite locally, use Python 3.14 and install the development requirements.
 
-Contributions and focused bug reports are welcome.
+To run tests:
+
+```sh
+scripts/setup
+python3 -m unittest discover -s tests -v
+```
+
+The tests simulate SmartPlus responses and never access a live account.
+
+## Help and support
+
+For help, use the [Home Assistant community discussion](https://community.home-assistant.io/t/akuvox-smartplus-view-door-camera-feeds-open-doors-and-manage-temporary-keys/623187) or [open an issue](https://github.com/nimroddolev/akuvox/issues). Include your Home Assistant version, integration version, relevant logs, and steps to reproduce. Never include passwords, tokens, pairing links, SIP credentials, or private image URLs.
+
+If this integration is useful to you, you can support its development:
+
+[![Buy me a coffee](https://img.buymeacoffee.com/button-api/?text=Buy%20me%20a%20coffee&emoji=%E2%98%95&slug=nimroddolev&button_colour=FFDD00&font_colour=000000&font_family=Inter&outline_colour=000000&coffee_colour=ffffff)](https://www.buymeacoffee.com/nimroddolev)
