@@ -32,6 +32,7 @@ from custom_components.akuvox.sharing import (
     _permission_relay_ids,
     _source_account_label,
     _source_device_data,
+    CredentialShareImageView,
     CredentialShareView,
     _digest,
     async_apply_remote_share_link,
@@ -664,6 +665,72 @@ class TestOneTimePairingLinkE2E(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             sorted((first_response.status, second_response.status)), [200, 403]
         )
+
+
+class TestCredentialShareImageAuthorisationE2E(unittest.IsolatedAsyncioTestCase):
+    """Verify image proxies enforce each share's scope and lifetime."""
+
+    async def test_expired_share_cannot_fetch_an_activity_image(self) -> None:
+        """Image access expires with the rest of the credential share."""
+        secret = "receiver-secret"
+        store = MagicMock()
+        store.async_load = AsyncMock(return_value={
+            "share-id": {
+                "entry_id": "entry-id",
+                "receiver_secret_hash": _digest(secret),
+                "access_expires_at": "2020-01-01T00:00:00+00:00",
+                "revoked": False,
+            }
+        })
+        hass = MagicMock()
+        request = MagicMock(headers={"Authorization": f"Bearer {secret}"})
+
+        with patch("custom_components.akuvox.sharing._store", return_value=store):
+            response = await CredentialShareImageView(hass).get(
+                request, "share-id", "activity", "capture-time"
+            )
+
+        self.assertEqual(response.status, 410)
+
+    async def test_temp_key_qr_requires_every_relay_to_be_in_scope(self) -> None:
+        """A shared QR code cannot bypass the configured relay scope."""
+        secret = "receiver-secret"
+        store = MagicMock()
+        store.async_load = AsyncMock(return_value={
+            "share-id": {
+                "entry_id": "entry-id",
+                "receiver_secret_hash": _digest(secret),
+                "revoked": False,
+                "allow_view_keys": True,
+                "view_key_relay_ids": ["relay:AA:0"],
+            }
+        })
+        entry = MagicMock(entry_id="entry-id")
+        client = MagicMock()
+        client.async_get_panel_temp_key_qr = AsyncMock()
+        client.get_panel_data.return_value = {
+            "temporary_keys": [
+                {"key_id": "out-of-scope", "doors": [{"mac": "BB", "relay": "1"}]}
+            ]
+        }
+        hass = MagicMock()
+        hass.data = {DOMAIN: {"entry-id": SimpleNamespace(client=client)}}
+        hass.config_entries.async_get_entry.return_value = entry
+        request = MagicMock(headers={"Authorization": f"Bearer {secret}"})
+
+        with (
+            patch("custom_components.akuvox.sharing._store", return_value=store),
+            patch(
+                "custom_components.akuvox.sharing.filter_disabled_panel_devices",
+                side_effect=lambda _hass, _entry, data: data,
+            ),
+        ):
+            response = await CredentialShareImageView(hass).get(
+                request, "share-id", "temp_key_qr", "out-of-scope"
+            )
+
+        self.assertEqual(response.status, 404)
+        client.async_get_panel_temp_key_qr.assert_not_awaited()
 
 
 class TestCredentialShareNamesE2E(unittest.IsolatedAsyncioTestCase):

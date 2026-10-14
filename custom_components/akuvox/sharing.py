@@ -197,6 +197,23 @@ def _permission_relay_ids(share: dict[str, Any], key: str, legacy_flag: str) -> 
     return [item for item in share.get("device_ids", []) if isinstance(item, str) and item.startswith("relay:")]
 
 
+def _share_access_has_expired(share: dict[str, Any]) -> bool:
+    """Return whether an optional receiver-access expiry has elapsed.
+
+    An invalid persisted expiry is treated as expired so malformed data cannot
+    accidentally leave a receiver authorised indefinitely.
+    """
+    expires_at = share.get("access_expires_at")
+    if not expires_at:
+        return False
+    try:
+        return datetime.fromisoformat(str(expires_at)).astimezone(timezone.utc) < datetime.now(
+            timezone.utc
+        )
+    except (TypeError, ValueError):
+        return True
+
+
 async def async_create_share(
     hass: HomeAssistant, entry: ConfigEntry, external_url: str, receiver_name: str,
     device_ids: list[str], allow_create_keys: bool = True,
@@ -480,16 +497,16 @@ class CredentialShareView(HomeAssistantView):
         shares = await _store(self.hass).async_load() or {}
         share = shares.get(share_id)
         supplied = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
-        expired = False
-        try:
-            expired = datetime.fromisoformat(share.get("expires_at", "")).astimezone(timezone.utc) < datetime.now(timezone.utc)
-        except (AttributeError, TypeError, ValueError):
-            expired = True
         if not share or share.get("revoked") or not supplied:
             return web.Response(
                 status=403,
                 headers={_CREDENTIAL_SHARE_RESPONSE_HEADER: _CREDENTIAL_SHARE_REVOKED},
             )
+        expired = False
+        try:
+            expired = datetime.fromisoformat(share.get("expires_at", "")).astimezone(timezone.utc) < datetime.now(timezone.utc)
+        except (AttributeError, TypeError, ValueError):
+            expired = True
         supplied_hash = _digest(supplied)
         # Shares created before one-time links were introduced retain their
         # original receiver secret. New shares exchange their pairing secret
@@ -522,15 +539,7 @@ class CredentialShareView(HomeAssistantView):
             )
         if expired and not share.get("activated"):
             return web.Response(status=410)
-        try:
-            access_expired = (
-                share.get("access_expires_at")
-                and datetime.fromisoformat(share["access_expires_at"]).astimezone(timezone.utc)
-                < datetime.now(timezone.utc)
-            )
-        except (TypeError, ValueError):
-            access_expired = False
-        if access_expired:
+        if _share_access_has_expired(share):
             return web.Response(status=410)
         entry = self.hass.config_entries.async_get_entry(share["entry_id"])
         if entry is None:
@@ -662,6 +671,8 @@ class CredentialShareImageView(HomeAssistantView):
         supplied = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
         if not share or share.get("revoked") or not supplied:
             return web.Response(status=403)
+        if _share_access_has_expired(share):
+            return web.Response(status=410)
         supplied_hash = _digest(supplied)
         legacy_share = "pairing_secret_hash" not in share
         authorised = (
@@ -713,11 +724,31 @@ class CredentialShareImageView(HomeAssistantView):
             elif image_type == "temp_key_qr":
                 if not share.get("allow_view_keys", True):
                     return web.Response(status=403)
-                if not any(
-                    str(item.get("key_id", "")) == image_id
-                    for item in filter_disabled_panel_devices(
-                        self.hass, entry, source_client.get_panel_data()
-                    ).get("temporary_keys", [])
+                allowed_relays = {
+                    item.removeprefix("relay:")
+                    for item in _permission_relay_ids(
+                        share, "view_key_relay_ids", "allow_view_keys"
+                    )
+                    if item.startswith("relay:")
+                }
+                key = next(
+                    (
+                        item
+                        for item in filter_disabled_panel_devices(
+                            self.hass, entry, source_client.get_panel_data()
+                        ).get("temporary_keys", [])
+                        if isinstance(item, dict) and str(item.get("key_id", "")) == image_id
+                    ),
+                    None,
+                )
+                if (
+                    not isinstance(key, dict)
+                    or not key.get("doors")
+                    or not all(
+                        isinstance(door, dict)
+                        and f"{door.get('mac', '')}:{door.get('relay', '')}" in allowed_relays
+                        for door in key["doors"]
+                    )
                 ):
                     return web.Response(status=404)
                 image = await source_client.async_get_panel_temp_key_qr(image_id)
