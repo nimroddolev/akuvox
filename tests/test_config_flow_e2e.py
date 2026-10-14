@@ -69,7 +69,7 @@ class TestConfigFlowE2E(unittest.TestCase):
         """SmartPlus shifts the account name and double-hashes the password."""
         self.assertEqual(
             AkuvoxApiClient._caesar_shift_login_value("Liv.dolev@gmail.com"),
-            "Oly.grohy@gmail.com",
+            "Oly.grohy@jpdlo.frp",
         )
         self.assertEqual(
             AkuvoxApiClient._caesar_shift_login_value("Zz9-@#"), "Cc9-@#"
