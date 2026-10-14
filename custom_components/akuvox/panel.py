@@ -28,6 +28,7 @@ from homeassistant.components.logger.helpers import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
 
@@ -67,7 +68,7 @@ from .sharing import (
 
 _PANEL_MODULE = "akuvox-panel.js"
 _PANEL_ICONSET = "akuvox-iconset.js"
-_PANEL_ASSET_VERSION = "20261004-still-refresh-rebuilt-v154"
+_PANEL_ASSET_VERSION = "20261014-camera-entity-id-v172"
 DATA_CAMERA_PREVIEW_LOCK = f"{DOMAIN}_panel_camera_preview_lock"
 
 
@@ -381,8 +382,22 @@ async def websocket_panel_data(
             entity_id = entity_registry.async_get_entity_id(
                 "camera", DOMAIN, f"{entry.entry_id}:{source_name}"
             )
-            state = hass.states.get(entity_id) if entity_id else None
-            token = state.attributes.get("access_token") if state else None
+            # The panel display name can be changed independently of the
+            # entity name. Send the registry identity so opening a live feed
+            # never depends on matching a user-editable friendly name.
+            if entity_id:
+                camera["entity_id"] = entity_id
+            # Re-authentication reloads the camera platform before its new
+            # state is always published.  The live entity already owns the
+            # current signed camera token, so do not drop previews while that
+            # short state-publication gap exists.
+            try:
+                camera_entity = (
+                    get_camera_from_entity_id(hass, entity_id) if entity_id else None
+                )
+            except HomeAssistantError:
+                camera_entity = None
+            token = camera_entity.access_tokens[-1] if camera_entity else None
             if token:
                 # The initial image uses Home Assistant's standard proxy so
                 # the tile can render normally. Subsequent refreshes use the

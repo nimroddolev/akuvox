@@ -8,13 +8,13 @@ import { PANEL_TAG, TAB_HASHES, TAB_HASH_BY_ID, TABS } from "./utils/constants.j
 import { closeOnBackdrop, escapeHtml } from "./utils/dom.js";
 import { copyText } from "./utils/clipboard.js";
 import { settingsRenderSignature } from "./utils/settings-signature.js";
-import { getPanelStyles } from "./styles/index.js?v=20261006-always-show-account-selector";
-import { showNotice, confirmModal, callWsWithBlocker } from "./components/dialogs.js?v=20261004-rtsp-copy-dialog";
+import { getPanelStyles } from "./styles/index.js?v=20261014-pairing-dialog-dynamic-height";
+import { showNotice, confirmModal, callWsWithBlocker } from "./components/dialogs.js?v=20261013-danger-confirmation";
 import { installCameraRelayActions } from "./components/camera-actions.js?v=20261004-snapshot-action-icon";
 import { closeKeyActionsMenu } from "./components/key-menu.js";
 import { isRtlLanguage, localizeElement } from "./utils/i18n.js?v=20261004-relay-confirmation";
 
-import { renderDevicesView, bindDevicesEvents } from "./views/devices-view.js?v=20261005-persistent-device-stills";
+import { renderDevicesView, bindDevicesEvents } from "./views/devices-view.js?v=20261014-camera-entity-id";
 import {
   renderActivityView,
   bindActivityEvents,
@@ -27,7 +27,7 @@ import {
   deleteSelectedKeys,
 } from "./views/keys-view.js?v=20261004-key-table-titles";
 import { renderAutomationsView, bindAutomationsEvents } from "./views/automations-view.js?v=20261006-create-action-alignment";
-import { renderSettingsView, bindSettingsEvents, updateActivityStorageProgress, updateRemoteShareConnectionStatus } from "./views/settings-view.js?v=20261004-localized-sip-pdf-user-locale";
+import { renderSettingsView, bindSettingsEvents, updateActivityStorageProgress, updateRemoteShareConnectionStatus } from "./views/settings-view.js?v=20261013-mobile-options-conditional";
 import { renderHelpView } from "./views/help-view.js";
 
 const ROW_VIEW_MODE_STORAGE_KEY = "akuvox-panel-row-view-mode";
@@ -637,9 +637,9 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
     }
   }
 
-  async _stream(cameraName, mode) {
+  async _stream(cameraName, mode, cameraEntityId = "") {
     if (mode === "open") {
-      this._openCamera(cameraName);
+      this._openCamera(cameraName, cameraEntityId);
       return;
     }
     if (
@@ -669,10 +669,12 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
     }
   }
 
-  _openCamera(cameraName) {
-    const entityId = Object.entries(this._hass.states).find(
-      ([id, state]) => id.startsWith("camera.") && state.attributes.friendly_name === cameraName
-    )?.[0];
+  _openCamera(cameraName, cameraEntityId = "") {
+    const entityId = this._hass.states[cameraEntityId]
+      ? cameraEntityId
+      : Object.entries(this._hass.states).find(
+        ([id, state]) => id.startsWith("camera.") && state.attributes.friendly_name === cameraName
+      )?.[0];
 
     if (!entityId) {
       showNotice(this, "The Home Assistant camera entity was not found.", "Camera unavailable");

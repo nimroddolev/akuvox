@@ -72,7 +72,7 @@ export const renderDevicesView = (host, account) => {
           <div class="actions">
             ${
               device.camera
-                ? `<button class="action device-action device-monitor-action" data-stream="${escapeHtml(device.camera.source_name || device.camera.name)}" data-mode="open">${icons.webcam}<span>Monitor</span></button>`
+                ? `<button class="action device-action device-monitor-action" data-stream="${escapeHtml(device.camera.source_name || device.camera.name)}" data-camera-entity="${escapeHtml(device.camera.entity_id || "")}" data-mode="open">${icons.webcam}<span>Monitor</span></button>`
                 : '<span class="muted">No camera</span>'
             }
           </div>
@@ -110,14 +110,14 @@ export const renderDevicesView = (host, account) => {
             </div>
             ${device.deviceId ? `<a class="info-link" href="/config/devices/device/${encodeURIComponent(device.deviceId)}">${icons.externalLink}Device</a>` : ""}
           </div>
-          <div class="device-preview ${status.className}" ${device.camera ? `data-camera-preview-stream="${escapeHtml(device.camera.source_name || device.camera.name)}"` : ""} aria-label="${escapeHtml(device.camera ? t(host, "Camera preview from {name}", { name: device.name }) : t(host, "No camera preview available"))}">
+          <div class="device-preview ${status.className}" ${device.camera ? `data-camera-preview-stream="${escapeHtml(device.camera.source_name || device.camera.name)}" data-camera-entity="${escapeHtml(device.camera.entity_id || "")}"` : ""} aria-label="${escapeHtml(device.camera ? t(host, "Camera preview from {name}", { name: device.name }) : t(host, "No camera preview available"))}">
             <span class="device-preview-placeholder" aria-hidden="true">${icons.webcam}</span>
             <p class="device-status ${status.className}" data-camera-status>${status.label}</p>
             ${device.camera?.preview_url ? `<img data-camera-key="${escapeHtml(cameraKey)}" src="${escapeHtml(device.camera.preview_url)}" alt="" loading="eager">` : ""}
-            ${device.camera ? `<button type="button" class="device-preview-play device-monitor-action" data-stream="${escapeHtml(device.camera.source_name || device.camera.name)}" data-mode="open" aria-label="${escapeHtml(t(host, "Monitor {name}", { name: device.name }))}">${icons.play}</button>` : ""}
+            ${device.camera ? `<button type="button" class="device-preview-play device-monitor-action" data-stream="${escapeHtml(device.camera.source_name || device.camera.name)}" data-camera-entity="${escapeHtml(device.camera.entity_id || "")}" data-mode="open" aria-label="${escapeHtml(t(host, "Monitor {name}", { name: device.name }))}">${icons.play}</button>` : ""}
           </div>
           <div class="tile-actions">
-            ${device.camera ? `<button class="action device-action device-monitor-action" data-stream="${escapeHtml(device.camera.source_name || device.camera.name)}" data-mode="open">${icons.webcam}<span>Monitor</span></button>` : '<span class="muted">No camera</span>'}
+            ${device.camera ? `<button class="action device-action device-monitor-action" data-stream="${escapeHtml(device.camera.source_name || device.camera.name)}" data-camera-entity="${escapeHtml(device.camera.entity_id || "")}" data-mode="open">${icons.webcam}<span>Monitor</span></button>` : '<span class="muted">No camera</span>'}
             ${device.relays.map((relay) => unlockButton(host, device.relays, relay)).join("") || '<span class="muted">No relay</span>'}
           </div>
         </article>
@@ -201,7 +201,7 @@ export const bindDevicesEvents = (host) => {
   });
   host.shadowRoot.querySelectorAll("[data-stream]").forEach((button) =>
     button.addEventListener("click", () =>
-      host._stream(button.dataset.stream, button.dataset.mode)
+      host._stream(button.dataset.stream, button.dataset.mode, button.dataset.cameraEntity)
     )
   );
 
@@ -209,7 +209,7 @@ export const bindDevicesEvents = (host) => {
     preview.addEventListener("click", (event) => {
       // The play button has its own handler. Let it handle the click once.
       if (event.target.closest("button, a")) return;
-      host._stream(preview.dataset.cameraPreviewStream, "open");
+      host._stream(preview.dataset.cameraPreviewStream, "open", preview.dataset.cameraEntity)
     })
   );
 
