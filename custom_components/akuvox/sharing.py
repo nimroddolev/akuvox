@@ -214,6 +214,24 @@ def _share_access_has_expired(share: dict[str, Any]) -> bool:
         return True
 
 
+def _share_secret_mode(share: dict[str, Any], supplied_secret: str) -> str | None:
+    """Classify a share credential without duplicating hash comparisons in views."""
+    supplied_hash = _digest(supplied_secret)
+    if bool(share.get("receiver_secret_hash")) and secrets.compare_digest(
+        str(share.get("receiver_secret_hash", "")), supplied_hash
+    ):
+        return "receiver"
+    if "pairing_secret_hash" not in share and secrets.compare_digest(
+        str(share.get("secret_hash", "")), supplied_hash
+    ):
+        return "legacy"
+    if "pairing_secret_hash" in share and secrets.compare_digest(
+        str(share.get("pairing_secret_hash", "")), supplied_hash
+    ):
+        return "pairing"
+    return None
+
+
 async def async_create_share(
     hass: HomeAssistant, entry: ConfigEntry, external_url: str, receiver_name: str,
     device_ids: list[str], allow_create_keys: bool = True,
@@ -507,31 +525,16 @@ class CredentialShareView(HomeAssistantView):
             expired = datetime.fromisoformat(share.get("expires_at", "")).astimezone(timezone.utc) < datetime.now(timezone.utc)
         except (AttributeError, TypeError, ValueError):
             expired = True
-        supplied_hash = _digest(supplied)
         # Shares created before one-time links were introduced retain their
         # original receiver secret. New shares exchange their pairing secret
         # exactly once for a private receiver secret.
-        legacy_share = "pairing_secret_hash" not in share
-        using_receiver_secret = bool(share.get("receiver_secret_hash")) and (
-            secrets.compare_digest(
-                str(share.get("receiver_secret_hash", "")), supplied_hash
-            )
-        )
-        using_legacy_secret = legacy_share and secrets.compare_digest(
-            str(share.get("secret_hash", "")), supplied_hash
-        )
-        using_pairing_secret = (
-            not legacy_share
-            and secrets.compare_digest(
-                str(share.get("pairing_secret_hash", "")), supplied_hash
-            )
-        )
-        if not (using_receiver_secret or using_legacy_secret or using_pairing_secret):
+        credential_mode = _share_secret_mode(share, supplied)
+        if credential_mode is None:
             return web.Response(
                 status=403,
                 headers={_CREDENTIAL_SHARE_RESPONSE_HEADER: _CREDENTIAL_SHARE_REVOKED},
             )
-        if using_pairing_secret and share.get("activated"):
+        if credential_mode == "pairing" and share.get("activated"):
             # The pairing URI has already exchanged its one-time secret.
             return web.Response(
                 status=403,
@@ -616,7 +619,7 @@ class CredentialShareView(HomeAssistantView):
         # receiver. Record it before returning 304 so the source UI reflects
         # the last time it checked in, rather than only token rotations.
         receiver_secret: str | None = None
-        if using_pairing_secret:
+        if credential_mode == "pairing":
             receiver_secret = secrets.token_urlsafe(32)
             share["receiver_secret_hash"] = _digest(receiver_secret)
         share["activated"] = True
@@ -673,15 +676,7 @@ class CredentialShareImageView(HomeAssistantView):
             return web.Response(status=403)
         if _share_access_has_expired(share):
             return web.Response(status=410)
-        supplied_hash = _digest(supplied)
-        legacy_share = "pairing_secret_hash" not in share
-        authorised = (
-            legacy_share and secrets.compare_digest(str(share.get("secret_hash", "")), supplied_hash)
-        ) or (
-            bool(share.get("receiver_secret_hash"))
-            and secrets.compare_digest(str(share.get("receiver_secret_hash", "")), supplied_hash)
-        )
-        if not authorised:
+        if _share_secret_mode(share, supplied) not in {"legacy", "receiver"}:
             return web.Response(status=403)
         entry = self.hass.config_entries.async_get_entry(share.get("entry_id"))
         source_client = getattr(

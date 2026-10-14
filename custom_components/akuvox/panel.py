@@ -183,6 +183,27 @@ def _client_for_entry(hass: HomeAssistant, entry_id: str) -> AkuvoxApiClient | N
     return None
 
 
+def _entry_for_message(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> ConfigEntry | None:
+    """Return a requested panel entry or send the shared not-found response."""
+    entry = next((item for item in _panel_entries(hass) if item.entry_id == msg["entry_id"]), None)
+    if entry is None:
+        connection.send_error(msg["id"], "not_found", "Akuvox account was not found")
+    return entry
+
+
+def _local_share_source_entry(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> ConfigEntry | None:
+    """Return a local account eligible to manage outgoing credential shares."""
+    entry = _entry_for_message(hass, connection, msg)
+    if entry is not None and entry.data.get(SHARED_MODE) == SHARED_MODE_REMOTE:
+        connection.send_error(msg["id"], "not_owner", "Only the credential owner can create pairing links")
+        return None
+    return entry
+
+
 async def _async_capture_panel_camera_preview(
     hass: HomeAssistant, entry_id: str, camera_name: str
 ) -> bytes | None:
@@ -641,12 +662,8 @@ async def websocket_panel_settings(
     """Return the editable settings for one administrator-authorised account."""
     if not _require_admin(connection, msg):
         return
-    entry = next(
-        (item for item in _panel_entries(hass) if item.entry_id == msg["entry_id"]),
-        None,
-    )
+    entry = _entry_for_message(hass, connection, msg)
     if entry is None:
-        connection.send_error(msg["id"], "not_found", "Akuvox account was not found")
         return
     client = _client_for_entry(hass, entry.entry_id)
     remote_sync = hass.data.get("akuvox_credential_sharing", {}).get(entry.entry_id)
@@ -760,12 +777,8 @@ async def websocket_panel_save_settings(
     """Persist panel-edited integration options."""
     if not _require_admin(connection, msg):
         return
-    entry = next(
-        (item for item in _panel_entries(hass) if item.entry_id == msg["entry_id"]),
-        None,
-    )
+    entry = _entry_for_message(hass, connection, msg)
     if entry is None:
-        connection.send_error(msg["id"], "not_found", "Akuvox account was not found")
         return
     options = dict(entry.options)
     options.pop("panel_enabled", None)
@@ -933,12 +946,8 @@ async def websocket_panel_create_credential_share(
     """Create a short-lived pairing link from the panel settings page."""
     if not _require_admin(connection, msg):
         return
-    entry = next((item for item in _panel_entries(hass) if item.entry_id == msg["entry_id"]), None)
+    entry = _local_share_source_entry(hass, connection, msg)
     if entry is None:
-        connection.send_error(msg["id"], "not_found", "Akuvox account was not found")
-        return
-    if entry.data.get(SHARED_MODE) == SHARED_MODE_REMOTE:
-        connection.send_error(msg["id"], "not_owner", "Only the credential owner can create pairing links")
         return
     try:
         source_url = str(msg["source_url"]).strip()

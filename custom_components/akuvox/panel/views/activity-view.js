@@ -8,7 +8,11 @@ import {
   matchesSelectedFilter,
   renderMultiSelectFilter,
 } from "../utils/multi-select-filter.js?v=20260925-option-labels";
-import { tableTimestampFormatter } from "../utils/formatters.js?v=20260820-table-timestamps";
+import {
+  formatRelativeTimestamp,
+  formatStorageAmount,
+  tableTimestampFormatter,
+} from "../utils/formatters.js?v=20261014-shared-display-formatters";
 import { icons } from "../utils/icons.js";
 import { showActivityImageDialog } from "../components/image-dialog.js?v=20260909-instant-open";
 import { t } from "../utils/i18n.js?v=20261005-pseudo-spanish";
@@ -24,17 +28,6 @@ const activityOrientation = (host, item) => {
   return settings.activity_image_orientations?.[
     String(item.source_location || item.Location || "").trim()
   ] || "none";
-};
-
-const formatStorageAmount = (bytes) => {
-  const units = ["B", "KB", "MB", "GB", "TB"];
-  let value = Math.max(0, Number(bytes) || 0);
-  let unit = 0;
-  while (value >= 1000 && unit < units.length - 1) {
-    value /= 1000;
-    unit += 1;
-  }
-  return `${value.toFixed(value >= 100 || unit === 0 ? 0 : value >= 10 ? 1 : 2)} ${units[unit]}`;
 };
 
 /** Convert a SmartPlus camelCase or PascalCase event type into title-cased words. */
@@ -84,45 +77,8 @@ const updateActivityUpdatedLabel = (host) => {
   if (label) label.textContent = formatUpdatedAgo(host, label.dataset.activityUpdatedAt);
 };
 
-const parseActivityTimestamp = (value) => {
-  const match = String(value || "").match(
-    /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?/
-  );
-  if (!match) return null;
-  const [, year, month, day, hour, minute, second = "0"] = match;
-  const timestamp = new Date(
-    Number(year),
-    Number(month) - 1,
-    Number(day),
-    Number(hour),
-    Number(minute),
-    Number(second)
-  );
-  return Number.isNaN(timestamp.getTime()) ? null : timestamp;
-};
-
-const formatActivityAge = (host, value) => {
-  const timestamp = parseActivityTimestamp(value);
-  if (!timestamp) return "";
-  const now = new Date();
-  const elapsedMinutes = Math.max(0, Math.floor((now - timestamp) / 60_000));
-  const isToday = timestamp.toDateString() === now.toDateString();
-  const dayLabel = isToday ? t(host, "Today") : "";
-  const withDayLabel = (age) => (dayLabel ? `${dayLabel} • ${age}` : age);
-  if (elapsedMinutes < 1) return withDayLabel(t(host, "Just now"));
-  if (elapsedMinutes < 60) {
-    return withDayLabel(t(host, elapsedMinutes === 1 ? "{count} min ago" : "{count} mins ago", { count: elapsedMinutes }));
-  }
-  const elapsedHours = Math.floor(elapsedMinutes / 60);
-  if (elapsedHours < 24) {
-    return withDayLabel(t(host, elapsedHours === 1 ? "{count} hour ago" : "{count} hours ago", { count: elapsedHours }));
-  }
-  const elapsedDays = Math.floor(elapsedHours / 24);
-  return t(host, elapsedDays === 1 ? "{count} day ago" : "{count} days ago", { count: elapsedDays });
-};
-
 const renderActivityTimestamp = (host, value, formatTimestamp) => {
-  const age = formatActivityAge(host, value);
+  const age = formatRelativeTimestamp(host, value, t);
   return `<div class="activity-timestamp">
     <time>${escapeHtml(formatTimestamp(value))}</time>
     ${age ? `<span>${escapeHtml(age)}</span>` : ""}

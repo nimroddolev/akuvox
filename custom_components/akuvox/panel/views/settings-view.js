@@ -6,6 +6,7 @@ import { closeOnBackdrop, escapeHtml } from "../utils/dom.js";
 import { icons } from "../utils/icons.js?v=20260930-notification-bell-v5";
 import { callWsWithBlocker, confirmModal, showNotice, showPairingLinkNotice } from "../components/dialogs.js?v=20261003-i18n-statuses";
 import { CAMERA_ORIENTATION_OPTIONS } from "../utils/orientation.js?v=20260830-combined-directional-labels";
+import { formatStorageAmount } from "../utils/formatters.js?v=20261014-shared-display-formatters";
 import { localizeElement, t } from "../utils/i18n.js?v=20261005-pseudo-spanish";
 
 const RECEIVER_CONTACT_TIMEOUT_MS = 2 * 60 * 1000;
@@ -318,6 +319,68 @@ const joinCallerNames = (names, conjunction) => {
   return `${names.slice(0, -1).join(", ")}, ${conjunction} ${names.at(-1)}`;
 };
 
+const defaultLocalize = (source, values = {}) => Object.entries(values).reduce(
+  (result, [key, value]) => result.replaceAll(`{${key}}`, String(value)), source
+);
+
+const buildCallerConditions = (callerRules) => {
+  const identities = (operator, type) => callerRules
+    .filter((rule) => rule.operator === operator && (rule.type || "family") === type)
+    .map((rule) => type === "temporary_key" ? rule.keyId : rule.name)
+    .filter(Boolean);
+  const template = (callers, keys, operator) => {
+    const comparisons = [
+      ...(callers.length ? [`(trigger.event.data.initiator | default('', true)) ${operator} ${JSON.stringify(callers)}`] : []),
+      ...(keys.length ? [`(trigger.event.data.temporary_key_id | default('', true)) ${operator} ${JSON.stringify(keys)}`] : []),
+    ];
+    return `{{ ${comparisons.join(operator === "in" ? " or " : " and ")} }}`;
+  };
+  const allowedCallers = identities("is", "family");
+  const allowedKeys = identities("is", "temporary_key");
+  const excludedCallers = identities("is_not", "family");
+  const excludedKeys = identities("is_not", "temporary_key");
+  return [
+    ...(allowedCallers.length || allowedKeys.length ? [{
+      condition: "template", value_template: template(allowedCallers, allowedKeys, "in"),
+    }] : []),
+    ...(excludedCallers.length || excludedKeys.length ? [{
+      condition: "template", value_template: template(excludedCallers, excludedKeys, "not in"),
+    }] : []),
+  ];
+};
+
+const groupRelayEntitiesByDoor = (relayEntities) => relayEntities.reduce((byDoor, relay) => {
+  if (!relay?.deviceId || !relay?.entityId) return byDoor;
+  const relays = byDoor.get(relay.deviceId) || [];
+  relays.push(relay);
+  byDoor.set(relay.deviceId, relays);
+  return byDoor;
+}, new Map());
+
+const notificationSelection = (existing) => ({
+  doorIds: [],
+  includeOpened: false,
+  includeCalls: false,
+  callerRules: [],
+  callerOperator: "is",
+  services: [],
+  includeRelayAction: false,
+  includeImage: true,
+  iosSound: "",
+  androidChannel: "",
+  priorityAlert: false,
+  requireActionAuthentication: false,
+  name: "",
+  initialState: undefined,
+  ...existing,
+});
+
+const withCurrentTemporaryKeyNames = (callerRules, keys) => callerRules.map((rule) => {
+  if (rule.type !== "temporary_key") return rule;
+  const key = keys.find((item) => item.keyId === rule.keyId);
+  return { ...rule, name: key?.name || rule.name || rule.keyId };
+});
+
 const callerConditionSummary = (rules) => {
   const allowed = rules.filter((rule) => rule.operator === "is").map((rule) => rule.name);
   const excluded = rules.filter((rule) => rule.operator === "is_not").map((rule) => rule.name);
@@ -333,43 +396,13 @@ const callerConditionSummary = (rules) => {
   return `Triggered if ${excludedClause}.`;
 };
 
-export const buildDoorNotificationAutomation = ({ name, doors, services, includeOpened, includeCalls, callerRules = [], includeRelayAction = false, includeImage = true, iosSound = "", androidChannel = "", priorityAlert = false, requireActionAuthentication = false, relayEntities = [], initialState, localize = (source, values = {}) => Object.entries(values).reduce((result, [key, value]) => result.replaceAll(`{${key}}`, String(value)), source) }) => {
+export const buildDoorNotificationAutomation = ({ name, doors, services, includeOpened, includeCalls, callerRules = [], includeRelayAction = false, includeImage = true, iosSound = "", androidChannel = "", priorityAlert = false, requireActionAuthentication = false, relayEntities = [], initialState, localize = defaultLocalize }) => {
   const captureTypes = [
     ...(includeOpened ? ["Face Unlock", "Unlock on SmartPlus", "Temp Key Unlock"] : []),
     ...(includeCalls ? ["Call"] : []),
   ];
-  const identities = (operator, type) => callerRules
-    .filter((rule) => rule.operator === operator && (rule.type || "family") === type)
-    .map((rule) => type === "temporary_key" ? rule.keyId : rule.name)
-    .filter(Boolean);
-  const allowedCallers = identities("is", "family");
-  const excludedCallers = identities("is_not", "family");
-  const allowedKeys = identities("is", "temporary_key");
-  const excludedKeys = identities("is_not", "temporary_key");
-  const identityExpression = (callers, keys, operator) => {
-    const comparisons = [
-      ...(callers.length ? [`(trigger.event.data.initiator | default('', true)) ${operator} ${JSON.stringify(callers)}`] : []),
-      ...(keys.length ? [`(trigger.event.data.temporary_key_id | default('', true)) ${operator} ${JSON.stringify(keys)}`] : []),
-    ];
-    return comparisons.join(operator === "in" ? " or " : " and ");
-  };
-  const callerConditions = [
-    ...(allowedCallers.length || allowedKeys.length ? [{
-      condition: "template",
-      value_template: `{{ ${identityExpression(allowedCallers, allowedKeys, "in")} }}`,
-    }] : []),
-    ...(excludedCallers.length || excludedKeys.length ? [{
-      condition: "template",
-      value_template: `{{ ${identityExpression(excludedCallers, excludedKeys, "not in")} }}`,
-    }] : []),
-  ];
-  const relaysByDoor = new Map();
-  relayEntities.forEach((relay) => {
-    if (!relay?.deviceId || !relay?.entityId) return;
-    const relays = relaysByDoor.get(relay.deviceId) || [];
-    relays.push(relay);
-    relaysByDoor.set(relay.deviceId, relays);
-  });
+  const callerConditions = buildCallerConditions(callerRules);
+  const relaysByDoor = groupRelayEntitiesByDoor(relayEntities);
   const selectedRelayEntities = includeRelayAction && includeCalls
     ? doors.flatMap((door) => relaysByDoor.get(door.deviceId) || []) : [];
   const actionServices = companionNotificationServices(services);
@@ -500,18 +533,8 @@ export const requestDoorNotificationAutomation = async (host, existing = null) =
   const services = notificationServices(host);
   const availableRelayEntities = await relayEntities(host);
   const editing = Boolean(existing);
-  const selection = {
-    doorIds: [], includeOpened: false, includeCalls: false, callerRules: [],
-    callerOperator: "is", services: [], includeRelayAction: false, includeImage: true,
-    iosSound: "", androidChannel: "", priorityAlert: false, requireActionAuthentication: false,
-    name: "", initialState: undefined,
-    ...existing,
-  };
-  selection.callerRules = selection.callerRules.map((rule) => {
-    if (rule.type !== "temporary_key") return rule;
-    const key = keys.find((item) => item.keyId === rule.keyId);
-    return { ...rule, name: key?.name || rule.name || rule.keyId };
-  });
+  const selection = notificationSelection(existing);
+  selection.callerRules = withCurrentTemporaryKeyNames(selection.callerRules, keys);
   const title = editing ? "Edit Automation" : "Create Automation";
   const canOfferRelayAction = () => selection.includeCalls &&
     companionNotificationServices(selection.services).length > 0 &&
@@ -889,18 +912,6 @@ const eventOptions = (host) => {
   <div class="settings-device-options" data-event-image-overrides ${eventImageWaiting && settings.custom_event_image_wait ? "" : "hidden"}>
     ${cameras.map((camera) => `<label class="settings-device-option"><span>${escapeHtml(camera.name)}</span><span class="settings-switch"><input type="checkbox" data-event-image-wait="${escapeHtml(camera.sourceName)}" aria-label="Wait for an event image from ${escapeHtml(camera.name)}" ${overrides[camera.sourceName] !== undefined ? (overrides[camera.sourceName] ? "checked" : "") : (settings.wait_for_event_image !== false ? "checked" : "")}><span></span></span></label>`).join("") || '<p class="muted">No cameras are currently available.</p>'}
   </div>`;
-};
-
-const formatStorageAmount = (bytes) => {
-  const units = ["B", "KB", "MB", "GB", "TB"];
-  let value = Math.max(0, Number(bytes) || 0);
-  let unitIndex = 0;
-  while (value >= 1000 && unitIndex < units.length - 1) {
-    value /= 1000;
-    unitIndex += 1;
-  }
-  const precision = value >= 100 || unitIndex === 0 ? 0 : value >= 10 ? 1 : 2;
-  return `${value.toFixed(precision)} ${units[unitIndex]}`;
 };
 
 const formSignature = (form) => JSON.stringify([...new FormData(form).entries()]);

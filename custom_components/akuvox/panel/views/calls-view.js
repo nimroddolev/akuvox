@@ -8,7 +8,7 @@ import {
   matchesSelectedFilter,
   renderMultiSelectFilter,
 } from "../utils/multi-select-filter.js?v=20260925-option-labels";
-import { tableTimestampFormatter } from "../utils/formatters.js?v=20260820-table-timestamps";
+import { formatRelativeTimestamp, tableTimestampFormatter } from "../utils/formatters.js?v=20261014-shared-display-formatters";
 import { showCallImageDialog } from "../components/image-dialog.js";
 import { t } from "../utils/i18n.js?v=20261003-hebrew-rtl-6";
 
@@ -37,40 +37,8 @@ const visibleCallKey = (call) =>
       ])
     : "id:" + (call.id || "");
 
-const parseCallTimestamp = (value) => {
-  const match = String(value || "").match(
-    /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?/
-  );
-  if (!match) return null;
-  const [, year, month, day, hour, minute, second = "0"] = match;
-  const timestamp = new Date(
-    Number(year),
-    Number(month) - 1,
-    Number(day),
-    Number(hour),
-    Number(minute),
-    Number(second)
-  );
-  return Number.isNaN(timestamp.getTime()) ? null : timestamp;
-};
-
-const formatCallAge = (host, value) => {
-  const timestamp = parseCallTimestamp(value);
-  if (!timestamp) return "";
-  const now = new Date();
-  const elapsedMinutes = Math.max(0, Math.floor((now - timestamp) / 60_000));
-  const isToday = timestamp.toDateString() === now.toDateString();
-  const withToday = (label) => (isToday ? `${t(host, "Today")} • ${label}` : label);
-  if (elapsedMinutes < 1) return withToday(t(host, "Just now"));
-  if (elapsedMinutes < 60) return withToday(t(host, elapsedMinutes === 1 ? "{count} min ago" : "{count} mins ago", { count: elapsedMinutes }));
-  const elapsedHours = Math.floor(elapsedMinutes / 60);
-  if (elapsedHours < 24) return withToday(t(host, elapsedHours === 1 ? "{count} hour ago" : "{count} hours ago", { count: elapsedHours }));
-  const elapsedDays = Math.floor(elapsedHours / 24);
-  return t(host, elapsedDays === 1 ? "{count} day ago" : "{count} days ago", { count: elapsedDays });
-};
-
 const renderCallTimestamp = (host, value, formatTimestamp) => {
-  const age = formatCallAge(host, value);
+  const age = formatRelativeTimestamp(host, value, t);
   return `<div class="activity-timestamp">
     <time>${escapeHtml(formatTimestamp(value))}</time>
     ${age ? `<span>${escapeHtml(age)}</span>` : ""}

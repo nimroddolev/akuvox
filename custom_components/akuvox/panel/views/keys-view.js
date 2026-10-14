@@ -54,6 +54,57 @@ export const updateFormFieldErrors = (form) => {
   }
 };
 
+const keyPermissions = (account) => {
+  const relays = account.relays || [];
+  const createRelayIds = account.shared_permissions?.create_key_relay_ids;
+  const hasScopedCreatePermissions = Array.isArray(createRelayIds);
+  const permittedRelays = hasScopedCreatePermissions
+    ? relays.filter((relay) => createRelayIds.includes(`relay:${relay.mac}:${relay.relay_id}`))
+    : account.credential_mode === "remote" ? [] : relays;
+  const accessibleRelayIds = account.shared_permissions?.view_key_relay_ids;
+  const accessibleRelays = account.credential_mode === "remote" && Array.isArray(accessibleRelayIds)
+    ? relays.filter((relay) => accessibleRelayIds.includes(`relay:${relay.mac}:${relay.relay_id}`))
+    : relays;
+  return {
+    permittedRelays,
+    accessibleRelays,
+    canCreateKeys: hasScopedCreatePermissions
+      ? permittedRelays.length > 0
+      : account.shared_permissions?.allow_create_keys !== false,
+    canEditKey: (key) => {
+      if (account.credential_mode !== "remote") return true;
+      const editRelayIds = account.shared_permissions?.edit_key_relay_ids;
+      return Array.isArray(editRelayIds) && Array.isArray(key.doors) && key.doors.length > 0 &&
+        key.doors.every((door) => editRelayIds.includes(`relay:${door.mac}:${door.relay}`));
+    },
+  };
+};
+
+const filteredAndSortedKeys = (host, keys, isManualTileOrder) => {
+  const keyValue = (key) => {
+    if (host._keySort.key === "manual") return String(key.description || "");
+    if (host._keySort.key === "validity") return String(key.begin_time || "");
+    if (["valid_until", "time_remaining"].includes(host._keySort.key)) return String(key.end_time || "");
+    if (host._keySort.key === "uses") return `${Number(key.access_times || 0)}/${Number(key.allowed_times || 0)}`;
+    if (host._keySort.key === "status") return key.expired ? "Expired" : "Active";
+    return String(key[host._keySort.key] || "");
+  };
+  const filtered = keys.filter((key) => {
+    const description = String(key.description || "").toLocaleLowerCase();
+    const status = key.expired ? "expired" : "active";
+    return (!host._keyFilters.description || description.includes(host._keyFilters.description.toLocaleLowerCase())) &&
+      matchesSelectedFilter(host._keyFilters.status, status) &&
+      (host._keyFilters.door.length === 0 || (key.doors || []).some((door) =>
+        host._keyFilters.door.includes(`${door.mac}|${door.relay}`)
+      ));
+  }).sort((left, right) => {
+    if (isManualTileOrder) return 0;
+    return keyValue(left).localeCompare(keyValue(right), undefined, { numeric: true }) *
+      (host._keySort.direction === "asc" ? 1 : -1);
+  });
+  return isManualTileOrder ? host._orderTiles("keys", filtered, (key) => key.key_id) : filtered;
+};
+
 /**
  * Render HTML content for the Temporary Keys tab.
  * @param {HTMLElement} host
@@ -64,27 +115,7 @@ export const renderKeysView = (host, account) => {
   const showKeyTiles =
     host._rowViewMode === "tiles" ||
     window.matchMedia?.("(max-width: 600px)").matches;
-  const createRelayIds = account.shared_permissions?.create_key_relay_ids;
-  const hasScopedCreatePermissions = Array.isArray(createRelayIds);
-  const permittedRelays = hasScopedCreatePermissions
-    ? (account.relays || []).filter((relay) => createRelayIds.includes(`relay:${relay.mac}:${relay.relay_id}`))
-    : account.credential_mode === "remote" ? [] : (account.relays || []);
-  const canCreateKeys = hasScopedCreatePermissions
-    ? permittedRelays.length > 0
-    : account.shared_permissions?.allow_create_keys !== false;
-  const accessibleRelayIds = account.shared_permissions?.view_key_relay_ids;
-  const accessibleRelays = account.credential_mode === "remote" && Array.isArray(accessibleRelayIds)
-    ? (account.relays || []).filter((relay) =>
-      accessibleRelayIds.includes(`relay:${relay.mac}:${relay.relay_id}`)
-    )
-    : (account.relays || []);
-  const canEditKey = (key) => {
-    if (account.credential_mode !== "remote") return true;
-    const editRelayIds = account.shared_permissions?.edit_key_relay_ids;
-    return Array.isArray(editRelayIds) &&
-      Array.isArray(key.doors) && key.doors.length > 0 &&
-      key.doors.every((door) => editRelayIds.includes(`relay:${door.mac}:${door.relay}`));
-  };
+  const { permittedRelays, accessibleRelays, canCreateKeys, canEditKey } = keyPermissions(account);
   const relayOptions = permittedRelays
     .map(
       (relay) => `
@@ -140,43 +171,7 @@ export const renderKeysView = (host, account) => {
     Number(Boolean(host._keyFilters.description)) +
     host._keyFilters.status.length +
     host._keyFilters.door.length;
-  let filtered = keys
-    .filter((key) => {
-      const description = String(key.description || "").toLocaleLowerCase();
-      const status = key.expired ? "expired" : "active";
-      return (
-        (!host._keyFilters.description ||
-          description.includes(host._keyFilters.description.toLocaleLowerCase())) &&
-        matchesSelectedFilter(host._keyFilters.status, status) &&
-        (host._keyFilters.door.length === 0 ||
-          (key.doors || []).some((door) =>
-            host._keyFilters.door.includes(`${door.mac}|${door.relay}`)
-          ))
-      );
-    })
-    .sort((left, right) => {
-      if (isManualTileOrder) return 0;
-      const getValue = (key) => {
-        if (host._keySort.key === "manual") return String(key.description || "");
-        if (host._keySort.key === "validity") return String(key.begin_time || "");
-        if (host._keySort.key === "valid_until" || host._keySort.key === "time_remaining") {
-          return String(key.end_time || "");
-        }
-        if (host._keySort.key === "uses") {
-          return `${Number(key.access_times || 0)}/${Number(key.allowed_times || 0)}`;
-        }
-        if (host._keySort.key === "status") return key.expired ? "Expired" : "Active";
-        return String(key[host._keySort.key] || "");
-      };
-      return (
-        getValue(left).localeCompare(getValue(right), undefined, { numeric: true }) *
-        (host._keySort.direction === "asc" ? 1 : -1)
-      );
-    });
-
-  if (isManualTileOrder) {
-    filtered = host._orderTiles("keys", filtered, (key) => key.key_id);
-  }
+  const filtered = filteredAndSortedKeys(host, keys, isManualTileOrder);
 
   const heading = (label, key) =>
     `<button class="sort-button ${host._keySort.key === key ? "active" : ""}" data-key-sort="${key}" data-direction="${host._keySort.direction === "asc" ? "↑" : "↓"}">${label}</button>`;
