@@ -4,18 +4,26 @@
 
 export const dialogStyles = `
   dialog {
-    border: 0;
-    border-radius: 14px;
-    padding: 24px;
+    border: 1px solid color-mix(in srgb, var(--panel-outline, #dbe2e8) 80%, transparent);
+    border-radius: 20px;
+    padding: 26px;
     width: min(560px, calc(100vw - 48px));
     color: inherit;
-    background: var(--card-background-color, #fff);
+    background: var(--card-background-color, var(--panel-card, #fff));
     text-align: center;
+    box-shadow: 0 24px 60px rgb(2 12 27 / 24%), 0 4px 14px rgb(2 12 27 / 12%);
+    animation: modal-enter 180ms cubic-bezier(.2, .8, .2, 1);
   }
 
   dialog::backdrop {
-    background: #003b5c99;
+    background: rgb(7 22 39 / 58%);
+    backdrop-filter: blur(4px);
   }
+
+  @keyframes modal-enter { from { opacity: 0; transform: translateY(10px) scale(.98); } to { opacity: 1; transform: none; } }
+
+  dialog > h2 { margin: 0 0 9px; color: var(--panel-text, inherit); font-size: 22px; line-height: 1.25; }
+  dialog > p { margin: 0; color: var(--panel-muted, var(--secondary-text-color)); line-height: 1.55; }
 
   dialog form {
     justify-items: center;
@@ -66,15 +74,29 @@ export const dialogStyles = `
     min-width: 112px;
     height: 40px;
     border: 0;
-    border-radius: 8px;
+    border-radius: 10px;
     font: inherit;
     cursor: pointer;
   }
 
   .modal-action {
     color: white;
-    background: #55bfe6;
+    background: linear-gradient(135deg, #0ea5e9, #0284c7);
+    box-shadow: 0 3px 8px rgb(2 132 199 / 22%);
   }
+
+  .modal-action.danger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    box-shadow: 0 3px 8px rgb(220 38 38 / 25%);
+  }
+
+  .modal-action.danger:hover { background: linear-gradient(135deg, #f87171, #dc2626); }
+  .modal-action-icon { display: inline-flex; width: 17px; height: 17px; }
+  .modal-action-icon svg { width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 2; }
 
   .modal-action:disabled {
     cursor: not-allowed;
@@ -82,12 +104,13 @@ export const dialogStyles = `
   }
 
   .modal-cancel {
-    color: #fff;
-    background: #4b5563;
+    border: 1px solid var(--panel-outline, #dbe2e8);
+    color: var(--panel-text, #334155);
+    background: color-mix(in srgb, var(--panel-surface, #f8fafc) 78%, var(--panel-card, #fff));
   }
 
   .modal-cancel:hover {
-    background: #374151;
+    background: color-mix(in srgb, var(--aqua, #0ea5e9) 10%, var(--panel-card, #fff));
   }
 
   .modal-icon {

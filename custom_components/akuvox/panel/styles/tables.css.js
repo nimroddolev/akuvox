@@ -11,7 +11,7 @@ export const tableStyles = `
 
   th,
   td {
-    padding: 6px;
+    padding: 11px 12px;
     text-align: left;
     border-bottom: 1px solid var(--divider-color, #ddd);
     vertical-align: middle;
@@ -19,7 +19,15 @@ export const tableStyles = `
 
   th {
     color: var(--panel-muted, #6b7280);
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: .035em;
+    text-transform: uppercase;
   }
+
+  thead { background: color-mix(in srgb, var(--panel-surface) 72%, var(--panel-card)); }
+  tbody tr { transition: background 140ms ease; }
+  tbody tr:hover { background: color-mix(in srgb, var(--aqua) 5%, transparent); }
 
   .table-wrap {
     overflow-x: auto;
@@ -48,8 +56,9 @@ export const tableStyles = `
     padding: 4px;
     box-sizing: border-box;
     border: 0;
-    border-radius: 999px;
-    background: #efeded;
+    border: 1px solid var(--panel-outline, #dbe2e8);
+    border-radius: 11px;
+    background: color-mix(in srgb, var(--panel-surface) 80%, var(--panel-card));
   }
 
   .view-mode-toggle .action {
@@ -62,7 +71,7 @@ export const tableStyles = `
     color: #424a52;
     background: transparent;
     box-shadow: none;
-    border-radius: 15px;
+    border-radius: 8px;
     font-size: 13px;
     font-weight: 600;
     gap: 6px;
@@ -79,9 +88,9 @@ export const tableStyles = `
 
   .view-mode-toggle .action.active,
   .view-mode-toggle .action[aria-pressed="true"] {
-    color: #006b9f;
+    color: var(--navy);
     background: #fff;
-    box-shadow: 0 3px 9px rgb(0 0 0 / 11%);
+    box-shadow: var(--panel-shadow-sm, 0 3px 9px rgb(0 0 0 / 11%));
   }
 
   .mobile-filter-toggle[aria-expanded="true"] {
@@ -104,15 +113,15 @@ export const tableStyles = `
     min-width: 0;
     padding: 18px;
     border: 1px solid var(--panel-outline, var(--divider-color, #8c99a3));
-    border-radius: 12px;
+    border-radius: var(--panel-radius, 16px);
     background: var(--panel-card, #fff);
-    box-shadow: 0 1px 2px rgb(27 28 28 / 4%);
+    box-shadow: var(--panel-shadow-sm, 0 1px 2px rgb(27 28 28 / 4%));
     transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
   }
 
   .tile-card:hover {
     border-color: color-mix(in srgb, var(--aqua) 45%, var(--panel-outline, #dbe2e8));
-    box-shadow: 0 8px 18px rgb(27 28 28 / 8%);
+    box-shadow: var(--panel-shadow-md, 0 8px 18px rgb(27 28 28 / 8%));
     /* Moving the hover target makes a pointer at its lower edge repeatedly
        leave and re-enter it, causing the device preview to visibly jitter. */
     transform: none;
@@ -479,6 +488,7 @@ export const tableStyles = `
   }
 
   .key-status.active em { color: inherit; }
+  .key-status em::before { content: "·"; margin-right: 4px; }
 
   .call-status {
     display: inline-block;
@@ -493,6 +503,7 @@ export const tableStyles = `
 
   .key-tile {
     gap: 12px;
+    min-height: 284px;
     padding: 16px;
     border-color: #e0e0e0;
     border-radius: 12px;
@@ -1176,6 +1187,41 @@ export const tableStyles = `
     display: flex;
     margin: 0;
     margin-inline-start: auto;
+  }
+
+  /* Activity and call filtering stays available at desktop widths too. Give
+     that trigger the same intentional, tactile treatment as the other panel
+     actions instead of leaving it as bare header text. */
+  .mobile-filter-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 38px;
+    padding: 8px 13px;
+    border: 1px solid var(--panel-outline, var(--divider-color, #8c99a3));
+    border-radius: 10px;
+    color: var(--panel-muted, var(--primary-text-color));
+    background: color-mix(in srgb, var(--panel-surface, #f8fafc) 78%, var(--panel-card, #fff));
+    box-shadow: var(--panel-shadow-sm, 0 1px 2px rgb(15 23 42 / 5%));
+    font: inherit;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+    transition: border-color 150ms ease, background 150ms ease, box-shadow 150ms ease, color 150ms ease;
+  }
+
+  .mobile-filter-toggle:hover {
+    border-color: color-mix(in srgb, var(--aqua) 48%, var(--panel-outline));
+    color: var(--navy);
+    background: color-mix(in srgb, var(--aqua) 8%, var(--panel-card));
+    box-shadow: 0 5px 12px rgb(15 23 42 / 9%);
+  }
+
+  .mobile-filter-toggle[aria-expanded="true"] {
+    border-color: color-mix(in srgb, var(--aqua) 65%, var(--panel-outline));
+    color: var(--navy);
+    background: color-mix(in srgb, var(--aqua) 12%, var(--panel-card));
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--aqua) 16%, transparent), var(--panel-shadow-sm, 0 2px 7px rgb(0 0 0 / 12%));
   }
 
   .calls-table-wrap .activity-controls.mobile-filter-panel,

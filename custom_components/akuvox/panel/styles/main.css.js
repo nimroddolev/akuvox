@@ -4,17 +4,20 @@
 
 export const mainStyles = `
   :host {
-    --aqua: #03a9f4;
-    --navy: #006493;
-    --mint: #e1f5fe;
-    --panel-surface: #fbf9f9;
+    --aqua: #0ea5e9;
+    --navy: #0369a1;
+    --mint: #e0f2fe;
+    --panel-surface: #f4f8fc;
     --panel-card: #ffffff;
-    --panel-text: #1b1c1c;
-    --panel-muted: #5e6972;
-    --panel-outline: #dbe2e8;
-    --panel-notice-bg: #e9f8fb;
-    --panel-notice-text: #006493;
+    --panel-text: #15212e;
+    --panel-muted: #64748b;
+    --panel-outline: #d9e3ee;
+    --panel-notice-bg: #ecf8ff;
+    --panel-notice-text: #075985;
     --panel-notice-outline: #bae6fd;
+    --panel-shadow-sm: 0 1px 2px rgb(15 23 42 / 4%), 0 2px 5px rgb(15 23 42 / 3%);
+    --panel-shadow-md: 0 12px 28px rgb(15 23 42 / 8%), 0 3px 8px rgb(15 23 42 / 5%);
+    --panel-radius: 16px;
     color: var(--panel-text);
     display: block;
     max-width: 100%;
@@ -30,12 +33,12 @@ export const mainStyles = `
     --aqua: #03a9f4;
     --navy: #38bdf8;
     --mint: #0d3144;
-    --panel-surface: #101216;
-    --panel-card: #1c2026;
+    --panel-surface: #0d121a;
+    --panel-card: #161d27;
     --panel-text: #f3f4f6;
     --panel-muted: #9ca3af;
-    --panel-outline: #2d3440;
-    --panel-notice-bg: #1f2937;
+    --panel-outline: #293545;
+    --panel-notice-bg: #102c3c;
     --panel-notice-text: #bae6fd;
     --panel-notice-outline: #334155;
     --primary-text-color: #e5e7eb;
@@ -57,7 +60,7 @@ export const mainStyles = `
     overflow-x: hidden;
     overflow-x: clip;
     padding: 28px;
-    background: var(--panel-surface);
+    background: radial-gradient(circle at 8% -12%, color-mix(in srgb, var(--aqua) 12%, transparent), transparent 28rem), var(--panel-surface);
     width: 100%;
   }
 
@@ -78,9 +81,11 @@ export const mainStyles = `
     padding: 0 28px;
     color: var(--app-header-text-color, var(--panel-text));
     border: 0;
-    border-bottom: 1px solid var(--panel-outline);
+    border-bottom: 1px solid color-mix(in srgb, var(--panel-outline) 85%, transparent);
     border-radius: 0;
-    background: var(--app-header-background-color, var(--panel-card));
+    background: color-mix(in srgb, var(--app-header-background-color, var(--panel-card)) 92%, transparent);
+    box-shadow: 0 1px 0 rgb(255 255 255 / 35%);
+    backdrop-filter: blur(16px);
   }
 
   .panel-page-title { min-width: 0; }
@@ -97,14 +102,15 @@ export const mainStyles = `
     border: 1px solid var(--panel-outline);
     color: var(--panel-text);
     background: var(--panel-surface);
-    border-radius: 8px;
+    border-radius: 10px;
+    font-weight: 600;
   }
 
   .mobile-menu-toggle { display: none; }
 
   nav {
     display: flex;
-    gap: 2px;
+    gap: 4px;
     margin: 16px 0 28px;
     border-bottom: 1px solid var(--panel-outline);
   }
@@ -173,8 +179,9 @@ export const mainStyles = `
 
   .tab {
     border: 0;
+    border-radius: 9px 9px 0 0;
     background: transparent;
-    padding: 11px 14px;
+    padding: 11px 15px;
     color: var(--panel-muted);
     font-size: 13px;
     font-weight: 500;
@@ -186,6 +193,12 @@ export const mainStyles = `
     font-weight: 600;
   }
 
+  .tab:hover:not(.selected) { color: var(--panel-text); background: color-mix(in srgb, var(--aqua) 7%, transparent); }
+  button:focus-visible, a:focus-visible, summary:focus-visible {
+    outline: 2px solid var(--aqua);
+    outline-offset: 3px;
+  }
+
   .grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
@@ -194,9 +207,10 @@ export const mainStyles = `
 
   .card {
     border: 1px solid var(--panel-outline);
-    border-radius: 12px;
-    padding: 16px;
+    border-radius: var(--panel-radius);
+    padding: 18px;
     background: var(--panel-card);
+    box-shadow: var(--panel-shadow-sm);
   }
 
   .card h2 {
@@ -215,12 +229,22 @@ export const mainStyles = `
   }
 
   .action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    min-height: 38px;
     color: white;
-    background: var(--aqua);
+    background: linear-gradient(135deg, #0ea5e9, #0284c7);
     border: 0;
-    border-radius: 8px;
-    padding: 8px 10px;
+    border-radius: 10px;
+    padding: 8px 13px;
+    box-shadow: 0 2px 4px rgb(2 132 199 / 20%);
+    font-weight: 700;
+    transition: transform 150ms ease, box-shadow 150ms ease, filter 150ms ease;
   }
+  .action:hover:not(:disabled) { filter: brightness(1.04); box-shadow: 0 6px 14px rgb(2 132 199 / 24%); transform: translateY(-1px); }
+  .action:active:not(:disabled) { transform: translateY(0); box-shadow: 0 1px 2px rgb(2 132 199 / 20%); }
 
   .settings-heading {
     align-items: flex-start;
@@ -304,8 +328,9 @@ export const mainStyles = `
     color: white;
     background: #16a34a;
     border: 0;
-    border-radius: 8px;
-    padding: 8px 10px;
+    border-radius: 10px;
+    padding: 9px 12px;
+    font-weight: 700;
   }
 
   .success:hover {
@@ -316,8 +341,9 @@ export const mainStyles = `
     color: white;
     background: #dc2626;
     border: 0;
-    border-radius: 8px;
-    padding: 8px;
+    border-radius: 10px;
+    padding: 9px 12px;
+    font-weight: 700;
   }
 
   .danger:hover {
@@ -338,8 +364,8 @@ export const mainStyles = `
   }
 
   .notice {
-    padding: 12px;
-    border-radius: 10px;
+    padding: 14px 16px;
+    border-radius: 12px;
     border: 1px solid var(--panel-notice-outline);
     background: var(--panel-notice-bg);
     color: var(--panel-notice-text);
@@ -426,7 +452,8 @@ export const mainStyles = `
     width: 100%;
     padding: 8px;
     border: 1px solid var(--divider-color, #bbb);
-    border-radius: 8px;
+    min-height: 40px;
+    border-radius: 10px;
     color: inherit;
     background: var(--card-background-color, #fff);
     font: inherit;
@@ -434,7 +461,7 @@ export const mainStyles = `
 
   fieldset {
     border: 1px solid var(--divider-color, #ddd);
-    border-radius: 8px;
+    border-radius: 12px;
     display: grid;
     gap: 7px;
   }
@@ -562,15 +589,21 @@ export const mainStyles = `
   .door-notification-close { position: absolute; top: 24px; right: 28px; width: 40px; height: 40px; padding: 0; border: 0; color: var(--secondary-text-color, #66758a); background: transparent; font: inherit; font-size: 36px; line-height: 1; cursor: pointer; }
   .door-notification-close:hover, .door-notification-close:focus-visible { color: var(--panel-text); background: transparent; outline: 2px solid var(--aqua); outline-offset: 2px; }
   .door-notification-dialog form { display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; gap: 14px; padding: 0 48px 24px; }
-  .door-notification-step-content { display: flex; flex: 1 1 auto; flex-direction: column; align-items: stretch; justify-content: center; min-height: 0; gap: 14px; padding: 3px; overflow: auto; overscroll-behavior: contain; }
+  .door-notification-step-content { display: flex; flex: 1 1 auto; flex-direction: column; align-items: stretch; justify-content: flex-start; min-height: 0; gap: 14px; padding: 3px; overflow: auto; overscroll-behavior: contain; }
   dialog.door-notification-dialog fieldset { align-self: center; width: min(100%, 420px); gap: 0; padding: 0; overflow: hidden; border-color: var(--panel-outline); text-align: left; justify-content: center; justify-items: start; }
   .door-notification-dialog legend { margin-left: 10px; padding: 0 4px; font-weight: 700; }
-  .door-notification-option { display: flex; align-items: center; gap: 10px; padding: 10px 12px; font-weight: 500; cursor: pointer; }
+  .door-notification-option { display: flex; box-sizing: border-box; width: 100%; align-items: center; gap: 10px; padding: 10px 12px; font-weight: 500; cursor: pointer; }
   .door-notification-option + .door-notification-option { border-top: 1px solid var(--panel-outline); }
-  .door-notification-option input { flex: 0 0 auto; width: 22px; height: 22px; margin: 0; }
+  .door-notification-option input { flex: 0 0 auto; width: 22px; height: 22px; margin: 0; accent-color: var(--aqua); }
+  .event-types-options { box-sizing: border-box; align-self: center; display: grid; width: 100%; max-width: 560px; gap: 24px; padding: 30px 34px; border: 1px solid var(--panel-outline); border-radius: 16px; text-align: start; background: color-mix(in srgb, var(--panel-card) 94%, var(--panel-surface)); }
+  .event-types-options h3 { margin: 0 0 4px; font-size: 20px; line-height: 1.25; }
+  .event-types-options .door-notification-option { padding: 0; font-size: 17px; }
+  .event-types-options .door-notification-option + .door-notification-option { border-top: 0; }
+  .event-types-options .door-notification-option input { width: 26px; height: 26px; }
   .door-notification-dialog .modal-actions { flex: 0 0 auto; justify-content: center; margin: 4px 0 0; }
   .door-notification-dialog a.modal-action { display: inline-flex; align-items: center; text-decoration: none; }
-  .door-notification-complete {
+  /* More specific than the responsive wizard rule below: completion needs no full-height canvas. */
+  dialog.door-notification-dialog.door-notification-complete {
     box-sizing: border-box;
     width: min(420px, calc(100vw - 32px));
     height: min(390px, calc(100dvh - 32px));
@@ -607,7 +640,10 @@ export const mainStyles = `
   .door-notification-complete .modal-cancel { min-width: 150px; }
   .door-notification-complete a.modal-action { justify-content: center; }
   .door-picker-control { position: relative; width: 100%; }
-  .door-picker-search { display: grid; gap: 4px; width: 100%; font-weight: 600; }
+  .door-picker-search { position: relative; display: block; width: 100%; font-weight: 600; }
+  .door-picker-search > span { position: absolute; z-index: 1; top: 50%; left: 13px; width: 19px; height: 19px; color: var(--panel-muted); pointer-events: none; transform: translateY(-50%); }
+  .door-picker-search svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 2; }
+  .door-picker-search input { box-sizing: border-box; min-height: 40px; padding-left: 42px; }
   .door-picker { position: absolute; z-index: 2; top: 100%; left: 0; box-sizing: border-box; width: 100%; max-height: 190px; overflow: auto; border: 1px solid var(--panel-outline); border-radius: 8px; background: var(--panel-card); box-shadow: 0 8px 18px #0003; overscroll-behavior: contain; }
   .notification-service-picker-control .door-picker { position: relative; top: auto; left: auto; margin-top: 6px; }
   .door-picker[hidden] { display: none; }
@@ -618,28 +654,63 @@ export const mainStyles = `
   .door-picker .muted { margin: 0; padding: 12px; }
   .notification-service-list, .selection-list { max-height: 360px; margin-top: 6px; overflow: auto; border: 1px solid var(--panel-outline); border-radius: 8px; overscroll-behavior: contain; scroll-snap-type: y mandatory; }
   .door-notification-step-content:has(.notification-service-picker-control), .door-notification-step-content:has(.selection-list-picker-control) { justify-content: flex-start; }
-  .door-notification-step-content:has(.notification-service-picker-control) .door-picker-control, .door-notification-step-content:has(.selection-list-picker-control) .door-picker-control { display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; }
-  .door-notification-step-content:has(.notification-service-picker-control) .notification-service-list, .door-notification-step-content:has(.selection-list-picker-control) .selection-list { flex: 1 1 0; min-height: 0; max-height: none; overflow-x: hidden; overflow-y: scroll; scrollbar-gutter: stable; }
+  .door-notification-step-content:has(.notification-service-picker-control) .notification-service-list, .door-notification-step-content:has(.selection-list-picker-control) .selection-list { overflow-x: hidden; overflow-y: auto; scrollbar-gutter: stable; }
   .notification-service-list, .selection-list { scrollbar-width: auto; scrollbar-color: var(--panel-muted) color-mix(in srgb, var(--panel-outline) 45%, transparent); }
   .notification-service-list::-webkit-scrollbar, .selection-list::-webkit-scrollbar { width: 12px; }
   .notification-service-list::-webkit-scrollbar-track, .selection-list::-webkit-scrollbar-track { background: color-mix(in srgb, var(--panel-outline) 45%, transparent); }
   .notification-service-list::-webkit-scrollbar-thumb, .selection-list::-webkit-scrollbar-thumb { min-height: 28px; border: 3px solid transparent; border-radius: 999px; background: var(--panel-muted); background-clip: padding-box; }
-  .door-notification-step-content:has(.notification-service-picker-control) .door-picker-search, .door-notification-step-content:has(.selection-list-picker-control) .door-picker-search { position: sticky; z-index: 1; top: 0; padding-bottom: 6px; background: var(--panel-card); }
+  .door-notification-step-content:has(.notification-service-picker-control) .door-picker-search, .door-notification-step-content:has(.selection-list-picker-control) .door-picker-search { z-index: 1; padding-bottom: 6px; background: var(--panel-card); }
   .notification-service-action-option { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; align-items: center; gap: 12px; min-height: 78px; padding: 12px; scroll-snap-align: start; }
-  .door-selection-list-option { display: grid; grid-template-columns: 34px minmax(0, 1fr); align-items: center; gap: 12px; min-height: 52px; padding: 10px 12px; scroll-snap-align: start; }
+  .door-selection-list-option { display: grid; grid-template-columns: 34px minmax(0, 1fr) 22px; align-items: center; gap: 12px; min-height: 52px; padding: 10px 12px; scroll-snap-align: start; }
+  .door-selection-list-option.selected { border: 1px solid var(--aqua); border-radius: 8px; background: color-mix(in srgb, var(--aqua) 8%, transparent); }
+  .door-selection-list-icon { display: grid; width: 32px; height: 32px; place-items: center; border-radius: 7px; color: var(--panel-muted); background: color-mix(in srgb, var(--panel-muted) 13%, transparent); }
+  .door-selection-list-icon svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 2; }
   .notification-service-selection { display: grid; width: 22px; height: 22px; place-items: center; border: 1px solid var(--panel-outline); border-radius: 5px; color: transparent; background: color-mix(in srgb, var(--panel-muted) 12%, transparent); font-size: 16px; font-weight: 800; line-height: 1; opacity: .55; }
   .notification-service-selection.selected { border-color: var(--aqua); color: var(--panel-card); background: var(--aqua); opacity: 1; }
   .notification-service-action-icon { display: grid; width: 28px; height: 28px; place-items: center; color: var(--panel-muted); }
   .notification-service-action-icon svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
   .notification-service-action-copy { display: grid; min-width: 0; gap: 4px; font-weight: 500; overflow-wrap: anywhere; }
   .notification-service-action-copy small { color: var(--panel-muted); font-size: 12px; font-weight: 400; line-height: 1.35; }
-  .notification-service-action-domain { color: var(--panel-muted); font-size: 13px; }
-  .caller-picker { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px 12px; width: 100%; }
+  .notification-service-action-domain { width: fit-content; padding: 2px 7px; border-radius: 5px; color: var(--panel-muted); background: color-mix(in srgb, var(--panel-muted) 12%, transparent); font-size: 11px; font-style: normal; font-weight: 700; }
+  .notification-service-action-icon { border-radius: 8px; color: #fff; background: var(--aqua); }
+  .notification-service-action-icon svg { width: 21px; height: 21px; fill: currentColor; stroke: none; }
+  .notification-service-action-option.selected { border: 1px solid var(--aqua); border-radius: 8px; background: color-mix(in srgb, var(--aqua) 8%, transparent); }
+  .notification-service-list, .selection-list { display: grid; gap: 10px; padding: 0; border: 0; border-radius: 0; background: transparent; }
+  .notification-service-list .door-picker-option, .selection-list .door-picker-option { box-sizing: border-box; width: 100%; border: 1px solid var(--panel-outline); border-radius: 10px; background: var(--panel-card); }
+  .notification-service-list .door-picker-option:hover, .notification-service-list .door-picker-option:focus-visible, .selection-list .door-picker-option:hover, .selection-list .door-picker-option:focus-visible { background: color-mix(in srgb, var(--aqua) 14%, var(--panel-card)); }
+  .notification-options { align-self: center; display: grid; width: min(100%, 420px); gap: 14px; }
+  .notification-select-option { display: grid; gap: 7px; font-size: 14px; font-weight: 500; text-align: start; }
+  .notification-select-option select, .notification-select-option > input { box-sizing: border-box; width: 100%; min-height: 42px; padding: 9px 12px; border: 1px solid var(--panel-outline); border-radius: 10px; color: var(--panel-text); background: var(--panel-card); font: inherit; }
+  .notification-select-option select { appearance: auto; }
+  .notification-select-input { position: relative; display: block; }
+  .notification-select-input input { box-sizing: border-box; width: 100%; min-height: 40px; padding-right: 40px; }
+  .notification-select-input i { position: absolute; top: 50%; right: 13px; display: grid; width: 18px; height: 18px; place-items: center; color: var(--panel-muted); pointer-events: none; transform: translateY(-50%); }
+  .notification-select-input svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; }
+  .notification-preview { display: grid; gap: 9px; padding-top: 6px; }
+  .notification-preview-heading { display: flex; align-items: center; justify-content: space-between; color: var(--panel-muted); font-size: 13px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; }
+  .notification-sound-preview { display: inline-grid; width: 34px; height: 34px; place-items: center; padding: 0; border: 1px solid var(--aqua); border-radius: 50%; color: #fff; background: var(--aqua); cursor: pointer; }
+  .notification-sound-preview:hover:not(:disabled) { filter: brightness(1.08); }
+  .notification-sound-preview:disabled { cursor: wait; opacity: .65; }
+  .notification-sound-preview svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .notification-preview-card { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 11px; padding: 13px; border: 1px solid var(--panel-outline); border-radius: 13px; background: color-mix(in srgb, var(--panel-card) 90%, var(--panel-surface)); }
+  .notification-preview-icon { display: grid; width: 36px; height: 36px; place-items: center; border-radius: 10px; color: #fff; background: var(--aqua); }
+  .notification-preview-icon svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 2; }
+  .notification-preview-app { display: flex; justify-content: space-between; gap: 8px; color: var(--panel-muted); font-size: 12px; font-weight: 600; }
+  .notification-preview-app small { font: inherit; font-weight: 400; }
+  .notification-preview-card strong { display: block; margin-top: 3px; font-size: 14px; }
+  .notification-preview-card p { margin: 3px 0 0; color: var(--panel-muted); font-size: 13px; line-height: 1.35; }
+  .notification-preview-card img, .notification-preview-image-placeholder { display: grid; box-sizing: border-box; width: 100%; height: 96px; margin-top: 10px; place-items: center; border-radius: 8px; color: var(--panel-muted); background: color-mix(in srgb, var(--panel-muted) 10%, transparent); object-fit: cover; }
+  .notification-preview-image-placeholder svg { width: 30px; height: 30px; fill: none; stroke: currentColor; stroke-width: 1.8; }
+  .notification-preview-status { min-height: 18px; margin: 0; color: var(--panel-muted); font-size: 12px; }
+  .automation-name-field { align-self: center; display: grid; width: min(100%, 420px); gap: 7px; font-size: 14px; font-weight: 500; text-align: start; }
+  .automation-name-field input { box-sizing: border-box; width: 100%; min-height: 42px; }
+  .caller-picker { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 16px 12px; width: 100%; }
   .caller-picker-add, .caller-picker-rule { display: flex; }
-  .caller-picker-add { position: relative; }
+  .caller-picker-add { position: relative; flex-direction: column; align-items: center; gap: 6px; }
   .caller-picker-add[hidden] { display: none; }
   .caller-picker-add-button { display: grid; width: 34px; height: 34px; place-items: center; padding: 0; border: 0; border-radius: 999px; color: #fff; background: var(--success-color, #16803c); font: inherit; font-size: 25px; font-weight: 500; line-height: 1; cursor: pointer; }
   .caller-picker-add-button:hover, .caller-picker-add-button:focus-visible { background: color-mix(in srgb, var(--success-color, #16803c) 82%, #000); outline: 2px solid var(--aqua); outline-offset: 2px; }
+  .caller-picker-add-label { color: var(--panel-muted); font-size: 13px; line-height: 1.2; }
   .caller-picker-add-menu { position: absolute; z-index: 3; top: calc(100% + 6px); left: 50%; display: grid; min-width: 180px; max-height: 190px; overflow: auto; border: 1px solid var(--panel-outline); border-radius: 8px; background: var(--panel-card); box-shadow: 0 8px 18px #0003; transform: translateX(-50%); overscroll-behavior: contain; }
   .caller-picker-add.opens-upward .caller-picker-add-menu { top: auto; bottom: calc(100% + 6px); }
   .caller-picker-add-menu[hidden] { display: none; }
@@ -654,7 +725,7 @@ export const mainStyles = `
   .remote-instance-dialog-header .door-notification-heading-row p { margin: 0; }
   .caller-picker-rule[hidden] { display: none; }
   .caller-picker-add select, .caller-picker-rule select { width: auto; max-width: 100%; min-width: 0; }
-  .caller-condition-summary { display: block; flex: 0 0 100%; margin: 0; line-height: 1.9; text-align: center; }
+  .caller-condition-summary { box-sizing: border-box; display: block; flex: 0 0 min(100%, 620px); margin: 0; padding: 10px 14px; border: 1px solid color-mix(in srgb, var(--aqua) 40%, var(--panel-outline)); border-radius: 12px; background: color-mix(in srgb, var(--aqua) 5%, var(--panel-card)); font-size: 18px; line-height: 1.9; text-align: center; }
   .caller-condition-summary .door-picker-badges { display: contents; }
   .caller-condition-summary .door-selection-badge, .caller-condition-summary .caller-picker-rule { margin: 3px 2px; vertical-align: middle; }
   .caller-condition-summary .caller-picker-rule { display: inline-flex; }
@@ -903,7 +974,7 @@ export const mainStyles = `
     display: flex;
     flex-direction: column;
     width: min(1100px, calc(100vw - 48px));
-    height: min(690px, calc(100vh - 48px));
+    height: auto;
     max-height: calc(100vh - 48px);
     padding: 0;
     overflow: hidden;
@@ -915,9 +986,11 @@ export const mainStyles = `
   .remote-instance-dialog-header h2 { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin: 0; color: var(--panel-text); font-size: 30px; line-height: 1.15; }
   .remote-instance-dialog-header p { margin: 8px 0 0; color: var(--panel-muted); font-size: 17px; }
   .door-notification-dialog .remote-instance-dialog-header > p { margin-top: 16px; }
-  .share-stage-progress { height: 5px; border-radius: 10px; margin: 0 48px 16px; overflow: hidden; background: color-mix(in srgb, var(--aqua, #03a9f4) 18%, transparent); }
-  .share-stage-progress span { display: block; width: 0; height: 100%; background: var(--aqua, #03a9f4); transition: width 220ms ease; }
-  .remote-instance-dialog-header .share-stage-progress { margin: 14px 0 12px; }
+  .wizard-stage-progress { display: grid; grid-template-columns: repeat(var(--wizard-stage-count, 6), minmax(0, 1fr)); gap: 3px; height: 5px; margin: 0 48px 16px; }
+  .wizard-stage-progress span { min-width: 0; border-radius: 999px; background: color-mix(in srgb, var(--aqua, #03a9f4) 18%, transparent); transition: background-color 220ms ease; }
+  .wizard-stage-progress span.is-complete { background: var(--aqua, #03a9f4); }
+  .remote-instance-dialog-header .wizard-stage-progress { margin: 14px 0 12px; }
+  [data-share-stage-progress] { --wizard-stage-count: 3; }
   .share-access-close { position: absolute; top: 24px; right: 28px; width: 40px; height: 40px; padding: 0; border: 0; color: var(--secondary-text-color, #66758a); background: transparent; font-size: 36px; line-height: 1; cursor: pointer; }
   .share-access-close:hover { color: var(--primary-text-color, #111); }
   .share-access-dialog input {
@@ -1007,7 +1080,7 @@ export const mainStyles = `
   .share-status-badge.waiting-to-pair { border-color: #f3ca67; color: #8a6100; background: #fff8e4; }
   .share-status-badge.revoked { border-color: #f3aaaa; color: #b42318; background: #fff0ef; }
   @media (max-width: 680px) {
-    .share-access-dialog { width: calc(100vw - 24px); height: calc(100vh - 24px); max-height: calc(100vh - 24px); }
+    .share-access-dialog { width: calc(100vw - 24px); height: auto; max-height: calc(100vh - 24px); }
     .door-notification-dialog { height: calc(100vh - 24px); }
     .remote-instance-dialog-header { padding: 26px 24px 22px; }
     .remote-instance-dialog-header h2 { font-size: 24px; padding-right: 28px; }

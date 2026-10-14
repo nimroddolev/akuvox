@@ -10,6 +10,22 @@ import { localizeElement, t } from "../utils/i18n.js?v=20261005-pseudo-spanish";
 
 const RECEIVER_CONTACT_TIMEOUT_MS = 2 * 60 * 1000;
 
+/** Render the shared, discrete progress indicator used by modal wizards. */
+const wizardProgress = ({ label, totalStages, stage, attribute }) => `<div class="wizard-stage-progress" role="progressbar" aria-label="${escapeHtml(label)}" aria-valuemin="0" aria-valuemax="${totalStages}" aria-valuenow="${stage}" ${attribute}>
+  ${Array.from({ length: totalStages }, (_, index) => `<span data-wizard-stage="${index + 1}"${index < stage ? " class=\"is-complete\"" : ""}></span>`).join("")}
+</div>`;
+
+/** Update a wizard progress indicator without relying on a continuous width fill. */
+const setWizardProgress = (dialog, selector, stage) => {
+  const progress = dialog.querySelector(selector);
+  if (!progress) return;
+  const completedStages = Math.max(0, Number(stage) || 0);
+  progress.querySelectorAll("[data-wizard-stage]").forEach((segment) => {
+    segment.classList.toggle("is-complete", Number(segment.dataset.wizardStage) <= completedStages);
+  });
+  progress.setAttribute("aria-valuenow", String(completedStages));
+};
+
 const receiverIsConnected = (share) => {
   if (typeof share.connected === "boolean") return share.connected;
   const lastContact = Date.parse(share.last_sync || "");
@@ -71,10 +87,134 @@ const companionNotificationServices = (services) => services.filter(
 
 const IOS_NOTIFICATION_SOUNDS = [
   "default",
-  "alarm.caf",
-  "Ringtone_US_Haptic.caf",
+  "none",
+  "US-EN-Alexa-Back-Door-Opened.wav",
+  "US-EN-Alexa-Back-Door-Unlocked.wav",
+  "US-EN-Alexa-Basement-Door-Opened.wav",
+  "US-EN-Alexa-Basement-Door-Unlocked.wav",
+  "US-EN-Alexa-Boyfriend-Is-Arriving.wav",
+  "US-EN-Alexa-Daughter-Is-Arriving.wav",
   "US-EN-Alexa-Front-Door-Opened.wav",
+  "US-EN-Alexa-Front-Door-Unlocked.wav",
+  "US-EN-Alexa-Garage-Door-Opened.wav",
+  "US-EN-Alexa-Girlfriend-Is-Arriving.wav",
+  "US-EN-Alexa-Good-Morning.wav",
+  "US-EN-Alexa-Good-Night.wav",
+  "US-EN-Alexa-Husband-Is-Arriving.wav",
+  "US-EN-Alexa-Mail-Has-Arrived.wav",
+  "US-EN-Alexa-Motion-At-Back-Door.wav",
+  "US-EN-Alexa-Motion-At-Front-Door.wav",
+  "US-EN-Alexa-Motion-Detected-Generic.wav",
+  "US-EN-Alexa-Motion-In-Back-Yard.wav",
+  "US-EN-Alexa-Motion-In-Basement.wav",
+  "US-EN-Alexa-Motion-In-Front-Yard.wav",
+  "US-EN-Alexa-Motion-In-Garage.wav",
+  "US-EN-Alexa-Patio-Door-Opened.wav",
+  "US-EN-Alexa-Patio-Door-Unlocked.wav",
+  "US-EN-Alexa-Smoke-Detected-Generic.wav",
+  "US-EN-Alexa-Smoke-Detected-In-Basement.wav",
+  "US-EN-Alexa-Smoke-Detected-In-Garage.wav",
+  "US-EN-Alexa-Smoke-Detected-In-Kitchen.wav",
+  "US-EN-Alexa-Son-Is-Arriving.wav",
+  "US-EN-Alexa-Water-Detected-Generic.wav",
+  "US-EN-Alexa-Water-Detected-In-Basement.wav",
+  "US-EN-Alexa-Water-Detected-In-Garage.wav",
+  "US-EN-Alexa-Water-Detected-In-Kitchen.wav",
+  "US-EN-Alexa-Welcome-Home.wav",
+  "US-EN-Alexa-Wife-Is-Arriving.wav",
+  "US-EN-Daisy-Back-Door-Motion.wav",
+  "US-EN-Daisy-Back-Door-Open.wav",
+  "US-EN-Daisy-Front-Door-Motion.wav",
+  "US-EN-Daisy-Front-Door-Open.wav",
+  "US-EN-Daisy-Front-Window-Open.wav",
+  "US-EN-Daisy-Garage-Door-Open.wav",
+  "US-EN-Daisy-Guest-Bath-Leak.wav",
+  "US-EN-Daisy-Kitchen-Sink-Leak.wav",
+  "US-EN-Daisy-Kitchen-Window-Open.wav",
+  "US-EN-Daisy-Laundry-Room-Leak.wav",
+  "US-EN-Daisy-Master-Bath-Leak.wav",
+  "US-EN-Daisy-Master-Bedroom-Window-Open.wav",
+  "US-EN-Daisy-Office-Window-Open.wav",
+  "US-EN-Daisy-Refrigerator-Leak.wav",
+  "US-EN-Daisy-Water-Heater-Leak.wav",
+  "US-EN-Morgan-Freeman-Back-Door-Closed.wav",
+  "US-EN-Morgan-Freeman-Back-Door-Locked.wav",
+  "US-EN-Morgan-Freeman-Back-Door-Opened.wav",
+  "US-EN-Morgan-Freeman-Back-Door-Unlocked.wav",
+  "US-EN-Morgan-Freeman-Basement-Door-Closed.wav",
+  "US-EN-Morgan-Freeman-Basement-Door-Locked.wav",
+  "US-EN-Morgan-Freeman-Basement-Door-Opened.wav",
+  "US-EN-Morgan-Freeman-Basement-Door-Unlocked.wav",
+  "US-EN-Morgan-Freeman-Boss-Is-Arriving.wav",
+  "US-EN-Morgan-Freeman-Boyfriend-Is-Arriving.wav",
+  "US-EN-Morgan-Freeman-Cleaning-Supplies-Closet-Opened.wav",
+  "US-EN-Morgan-Freeman-Coworker-Is-Arriving.wav",
+  "US-EN-Morgan-Freeman-Daughter-Is-Arriving.wav",
+  "US-EN-Morgan-Freeman-Friend-Is-Arriving.wav",
+  "US-EN-Morgan-Freeman-Front-Door-Closed.wav",
+  "US-EN-Morgan-Freeman-Front-Door-Locked.wav",
   "US-EN-Morgan-Freeman-Front-Door-Opened.wav",
+  "US-EN-Morgan-Freeman-Front-Door-Unlocked.wav",
+  "US-EN-Morgan-Freeman-Garage-Door-Closed.wav",
+  "US-EN-Morgan-Freeman-Garage-Door-Opened.wav",
+  "US-EN-Morgan-Freeman-Girlfriend-Is-Arriving.wav",
+  "US-EN-Morgan-Freeman-Good-Morning.wav",
+  "US-EN-Morgan-Freeman-Good-Night.wav",
+  "US-EN-Morgan-Freeman-Liquor-Cabinet-Opened.wav",
+  "US-EN-Morgan-Freeman-Motion-Detected.wav",
+  "US-EN-Morgan-Freeman-Motion-In-Basement.wav",
+  "US-EN-Morgan-Freeman-Motion-In-Bedroom.wav",
+  "US-EN-Morgan-Freeman-Motion-In-Game-Room.wav",
+  "US-EN-Morgan-Freeman-Motion-In-Garage.wav",
+  "US-EN-Morgan-Freeman-Motion-In-Kitchen.wav",
+  "US-EN-Morgan-Freeman-Motion-In-Living-Room.wav",
+  "US-EN-Morgan-Freeman-Motion-In-Theater.wav",
+  "US-EN-Morgan-Freeman-Motion-In-Wine-Cellar.wav",
+  "US-EN-Morgan-Freeman-Patio-Door-Closed.wav",
+  "US-EN-Morgan-Freeman-Patio-Door-Locked.wav",
+  "US-EN-Morgan-Freeman-Patio-Door-Opened.wav",
+  "US-EN-Morgan-Freeman-Patio-Door-Unlocked.wav",
+  "US-EN-Morgan-Freeman-Roommate-Is-Arriving.wav",
+  "US-EN-Morgan-Freeman-Searching-For-Car-Keys.wav",
+  "US-EN-Morgan-Freeman-Setting-The-Mood.wav",
+  "US-EN-Morgan-Freeman-Smartthings-Detected-A-Flood.wav",
+  "US-EN-Morgan-Freeman-Smartthings-Detected-Carbon-Monoxide.wav",
+  "US-EN-Morgan-Freeman-Smartthings-Detected-Smoke.wav",
+  "US-EN-Morgan-Freeman-Smoke-Detected-In-Basement.wav",
+  "US-EN-Morgan-Freeman-Smoke-Detected-In-Garage.wav",
+  "US-EN-Morgan-Freeman-Smoke-Detected-In-Kitchen.wav",
+  "US-EN-Morgan-Freeman-Someone-Is-Arriving.wav",
+  "US-EN-Morgan-Freeman-Son-Is-Arriving.wav",
+  "US-EN-Morgan-Freeman-Starting-Movie-Mode.wav",
+  "US-EN-Morgan-Freeman-Starting-Party-Mode.wav",
+  "US-EN-Morgan-Freeman-Starting-Romance-Mode.wav",
+  "US-EN-Morgan-Freeman-Turning-Off-All-The-Lights.wav",
+  "US-EN-Morgan-Freeman-Turning-Off-The-Air-Conditioner.wav",
+  "US-EN-Morgan-Freeman-Turning-Off-The-Bar-Lights.wav",
+  "US-EN-Morgan-Freeman-Turning-Off-The-Chandelier.wav",
+  "US-EN-Morgan-Freeman-Turning-Off-The-Family-Room-Lights.wav",
+  "US-EN-Morgan-Freeman-Turning-Off-The-Hallway-Lights.wav",
+  "US-EN-Morgan-Freeman-Turning-Off-The-Kitchen-Light.wav",
+  "US-EN-Morgan-Freeman-Turning-Off-The-Light.wav",
+  "US-EN-Morgan-Freeman-Turning-Off-The-Lights.wav",
+  "US-EN-Morgan-Freeman-Turning-Off-The-Mood-Lights.wav",
+  "US-EN-Morgan-Freeman-Turning-Off-The-TV.wav",
+  "US-EN-Morgan-Freeman-Turning-On-The-Air-Conditioner.wav",
+  "US-EN-Morgan-Freeman-Turning-On-The-Bar-Lights.wav",
+  "US-EN-Morgan-Freeman-Turning-On-The-Chandelier.wav",
+  "US-EN-Morgan-Freeman-Turning-On-The-Family-Room-Lights.wav",
+  "US-EN-Morgan-Freeman-Turning-On-The-Hallway-Lights.wav",
+  "US-EN-Morgan-Freeman-Turning-On-The-Kitchen-Light.wav",
+  "US-EN-Morgan-Freeman-Turning-On-The-Light.wav",
+  "US-EN-Morgan-Freeman-Turning-On-The-Lights.wav",
+  "US-EN-Morgan-Freeman-Turning-On-The-Mood-Lights.wav",
+  "US-EN-Morgan-Freeman-Turning-On-The-TV.wav",
+  "US-EN-Morgan-Freeman-Vacate-The-Premises.wav",
+  "US-EN-Morgan-Freeman-Water-Detected-In-Basement.wav",
+  "US-EN-Morgan-Freeman-Water-Detected-In-Garage.wav",
+  "US-EN-Morgan-Freeman-Water-Detected-In-Kitchen.wav",
+  "US-EN-Morgan-Freeman-Welcome-Home.wav",
+  "US-EN-Morgan-Freeman-Wife-Is-Arriving.wav",
 ];
 
 const relayEntities = async (host) => {
@@ -122,7 +262,7 @@ const temporaryKeys = (host) => {
     .sort((left, right) => left.name.localeCompare(right.name));
 };
 
-const notificationAction = (service, withImage, relayActions = [], options = {}) => {
+const notificationAction = (service, withImage, relayActions = [], options = {}, localize = (source, values = {}) => Object.entries(values).reduce((result, [key, value]) => result.replaceAll(`{${key}}`, String(value)), source)) => {
   const isCompanionApp = service.startsWith("notify.mobile_app_");
   const mobileData = isCompanionApp ? {
     ...((options.iosSound || options.priorityAlert) ? { push: {
@@ -136,8 +276,8 @@ const notificationAction = (service, withImage, relayActions = [], options = {})
   return {
     action: service,
     data: {
-    title: "{{ trigger.event.data.location }} {% if trigger.event.data.capture_type == 'Call' %}doorbell{% else %}opened{% endif %}",
-    message: "{{ 'Someone is calling from the ' ~ trigger.event.data.location ~ ' door' if trigger.event.data.capture_type == 'Call' else 'The ' ~ trigger.event.data.location ~ ' door was opened by ' ~ (trigger.event.data.initiator | default('Unknown', true)) }}",
+    title: `{{ trigger.event.data.location }} {% if trigger.event.data.capture_type == 'Call' %}${localize("doorbell")}{% else %}${localize("opened")}{% endif %}`,
+    message: `{% if trigger.event.data.capture_type == 'Call' %}${localize("Someone is calling from the {door} door.", { door: "{{ trigger.event.data.location }}" })}{% else %}${localize("The {door} door was opened by {initiator}.", { door: "{{ trigger.event.data.location }}", initiator: "{{ trigger.event.data.initiator | default('Unknown', true) }}" })}{% endif %}`,
     ...((withImage || relayActions.length || Object.keys(mobileData).length) ? { data: {
       ...(withImage ? { image: "{{ trigger.event.data.pic_url }}" } : {}),
       ...(relayActions.length ? { actions: relayActions } : {}),
@@ -193,7 +333,7 @@ const callerConditionSummary = (rules) => {
   return `Triggered if ${excludedClause}.`;
 };
 
-export const buildDoorNotificationAutomation = ({ name, doors, services, includeOpened, includeCalls, callerRules = [], includeRelayAction = false, includeImage = true, iosSound = "", androidChannel = "", priorityAlert = false, requireActionAuthentication = false, relayEntities = [], initialState }) => {
+export const buildDoorNotificationAutomation = ({ name, doors, services, includeOpened, includeCalls, callerRules = [], includeRelayAction = false, includeImage = true, iosSound = "", androidChannel = "", priorityAlert = false, requireActionAuthentication = false, relayEntities = [], initialState, localize = (source, values = {}) => Object.entries(values).reduce((result, [key, value]) => result.replaceAll(`{${key}}`, String(value)), source) }) => {
   const captureTypes = [
     ...(includeOpened ? ["Face Unlock", "Unlock on SmartPlus", "Temp Key Unlock"] : []),
     ...(includeCalls ? ["Call"] : []),
@@ -236,7 +376,7 @@ export const buildDoorNotificationAutomation = ({ name, doors, services, include
   const notificationOptions = { iosSound, androidChannel, priorityAlert };
   const relayActions = (relays) => relays.map((relay) => ({
     action: `{{ akuvox_relay_action_${selectedRelayEntities.indexOf(relay)} }}`,
-    title: `Open ${relay.name}`,
+    title: localize("Open {name}", { name: relay.name }),
     ...(requireActionAuthentication ? { authenticationRequired: true } : {}),
   }));
   const notificationFor = (relays = []) => ({
@@ -246,11 +386,11 @@ export const buildDoorNotificationAutomation = ({ name, doors, services, include
         value_template: "{{ trigger.event.data.pic_url | default('', true) != '' }}",
       }],
       sequence: services.map((service) => notificationAction(
-        service, includeImage, actionServices.includes(service) ? relayActions(relays) : [], notificationOptions
+        service, includeImage, actionServices.includes(service) ? relayActions(relays) : [], notificationOptions, localize
       )),
     }],
     default: services.map((service) => notificationAction(
-      service, false, actionServices.includes(service) ? relayActions(relays) : [], notificationOptions
+      service, false, actionServices.includes(service) ? relayActions(relays) : [], notificationOptions, localize
     )),
   });
   const notification = selectedRelayEntities.length && actionServices.length ? {
@@ -291,7 +431,7 @@ export const buildDoorNotificationAutomation = ({ name, doors, services, include
   ] : [notification];
   return {
     alias: name,
-    description: "Created by Akuvox SmartPlus door-event notifications.",
+    description: localize("Created by Akuvox SmartPlus door-event notifications."),
     mode: "parallel",
     max: 10,
     triggers: doors.map((door) => ({
@@ -313,7 +453,7 @@ const requestDoorNotificationStep = (host, { title = "Create Automation", descri
   const dialog = host.shadowRoot.ownerDocument.createElement("dialog");
   dialog.className = "door-notification-dialog";
   dialog.innerHTML = `<button class="door-notification-close" type="button" data-cancel aria-label="Close" title="Close" ${focusCancel ? "autofocus" : ""}>×</button><div class="remote-instance-dialog-header"><h2>${escapeHtml(title)}</h2>
-    <div class="share-stage-progress" role="progressbar" aria-label="Automation setup progress" aria-valuemin="0" aria-valuemax="${totalStages}" aria-valuenow="${progressFromStage}"><span data-door-notification-progress style="width:${(progressFromStage / totalStages) * 100}%"></span></div>
+    ${wizardProgress({ label: "Automation setup progress", totalStages, stage: progressFromStage, attribute: "data-door-notification-progress" })}
     ${headerContent ? `<div class="door-notification-heading-row"><p data-door-notification-description>${escapeHtml(description)}</p>${headerContent}</div>` : `<p data-door-notification-description>${escapeHtml(description)}</p>`}</div>
     <form data-door-notification-form>
       <div class="door-notification-step-content">${content}<p class="form-error" data-door-notification-error hidden></p></div>
@@ -347,22 +487,10 @@ const requestDoorNotificationStep = (host, { title = "Create Automation", descri
   dialog.showModal();
   const stepContent = dialog.querySelector(".door-notification-step-content");
   if (stepContent) stepContent.scrollTop = 0;
-  const progress = dialog.querySelector("[data-door-notification-progress]");
-  if (progress) {
-    // Some stage bindings update the progress before the dialog is painted.
-    // Reset and flush the prior value so every forward transition is visible.
-    progress.style.transition = "none";
-    progress.style.width = `${(progressFromStage / totalStages) * 100}%`;
-    progress.parentElement?.setAttribute("aria-valuenow", String(progressFromStage));
-    void progress.offsetWidth;
-    window.requestAnimationFrame(() => {
-      progress.style.transition = "";
-      window.requestAnimationFrame(() => {
-        progress.style.width = `${(progressToStage / totalStages) * 100}%`;
-        progress.parentElement?.setAttribute("aria-valuenow", String(progressToStage));
-      });
-    });
-  }
+  // Defer the completed state so entering a step still has a visible transition.
+  window.requestAnimationFrame(() => setWizardProgress(
+    dialog, "[data-door-notification-progress]", progressToStage
+  ));
 });
 
 export const requestDoorNotificationAutomation = async (host, existing = null) => {
@@ -388,6 +516,14 @@ export const requestDoorNotificationAutomation = async (host, existing = null) =
   const canOfferRelayAction = () => selection.includeCalls &&
     companionNotificationServices(selection.services).length > 0 &&
     availableRelayEntities.some((relay) => selection.doorIds.includes(relay.deviceId));
+  const hasMobileNotificationOptions = () => companionNotificationServices(selection.services).length > 0;
+  const clearMobileNotificationOptions = () => {
+    selection.includeRelayAction = false;
+    selection.requireActionAuthentication = false;
+    selection.iosSound = "";
+    selection.androidChannel = "";
+    selection.priorityAlert = false;
+  };
   let step = 0;
   let progressFromStage = 0;
   while (step >= 0 && step < 6) {
@@ -396,7 +532,7 @@ export const requestDoorNotificationAutomation = async (host, existing = null) =
       result = await requestDoorNotificationStep(host, {
         title,
         stage: 1, progressFromStage, progressToStage: selection.doorIds.length ? 1 : 0, description: "Which doors should trigger the automation?", nextLabel: "Next", focusCancel: true,
-        content: `<div class="door-picker-control selection-list-picker-control"><label class="door-picker-search"><input type="search" data-door-search aria-label="Search doors" placeholder="Type to filter doors" autocomplete="off"></label><div class="door-picker-results selection-list" data-door-picker-results role="listbox" aria-label="Doors"></div></div>`,
+        content: `<div class="door-picker-control selection-list-picker-control"><label class="door-picker-search"><span aria-hidden="true">${icons.searchThumbnail}</span><input type="search" data-door-search aria-label="Search doors" placeholder="Search doors" autocomplete="off"></label><div class="door-picker-results selection-list" data-door-picker-results role="listbox" aria-label="Doors"></div></div>`,
         bind: (dialog) => {
           const search = dialog.querySelector("[data-door-search]");
           const results = dialog.querySelector("[data-door-picker-results]");
@@ -404,19 +540,14 @@ export const requestDoorNotificationAutomation = async (host, existing = null) =
           const render = (updateProgress = false) => {
             nextButton.disabled = selection.doorIds.length === 0;
             if (updateProgress) {
-              const progress = dialog.querySelector("[data-door-notification-progress]");
-              if (progress) {
-                const progressStage = selection.doorIds.length ? 1 : 0;
-                progress.style.width = `${(progressStage / 6) * 100}%`;
-                progress.parentElement?.setAttribute("aria-valuenow", String(progressStage));
-              }
+              setWizardProgress(dialog, "[data-door-notification-progress]", selection.doorIds.length ? 1 : 0);
             }
             const query = search.value.trim().toLocaleLowerCase();
             const matching = doors.filter((door) => door.name.toLocaleLowerCase().includes(query));
             results.innerHTML = matching.map((door) => {
               const selected = selection.doorIds.includes(door.deviceId);
-              return `<button class="door-picker-option door-selection-list-option" type="button" role="option" aria-selected="${selected}" data-toggle-door="${escapeHtml(door.deviceId)}"><span class="notification-service-selection${selected ? " selected" : ""}" aria-hidden="true">✓</span><span>${escapeHtml(door.name)}</span></button>`;
-            }).join("") || '<p class="muted">No matching doors.</p>';
+              return `<button class="door-picker-option door-selection-list-option${selected ? " selected" : ""}" type="button" role="option" aria-selected="${selected}" data-toggle-door="${escapeHtml(door.deviceId)}"><span class="door-selection-list-icon" aria-hidden="true">${icons.door}</span><span>${escapeHtml(door.name)}</span><span class="notification-service-selection${selected ? " selected" : ""}" aria-hidden="true">✓</span></button>`;
+            }).join("") || `<p class="muted">${escapeHtml(t(host, "No matching doors."))}</p>`;
             results.querySelectorAll("[data-toggle-door]").forEach((button) => button.addEventListener("click", () => {
               const doorId = button.dataset.toggleDoor;
               selection.doorIds = selection.doorIds.includes(doorId)
@@ -430,25 +561,21 @@ export const requestDoorNotificationAutomation = async (host, existing = null) =
         },
         submit: (_form, error) => {
           if (selection.doorIds.length) return { doorIds: selection.doorIds };
-          error.textContent = "Select at least one door."; error.hidden = false; return null;
+          error.textContent = t(host, "Select at least one door."); error.hidden = false; return null;
         },
       });
     } else if (step === 1) {
       result = await requestDoorNotificationStep(host, {
         title,
         stage: 2, progressFromStage, progressToStage: selection.includeOpened || selection.includeCalls ? 2 : 1, description: "Which events should trigger the automation?", backLabel: "Back", nextLabel: "Next",
-        content: `<fieldset><legend>Event types</legend><label class="door-notification-option"><input type="checkbox" name="opened" ${selection.includeOpened ? "checked" : ""}><span>Door opened / unlocked</span></label><label class="door-notification-option"><input type="checkbox" name="call" ${selection.includeCalls ? "checked" : ""}><span>Doorbell call</span></label></fieldset>`,
+        content: `<section class="event-types-options" role="group" aria-labelledby="event-types-heading"><h3 id="event-types-heading">Event types</h3><label class="door-notification-option"><input type="checkbox" name="opened" ${selection.includeOpened ? "checked" : ""}><span>Door opened / unlocked</span></label><label class="door-notification-option"><input type="checkbox" name="call" ${selection.includeCalls ? "checked" : ""}><span>Doorbell call</span></label></section>`,
         bind: (dialog) => {
           const eventTypes = [...dialog.querySelectorAll('[name="opened"], [name="call"]')];
           const nextButton = dialog.querySelector("[data-next]");
           const updateStepState = () => {
             const hasEventType = eventTypes.some((input) => input.checked);
             nextButton.disabled = !hasEventType;
-            const progress = dialog.querySelector("[data-door-notification-progress]");
-            if (!progress) return;
-            const progressStage = hasEventType ? 2 : 1;
-            progress.style.width = `${(progressStage / 6) * 100}%`;
-            progress.parentElement?.setAttribute("aria-valuenow", String(progressStage));
+            setWizardProgress(dialog, "[data-door-notification-progress]", hasEventType ? 2 : 1);
           };
           eventTypes.forEach((input) => input.addEventListener("change", updateStepState));
           updateStepState();
@@ -457,7 +584,7 @@ export const requestDoorNotificationAutomation = async (host, existing = null) =
           const includeOpened = form.querySelector('[name="opened"]').checked;
           const includeCalls = form.querySelector('[name="call"]').checked;
           if (includeOpened || includeCalls) return { includeOpened, includeCalls };
-          error.textContent = "Select at least one event type."; error.hidden = false; return null;
+          error.textContent = t(host, "Select at least one event type."); error.hidden = false; return null;
         },
       });
     } else if (step === 2) {
@@ -465,7 +592,7 @@ export const requestDoorNotificationAutomation = async (host, existing = null) =
         title,
         stage: 3, progressFromStage, description: "Who should trigger the automation?", backLabel: "Back", nextLabel: "Next",
         content: members.length || keys.length
-          ? `<div class="caller-picker"><div class="caller-picker-add" data-caller-picker-add><button class="caller-picker-add-button" type="button" data-add-caller aria-label="Add a person or temporary key" aria-expanded="false"><span aria-hidden="true">+</span></button><div class="caller-picker-add-menu" data-add-caller-menu role="menu" hidden></div></div><div class="caller-condition-summary muted" data-caller-condition-summary hidden></div></div>`
+          ? `<div class="caller-picker"><div class="caller-picker-add" data-caller-picker-add><button class="caller-picker-add-button" type="button" data-add-caller aria-label="Add a person or temporary key" aria-expanded="false"><span aria-hidden="true">+</span></button><span class="caller-picker-add-label">Add person or key</span><div class="caller-picker-add-menu" data-add-caller-menu role="menu" hidden></div></div><div class="caller-condition-summary muted" data-caller-condition-summary hidden></div></div>`
           : '<p class="muted">No family members or active temporary keys are available. Continue to notify for every initiator.</p>',
         bind: (dialog) => {
           const addCaller = dialog.querySelector("[data-add-caller]");
@@ -479,7 +606,7 @@ export const requestDoorNotificationAutomation = async (host, existing = null) =
             const availableMembers = members.filter((name) => !selectedMembers.has(name));
             const availableKeys = keys.filter((key) => !selectedKeys.has(key.keyId));
             addCallerPicker.hidden = availableMembers.length + availableKeys.length === 0;
-            addCallerMenu.innerHTML = `${availableMembers.length ? `<div class="caller-picker-menu-heading">Family members</div>${availableMembers.map((name) => `<button type="button" role="menuitem" data-add-caller-name="${escapeHtml(name)}"><span class="caller-picker-identity-icon" aria-hidden="true">${icons.user}</span><span>${escapeHtml(name)}</span></button>`).join("")}` : ""}${availableKeys.length ? `<div class="caller-picker-menu-heading">Temporary keys</div>${availableKeys.map((key) => `<button type="button" role="menuitem" data-add-key-id="${escapeHtml(key.keyId)}" data-add-key-name="${escapeHtml(key.name)}"><span class="caller-picker-identity-icon" aria-hidden="true">${icons.key}</span><span>${escapeHtml(key.name)}</span></button>`).join("")}` : ""}`;
+            addCallerMenu.innerHTML = `${availableMembers.length ? `<div class="caller-picker-menu-heading">${escapeHtml(t(host, "Family members"))}</div>${availableMembers.map((name) => `<button type="button" role="menuitem" data-add-caller-name="${escapeHtml(name)}"><span class="caller-picker-identity-icon" aria-hidden="true">${icons.user}</span><span>${escapeHtml(name)}</span></button>`).join("")}` : ""}${availableKeys.length ? `<div class="caller-picker-menu-heading">${escapeHtml(t(host, "Temporary keys"))}</div>${availableKeys.map((key) => `<button type="button" role="menuitem" data-add-key-id="${escapeHtml(key.keyId)}" data-add-key-name="${escapeHtml(key.name)}"><span class="caller-picker-identity-icon" aria-hidden="true">${icons.key}</span><span>${escapeHtml(key.name)}</span></button>`).join("")}` : ""}`;
             const plural = selection.callerRules.length !== 1;
             const callerRuleLabel = (isNot) => {
               if (selection.includeOpened && !selection.includeCalls) {
@@ -562,7 +689,7 @@ export const requestDoorNotificationAutomation = async (host, existing = null) =
         title,
         stage: 4, progressFromStage, progressToStage: selection.services.length ? 4 : 3, description: "Which notify services should be run?", backLabel: "Back", nextLabel: "Next",
         content: services.length
-          ? `<div class="door-picker-control notification-service-picker-control"><label class="door-picker-search"><input type="search" data-service-search aria-label="Search notification services" placeholder="Type to filter notification services" autocomplete="off"></label><div class="door-picker-results notification-service-list" data-service-picker-results role="listbox" aria-label="Notification services"></div></div>`
+          ? `<div class="door-picker-control notification-service-picker-control"><label class="door-picker-search"><span aria-hidden="true">${icons.searchThumbnail}</span><input type="search" data-service-search aria-label="Search notification services" placeholder="Search notification services" autocomplete="off"></label><div class="door-picker-results notification-service-list" data-service-picker-results role="listbox" aria-label="Notification services"></div></div>`
           : '<p class="muted">No notification services are available.</p>',
         bind: (dialog) => {
           const search = dialog.querySelector("[data-service-search]");
@@ -572,19 +699,14 @@ export const requestDoorNotificationAutomation = async (host, existing = null) =
           const render = (updateProgress = false) => {
             nextButton.disabled = selection.services.length === 0;
             if (updateProgress) {
-              const progress = dialog.querySelector("[data-door-notification-progress]");
-              if (progress) {
-                const progressStage = selection.services.length ? 4 : 3;
-                progress.style.width = `${(progressStage / 6) * 100}%`;
-                progress.parentElement?.setAttribute("aria-valuenow", String(progressStage));
-              }
+              setWizardProgress(dialog, "[data-door-notification-progress]", selection.services.length ? 4 : 3);
             }
             const query = search.value.trim().toLocaleLowerCase();
             const matching = services.filter((service) => service.name.toLocaleLowerCase().includes(query));
             results.innerHTML = matching.map((service) => {
               const selected = selection.services.includes(service.service);
-              return `<button class="door-picker-option notification-service-action-option" type="button" role="option" aria-selected="${selected}" data-toggle-service="${escapeHtml(service.service)}"><span class="notification-service-selection${selected ? " selected" : ""}" aria-hidden="true">✓</span><span class="notification-service-action-copy"><span>${escapeHtml(t(host, "Send a notification with {name}", { name: service.name }))}</span><small>${escapeHtml(t(host, "Sends a notification message using the {name} service.", { name: service.name }))}</small></span><span class="notification-service-action-domain">notify</span></button>`;
-            }).join("") || '<p class="muted">No matching notification services.</p>';
+              return `<button class="door-picker-option notification-service-action-option${selected ? " selected" : ""}" type="button" role="option" aria-selected="${selected}" data-toggle-service="${escapeHtml(service.service)}"><span class="notification-service-action-icon" aria-hidden="true">${icons.automation}</span><span class="notification-service-action-copy"><span>${escapeHtml(t(host, "Send a notification with {name}", { name: service.name }))}</span><small>${escapeHtml(t(host, "Sends a notification message using the {name} service.", { name: service.name }))}</small><em class="notification-service-action-domain">notify</em></span><span class="notification-service-selection${selected ? " selected" : ""}" aria-hidden="true">✓</span></button>`;
+            }).join("") || `<p class="muted">${escapeHtml(t(host, "No matching notification services."))}</p>`;
             results.querySelectorAll("[data-toggle-service]").forEach((button) => button.addEventListener("click", () => {
               const serviceId = button.dataset.toggleService;
               selection.services = selection.services.includes(serviceId)
@@ -598,34 +720,89 @@ export const requestDoorNotificationAutomation = async (host, existing = null) =
         },
         submit: (_form, error) => {
           if (selection.services.length) return { services: selection.services };
-          error.textContent = "Select at least one notification service."; error.hidden = false; return null;
+          error.textContent = t(host, "Select at least one notification service."); error.hidden = false; return null;
         },
       });
     } else if (step === 4) {
+      const mobileServices = companionNotificationServices(selection.services);
+      const previewDoor = doors.find((door) => selection.doorIds.includes(door.deviceId));
+      const previewDoorName = previewDoor?.name || t(host, "Door");
+      const previewCamera = (host._account?.()?.cameras || []).find(
+        (camera) => selection.doorIds.includes(camera?.device_id) && camera?.preview_url
+      );
+      const iosSoundOptions = [...new Set([
+        ...IOS_NOTIFICATION_SOUNDS,
+        ...(selection.iosSound && !IOS_NOTIFICATION_SOUNDS.includes(selection.iosSound)
+          ? [selection.iosSound] : []),
+      ])];
+      const mobileOptions = mobileServices.length ? `<label class="door-notification-option"><input type="checkbox" name="include-image" ${selection.includeImage ? "checked" : ""}><span>Display the captured still as the notification image</span></label><label class="notification-select-option"><span>iOS notification sound</span><select name="ios-sound" aria-label="iOS notification sound">${iosSoundOptions.map((sound) => `<option value="${escapeHtml(sound)}" ${selection.iosSound === sound || (!selection.iosSound && sound === "default") ? "selected" : ""}>${escapeHtml(sound === "default" ? "Default (Tri-tone)" : sound === "none" ? "No sound" : sound)}</option>`).join("")}</select></label><label class="notification-select-option"><span>Android notification channel</span><input data-android-channel name="android-channel" value="${escapeHtml(selection.androidChannel)}" placeholder="General (default)"><small data-android-channel-note hidden>Priority alerts use Android's alarm stream.</small></label><label class="door-notification-option"><input type="checkbox" name="priority-alert" ${selection.priorityAlert ? "checked" : ""}><span>Priority alert (critical on iOS, alarm stream on Android)</span></label>` : "";
+      const notificationPreview = mobileServices.length ? `<section class="notification-preview" aria-label="${escapeHtml(t(host, "Notification preview"))}"><div class="notification-preview-heading"><span>${escapeHtml(t(host, "Notification preview"))}</span><button type="button" class="notification-sound-preview" data-preview-sound aria-label="${escapeHtml(t(host, "Play notification sound preview"))}" title="${escapeHtml(t(host, "Play notification sound preview"))}">${icons.speaker}</button></div><article class="notification-preview-card"><span class="notification-preview-icon" aria-hidden="true">${icons.bell}</span><div><div class="notification-preview-app">Akuvox SmartPlus <small>${escapeHtml(t(host, "now"))}</small></div><strong data-notification-preview-title>${escapeHtml(t(host, "{name} door event", { name: previewDoorName }))}</strong><p data-notification-preview-message></p>${previewCamera?.preview_url ? `<img data-notification-preview-image src="${escapeHtml(previewCamera.preview_url)}" alt="" ${selection.includeImage ? "" : "hidden"}>` : `<span class="notification-preview-image-placeholder" data-notification-preview-image ${selection.includeImage ? "" : "hidden"}>${icons.cameraDoor}</span>`}</div></article><p class="notification-preview-status" data-notification-preview-status aria-live="polite"></p></section>` : "";
       result = await requestDoorNotificationStep(host, {
         title,
         stage: 5, progressFromStage, progressToStage: 5,
         description: "Notification options", backLabel: "Back", nextLabel: "Next",
-        content: `<fieldset><legend>Notification options</legend>${canOfferRelayAction() ? `<label class="door-notification-option"><input type="checkbox" name="open-called-door" ${selection.includeRelayAction ? "checked" : ""}><span>Include actions to open the called door relay</span></label><label class="door-notification-option"><input type="checkbox" name="require-action-authentication" ${selection.requireActionAuthentication ? "checked" : ""}><span>Require the phone to be unlocked to open a relay</span></label>` : ""}<label class="door-notification-option"><input type="checkbox" name="include-image" ${selection.includeImage ? "checked" : ""}><span>Display the captured still as the notification image</span></label><label class="door-notification-option"><span>iOS notification sound</span><input name="ios-sound" list="ios-notification-sounds" value="${escapeHtml(selection.iosSound)}" placeholder="Default or custom filename"><datalist id="ios-notification-sounds">${IOS_NOTIFICATION_SOUNDS.map((sound) => `<option value="${sound}"></option>`).join("")}</datalist></label><label class="door-notification-option"><span>Android notification channel</span><input data-android-channel name="android-channel" value="${escapeHtml(selection.androidChannel)}" placeholder="Configured channel name"><small data-android-channel-note hidden>Priority alerts use Android's alarm stream.</small></label><label class="door-notification-option"><input type="checkbox" name="priority-alert" ${selection.priorityAlert ? "checked" : ""}><span>Priority alert (critical on iOS, alarm stream on Android)</span></label></fieldset>`,
+        content: `<div class="notification-options">${canOfferRelayAction() ? `<label class="door-notification-option"><input type="checkbox" name="open-called-door" ${selection.includeRelayAction ? "checked" : ""}><span>Include actions to open the called door relay</span></label><label class="door-notification-option"><input type="checkbox" name="require-action-authentication" ${selection.requireActionAuthentication ? "checked" : ""}><span>Require the phone to be unlocked to open a relay</span></label>` : ""}${mobileOptions}${notificationPreview}</div>`,
         bind: (dialog) => {
           const priorityAlert = dialog.querySelector('[name="priority-alert"]');
           const androidChannel = dialog.querySelector('[data-android-channel]');
           const note = dialog.querySelector('[data-android-channel-note]');
+          const includeImage = dialog.querySelector('[name="include-image"]');
+          const previewImage = dialog.querySelector('[data-notification-preview-image]');
+          const previewMessage = dialog.querySelector('[data-notification-preview-message]');
+          const previewButton = dialog.querySelector('[data-preview-sound]');
+          const previewStatus = dialog.querySelector('[data-notification-preview-status]');
+          const updatePreview = () => {
+            if (previewImage) previewImage.hidden = !includeImage?.checked;
+            if (previewMessage) {
+              previewMessage.textContent = selection.includeCalls && !selection.includeOpened
+                ? t(host, "Someone is calling from {name}.", { name: previewDoorName })
+                : selection.includeOpened && !selection.includeCalls
+                  ? t(host, "{name} was opened.", { name: previewDoorName })
+                  : t(host, "{name} was called or opened.", { name: previewDoorName });
+            }
+          };
           const updateAndroidChannel = () => {
+            if (!androidChannel || !note) return;
             const isPriority = priorityAlert.checked;
             androidChannel.disabled = isPriority;
             note.hidden = !isPriority;
           };
-          priorityAlert.addEventListener("change", updateAndroidChannel);
+          priorityAlert?.addEventListener("change", updateAndroidChannel);
+          includeImage?.addEventListener("change", updatePreview);
+          previewButton?.addEventListener("click", async () => {
+            previewButton.disabled = true;
+            if (previewStatus) previewStatus.textContent = t(host, "Sending sound preview…");
+            try {
+              const iosSound = dialog.querySelector('[name="ios-sound"]')?.value || "default";
+              const data = {
+                title: "Akuvox SmartPlus",
+                message: t(host, "Notification sound preview"),
+                data: {
+                  push: { sound: priorityAlert.checked ? { name: iosSound, critical: 1, volume: 1.0 } : iosSound },
+                  ...(priorityAlert.checked ? { ttl: 0, priority: "high", channel: "alarm_stream" }
+                    : androidChannel?.value.trim() ? { channel: androidChannel.value.trim() } : {}),
+                },
+              };
+              await Promise.all(mobileServices.map((service) => host._hass.callService(
+                "notify", service.replace(/^notify\./, ""), data
+              )));
+              if (previewStatus) previewStatus.textContent = t(host, "Sound preview sent to the selected mobile device.");
+            } catch (error) {
+              if (previewStatus) previewStatus.textContent = error?.message || t(host, "Could not send the sound preview.");
+            } finally {
+              previewButton.disabled = false;
+            }
+          });
           updateAndroidChannel();
+          updatePreview();
         },
         submit: (form) => ({
           includeRelayAction: canOfferRelayAction() && form.querySelector('[name="open-called-door"]').checked,
           requireActionAuthentication: canOfferRelayAction() && form.querySelector('[name="require-action-authentication"]').checked,
           includeImage: form.querySelector('[name="include-image"]').checked,
-          iosSound: form.querySelector('[name="ios-sound"]').value.trim(),
-          androidChannel: form.querySelector('[name="android-channel"]').value.trim(),
-          priorityAlert: form.querySelector('[name="priority-alert"]').checked,
+          iosSound: form.querySelector('[name="ios-sound"]')?.value.trim() || "",
+          androidChannel: form.querySelector('[name="android-channel"]')?.value.trim() || "",
+          priorityAlert: form.querySelector('[name="priority-alert"]')?.checked || false,
         }),
       });
     } else {
@@ -640,30 +817,35 @@ export const requestDoorNotificationAutomation = async (host, existing = null) =
       result = await requestDoorNotificationStep(host, {
         title,
         stage: 6, progressFromStage, progressToStage: (selection.name || defaultName).trim() ? 6 : 5, description: "Enter the automation name.", backLabel: "Back", nextLabel: editing ? "Save automation" : "Create automation",
-        content: `<input name="automation-name" type="text" value="${escapeHtml(selection.name || defaultName)}" aria-label="Automation name" required>`,
+        content: `<label class="automation-name-field"><span>Automation name</span><input name="automation-name" type="text" value="${escapeHtml(selection.name || defaultName)}" aria-label="Automation name" required></label>`,
         bind: (dialog) => {
           const nameInput = dialog.querySelector('[name="automation-name"]');
           nameInput?.addEventListener("input", () => {
-            const progress = dialog.querySelector("[data-door-notification-progress]");
-            if (!progress) return;
-            const progressStage = nameInput.value.trim() ? 6 : 5;
-            progress.style.width = `${(progressStage / 6) * 100}%`;
-            progress.parentElement?.setAttribute("aria-valuenow", String(progressStage));
+            setWizardProgress(dialog, "[data-door-notification-progress]", nameInput.value.trim() ? 6 : 5);
           });
         },
         submit: (form, error) => {
           const name = form.querySelector('[name="automation-name"]').value.trim();
           if (name) return { name };
-          error.textContent = "Enter an automation name."; error.hidden = false; return null;
+          error.textContent = t(host, "Enter an automation name."); error.hidden = false; return null;
         },
       });
     }
     if (!result) return null;
     progressFromStage = step + 1;
-    if (result.direction === "back") { step -= 1; continue; }
+    if (result.direction === "back") {
+      step -= 1;
+      if (step === 4 && !hasMobileNotificationOptions()) step -= 1;
+      continue;
+    }
     Object.assign(selection, result.value);
     if (step === 3 && !canOfferRelayAction()) selection.includeRelayAction = false;
-    step += 1;
+    if (step === 3 && !hasMobileNotificationOptions()) {
+      clearMobileNotificationOptions();
+      step += 2;
+    } else {
+      step += 1;
+    }
   }
   return {
     ...selection,
@@ -867,7 +1049,7 @@ const requestShareAccess = (host, viewedShare = null) => new Promise((resolve) =
   const basics = readOnly
     ? `<section class="share-details-card"><div class="share-detail"><span class="share-detail-icon">${icons.calendar}</span><span><small>Validity</small><strong>${escapeHtml(formattedExpiry)}</strong></span></div><div class="share-detail"><span class="share-detail-icon">${icons.calendar}</span><span><small>Registered on</small><strong>${escapeHtml(createdAt ? new Date(createdAt).toLocaleString() : "—")}</strong></span></div></section>`
     : `<section class="share-details-card share-generation-details"><label class="share-detail share-name-field"><span class="share-detail-icon">${icons.idCard}</span><span><small>Remote instance name</small><input data-receiver-name maxlength="100" required placeholder="e.g. Holiday home" autofocus></span></label><div class="share-detail share-expiry-field"><span class="share-detail-icon">${icons.calendar}</span><span><small>Validity</small><label class="check"><input data-never-expire name="access-duration" type="radio" checked> Never expires</label><label class="check" data-access-expiry-row><span><input data-expiring name="access-duration" type="radio"> Set expiry date &amp; time</span><input data-access-expiry type="datetime-local" min="${earliestExpiry}" disabled hidden></label></span></div></section>`;
-  const stageProgress = readOnly ? "" : '<div class="share-stage-progress" role="progressbar" aria-label="Pairing link setup progress" aria-valuemin="0" aria-valuemax="3" aria-valuenow="0"><span data-share-stage-progress></span></div>';
+  const stageProgress = readOnly ? "" : wizardProgress({ label: "Pairing link setup progress", totalStages: 3, stage: 0, attribute: "data-share-stage-progress" });
   const heading = readOnly
     ? `<h2>${escapeHtml(viewedShare.receiver_name)} <span class="share-status-badge ${status.toLocaleLowerCase().replaceAll(" ", "-")}"><i></i>${escapeHtml(status)}</span></h2><p>Review the access permissions granted to this Home Assistant instance.</p>`
     : `<h2>Create Pairing Link</h2>${stageProgress}<p data-share-stage-description>${stageDescriptions[0]}</p>`;
@@ -931,11 +1113,8 @@ const requestShareAccess = (host, viewedShare = null) => new Promise((resolve) =
     if (confirmButton) confirmButton.disabled = !isFirstStageValid() || !hasSelectedPermission;
   };
   const updateProgress = () => {
-    const progress = dialog.querySelector("[data-share-stage-progress]");
-    if (!progress) return;
     const progressStage = stage === 1 && !receiverName?.value.trim() ? 0 : stage;
-    progress.style.width = `${(progressStage / 3) * 100}%`;
-    progress.parentElement?.setAttribute("aria-valuenow", String(progressStage));
+    setWizardProgress(dialog, "[data-share-stage-progress]", progressStage);
   };
   const updateStage = () => {
     stages.forEach((element) => { element.hidden = Number(element.dataset.shareStage) !== stage; });
@@ -1002,12 +1181,12 @@ const requestShareAccess = (host, viewedShare = null) => new Promise((resolve) =
     const hasSelectedDeviceField = [...dialog.querySelectorAll("tbody tr:not(.share-select-all-row) input[type='checkbox']")]
       .some((input) => input.checked);
     if (!hasSelectedDeviceField) {
-      error.textContent = "Select at least one device option to share.";
+      error.textContent = t(host, "Select at least one device option to share.");
       error.hidden = false;
       return;
     }
     if (existingReceiverNames.has(name.toLocaleLowerCase())) {
-      error.textContent = "A paired Home Assistant already uses this receiver name.";
+      error.textContent = t(host, "A paired Home Assistant already uses this receiver name.");
       error.hidden = false;
       return;
     }
@@ -1116,12 +1295,12 @@ const requestSipPdfPassword = (host) => new Promise((resolve) => {
     if (password.length < 8) {
       event.preventDefault();
       const error = form.querySelector("[data-sip-pdf-error]");
-      error.textContent = "Use a password containing at least 8 characters.";
+      error.textContent = t(host, "Use a password containing at least 8 characters.");
       error.hidden = false;
     } else if (password !== confirmation) {
       event.preventDefault();
       const error = form.querySelector("[data-sip-pdf-error]");
-      error.textContent = "Passwords must match.";
+      error.textContent = t(host, "Passwords must match.");
       error.hidden = false;
     }
   });

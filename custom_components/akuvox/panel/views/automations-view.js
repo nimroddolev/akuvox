@@ -364,7 +364,7 @@ export const bindAutomationsEvents = (host) => {
     if (!selection) return;
     try {
       await host._hass.callApi("POST", `config/automation/config/${encodeURIComponent(automation.id)}`,
-        buildDoorNotificationAutomation(selection));
+        buildDoorNotificationAutomation({ ...selection, localize: (source, values) => t(host, source, values) }));
       upsertAutomation(host, automation.id, selection);
       host._render();
       showDoorNotificationCreated(host, automation.id, true);
@@ -405,7 +405,7 @@ export const bindAutomationsEvents = (host) => {
     const automationId = String(Date.now());
     try {
       await host._hass.callApi("POST", `config/automation/config/${encodeURIComponent(automationId)}`,
-        buildDoorNotificationAutomation(selection));
+        buildDoorNotificationAutomation({ ...selection, localize: (source, values) => t(host, source, values) }));
       upsertAutomation(host, automationId, selection);
       host._render();
       showDoorNotificationCreated(host, automationId);

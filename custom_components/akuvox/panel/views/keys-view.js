@@ -6,6 +6,7 @@ import {
 } from "../utils/multi-select-filter.js?v=20260925-option-labels";
 import { icons } from "../utils/icons.js?v=20260928-detailed-qr-icon";
 import {
+  keyTileTimestamp,
   parseDateTimeInput,
   normaliseUhfCard,
   LICENSE_PLATE_PATTERN,
@@ -17,9 +18,9 @@ import {
   UHF_CARD_REGEX,
   UHF_CARD_ERROR_MSG,
   tableTimestampFormatter,
-} from "../utils/formatters.js?v=20260820-table-timestamps";
+} from "../utils/formatters.js?v=20261013-key-tile-timestamps";
 import { copyText } from "../utils/clipboard.js";
-import { showNotice, confirmModal, callWsWithBlocker } from "../components/dialogs.js?v=20261003-i18n-3";
+import { showNotice, confirmModal, callWsWithBlocker } from "../components/dialogs.js?v=20261013-danger-confirmation";
 import { showDateRangePicker } from "../components/date-range-picker.js?v=20261003-i18n-modal";
 import { showTemporaryKeyQrDialog } from "../components/qr-dialog.js?v=20260928-qr-loading-modal-v2";
 import { showKeyActionsMenu, closeKeyActionsMenu } from "../components/key-menu.js?v=20260928-disabled-edit-muted";
@@ -264,8 +265,8 @@ export const renderKeysView = (host, account) => {
           </div>
           <div class="key-tile-code"><div><span>Passcode</span><strong>${code}${copyButton}${viewQrButton}</strong>${doorBadges}</div></div>
           <dl class="key-tile-validity">
-            <div><dt>${icons.calendar}<span>Valid from</span></dt><dd>${escapeHtml(formatTimestamp(key.begin_time))}</dd></div>
-            <div><dt>${icons.calendar}<span>Valid to</span></dt><dd>${escapeHtml(formatTimestamp(key.end_time))}</dd></div>
+            <div><dt>${icons.calendar}<span>Valid from</span></dt><dd>${escapeHtml(keyTileTimestamp(key.begin_time))}</dd></div>
+            <div><dt>${icons.calendar}<span>Valid to</span></dt><dd>${escapeHtml(keyTileTimestamp(key.end_time))}</dd></div>
           </dl>
           <div class="key-tile-usage" style="--key-usage-color:${usageColor}">
             <div><span>${escapeHtml(t(host, "Usage: {used} of {allowed}", { used: key.access_times, allowed: key.allowed_times }))}</span><strong>${escapeHtml(t(host, "{percent}% available", { percent: availablePercent }))}</strong></div>
@@ -730,15 +731,18 @@ const handleCreateKey = async (host, event) => {
  * @param {string} tempKey
  */
 export const deleteKey = async (host, tempKey) => {
-  const key = host._account()?.temporary_keys?.find((item) => item.key_code === tempKey);
-  const name = key?.description || tempKey;
+  const key = host._account()?.temporary_keys?.find((item) =>
+    String(item.key_id) === String(tempKey) || item.key_code === tempKey
+  );
+  const name = key?.description || key?.name || key?.key_name || tempKey;
 
   if (
     !(await confirmModal(
       host,
       t(host, "Permanently delete temporary key {name}?", { name }),
-      "Delete temporary key",
-      t(host, "Delete key")
+      `${t(host, "Delete temporary key")}?`,
+      t(host, "Delete key"),
+      { danger: true, icon: icons.trash }
     ))
   ) {
     return;

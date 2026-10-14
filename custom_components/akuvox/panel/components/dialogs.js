@@ -137,9 +137,10 @@ export const showPairingLinkNotice = (host, pairingLink) => new Promise((resolve
  * @param {string} message
  * @param {string} title
  * @param {string} actionLabel
+ * @param {{danger?: boolean, icon?: string}} [options]
  * @returns {Promise<boolean>}
  */
-export const confirmModal = (host, message, title, actionLabel) => {
+export const confirmModal = (host, message, title, actionLabel, options = {}) => {
   return new Promise((resolve) => {
     const documentRef = host.shadowRoot.ownerDocument;
     const dialog = documentRef.createElement("dialog");
@@ -159,8 +160,16 @@ export const confirmModal = (host, message, title, actionLabel) => {
     cancelButton.textContent = t(host, "Cancel");
 
     actionButton.type = "button";
-    actionButton.className = "modal-action";
-    actionButton.textContent = t(host, actionLabel);
+    actionButton.className = `modal-action${options.danger ? " danger" : ""}`;
+    if (options.icon) {
+      const icon = documentRef.createElement("span");
+      icon.className = "modal-action-icon";
+      icon.setAttribute("aria-hidden", "true");
+      icon.innerHTML = options.icon;
+      actionButton.append(icon, documentRef.createTextNode(t(host, actionLabel)));
+    } else {
+      actionButton.textContent = t(host, actionLabel);
+    }
 
     cancelButton.addEventListener("click", () => dialog.close());
     actionButton.addEventListener("click", () => {

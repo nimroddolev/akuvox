@@ -976,7 +976,13 @@ export const viewStyles = `
   .help-card {
     display: grid;
     gap: 20px;
-    max-width: 820px;
+    width: min(80%, 960px);
+    box-sizing: border-box;
+    margin-inline: auto;
+  }
+
+  @media (max-width: 600px) {
+    .help-card { width: calc(100% - 32px); }
   }
 
   .help-card h2 {
@@ -1281,10 +1287,18 @@ export const viewStyles = `
   }
 
   :host([dark]) .key-tile-expired {
-    border-color: var(--panel-outline);
-    background: #20242b;
-    opacity: .88;
+    border-color: #3a4656;
+    background: #222a35;
+    opacity: 1;
   }
+
+  :host([dark]) .key-tile {
+    border-color: #3a4656;
+    background: #222a35;
+  }
+
+  :host([dark]) .key-tile-active,
+  :host([dark]) .key-tile-active:hover { border-color: #3a4656; }
 
   :host([dark]) .key-tile:hover,
   :host([dark]) .key-tile-expired:hover {
@@ -1314,6 +1328,11 @@ export const viewStyles = `
     color: #e5e7eb;
     background: #303a46;
   }
+
+  :host([dark]) .key-tile-code { background: #151c25; }
+  :host([dark]) .key-tile-code strong { color: #078bc7; }
+  :host([dark]) .key-tile .key-menu-button.danger { color: #aeb8c7; }
+  :host([dark]) .key-tile .key-menu-button.danger:hover { color: #fecaca; background: #4a2028; }
 
   :host([dark]) .key-tile-code .key-tile-door-badge {
     color: #38bdf8;

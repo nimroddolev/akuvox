@@ -29,13 +29,22 @@ export const tableTimestampFormatter = (values) => {
  */
 export const parseDateTimeInput = (value) => {
   const match = String(value || "").match(
-    /(\d{4})-(\d{2})-(\d{2})[ T](\d{2}:\d{2})|(?:\d{2})-(\d{2})-(\d{4})[ T](\d{2}:\d{2})/
+    /(\d{4})-(\d{2})-(\d{2})[ T](\d{2}:\d{2})|(\d{2})-(\d{2})-(\d{4})[ T](\d{2}:\d{2})/
   );
   return match
     ? match[1]
       ? `${match[1]}-${match[2]}-${match[3]}T${match[4]}`
       : `${match[7]}-${match[6]}-${match[5]}T${match[8]}`
     : "";
+};
+
+/** Format a temporary-key tile timestamp as DD-MM HH:MM. */
+export const keyTileTimestamp = (value) => {
+  const parsed = parseDateTimeInput(value);
+  if (!parsed) return String(value || "");
+  const [date, time] = parsed.split("T");
+  const [, month, day] = date.split("-");
+  return `${day}-${month} ${time}`;
 };
 
 /**
@@ -71,5 +80,4 @@ export const UHF_CARD_PATTERN = "[0-9A-Fa-f]{0,24}";
 export const UHF_CARD_TITLE = "Enter up to 24 hexadecimal characters (0–9 and A–F)";
 export const UHF_CARD_REGEX = /^[0-9A-Fa-f]{0,24}$/;
 export const UHF_CARD_ERROR_MSG = "Enter up to 24 hexadecimal characters (0–9 and A–F)";
-
 
