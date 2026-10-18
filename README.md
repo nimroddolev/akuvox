@@ -6,6 +6,8 @@
 
 Bring your Akuvox SmartPlus account into Home Assistant to view door cameras, unlock relays, review activity, and build automations around door events.
 
+<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/integration-overview-dark.png"><source media="(prefers-color-scheme: light)" srcset="docs/images/integration-overview-light.png"><img src="docs/images/integration-overview-light.png" alt="Illustrated overview of camera access, activity, temporary keys, automations, and account sharing" style="width: 100%"></picture></p>
+
 > This is an unofficial community integration that uses SmartPlus's private cloud API. Akuvox or SmartPlus may change that API or its authentication without notice.
 
 ## What you get
@@ -16,9 +18,7 @@ Bring your Akuvox SmartPlus account into Home Assistant to view door cameras, un
 - Automatic session refresh and a guided reauthentication flow when SmartPlus requires it.
 - Optional local history, image & camera rotation, scoped account sharing, temporary keys, and SIP exports.
 
-## Before you start
-
-You need:
+## Requirements
 
 - A SmartPlus account that already has access to the doors or devices you want to use.
 - A Home Assistant administrator account.
@@ -46,7 +46,7 @@ For a manual installation, copy `custom_components/akuvox` into `<your Home Assi
 
     - **Email/username and password** - Enter your account's email and password to receive the emailed verification code to sign in securely.
     - **SMS** - Select your country & phone number to receive an SMS code to sign in securely.
-    - **Credentials from another Home Assistant** - Use a restricted pairing link created by another Home Assistant instance running the integration. See [Share an account](#share-an-account).
+    - **Credentials from another Home Assistant** - Use a pairing link from another Home Assistant instance running the integration (see [Share an account](#share-an-account)).
 
 The country selector chooses the SmartPlus region in most cases. If it does not, select the regional API subdomain manually during setup.
 
@@ -69,47 +69,50 @@ Only Home Assistant administrators can open the panel and use its sensitive cont
 
 View live streams and still previews, open RTSP links, and unlock relays from the **Devices** tab.
 
-[![Devices tab with a front-door camera preview and relay controls](docs/images/devices-preview.png)](docs/images/devices-preview.png)
+<p><a href="docs/images/devices-preview.jpeg"><img src="docs/images/devices-preview.jpeg" alt="Devices tab with a front-door camera preview and relay controls" width="100%" style="max-width: 1350px"></a></p>
 
 ### Latest Activity
 
 Browse and filter recent door activity and its available images from the **Latest Activity** tab.
 
-[![Latest Activity tab with filters and a chronological door-event list](docs/images/latest-activity-preview.png)](docs/images/latest-activity-preview.png)
+<p><a href="docs/images/latest-activity-preview.jpeg"><img src="docs/images/latest-activity-preview.jpeg" alt="Latest Activity tab with filters and a chronological door-event list" width="100%" style="max-width: 1350px"></a></p>
 
 ### Call History
 
 Review recent SmartPlus calls and their available images from the **Call History** tab.
 
+<p><a href="docs/images/call-history-preview.png"><img src="docs/images/call-history-preview.png" alt="Call History tab with caller callee status and duration columns" width="100%" style="max-width: 1350px"></a></p>
+
 ### Temporary keys
 
-Create, edit, delete, copy, and retrieve QR codes for temporary access from **Akuvox SmartPlus → Temporary Keys**. What you can manage depends on the permissions of the connected SmartPlus account.
+Create, edit, delete, copy, and retrieve QR codes for temporary access from **Akuvox SmartPlus → Temporary Keys**.
 
-[![Temporary Keys tab with generic, masked access codes](docs/images/temporary-keys-preview.png)](docs/images/temporary-keys-preview.png)
+<p><a href="docs/images/temporary-keys-preview.jpeg"><img src="docs/images/temporary-keys-preview.jpeg" alt="Temporary Keys tab with generic, masked access codes" width="100%" style="max-width: 1350px"></a></p>
 
-When editing a key, you can review its validity, usage limit, optional identifiers, and permitted relays.
+When creating new temporary keys, you can enter the key name and validity period, choose permitted doors, then collect optional identifiers.
 
-[![Edit Temporary Key dialog with a masked access ID and generic relay permissions](docs/images/temporary-key-edit-preview.png)](docs/images/temporary-key-edit-preview.png)
+<p>
+  <a href="docs/images/temporary-key-create-step-1.jpeg"><img src="docs/images/temporary-key-create-step-1.jpeg" width="33%" style="max-width: 450px" alt="Create Temporary Key: enter name and validity period" width="33%"></a>
+  <a href="docs/images/temporary-key-create-step-2.jpeg"><img src="docs/images/temporary-key-create-step-2.jpeg" width="33%" style="max-width: 450px" alt="Create Temporary Key: choose permitted generic doors" width="33%"></a>
+  <a href="docs/images/temporary-key-create-step-3.jpeg"><img src="docs/images/temporary-key-create-step-3.jpeg" width="33%" style="max-width: 450px" alt="Create Temporary Key: enter optional identifiers" width="33%"></a>
+</p>
 
 ### Automations
 
 #### Automations Wizard
 
-Use **Akuvox SmartPlus → Automations** to build automations with a UI that allows you to easily construct triggers that target specific doors, event types & family members, and build notification events that take advantage of the event data (such as door/person names, live camera images, etc.).
+Use **Akuvox SmartPlus → Automations** to easily build automations triggered by specific doors, event types & family members, that fire off notification events that take advantage of door/person names, live camera images, etc.
 
-[![Automations tab with a no-code front-door notification workflow](docs/images/automations-preview.png)](docs/images/automations-preview.png)
+<p><a href="docs/images/automations-preview.jpeg"><img src="docs/images/automations-preview.jpeg" alt="Automations tab with a no-code front-door notification workflow" width="100%" style="max-width: 1350px"></a></p>
 
-The six-step wizard selects doors, event types, optional people or temporary keys, notification services, delivery options, and a name before creating the automation.
 
-<p align="center">
-  <a href="docs/images/automations-wizard-step-1.png"><img src="docs/images/automations-wizard-step-1.png" width="33%" alt="Create Automation — choose doors"></a>
-  <a href="docs/images/automations-wizard-step-2.png"><img src="docs/images/automations-wizard-step-2.png" width="33%" alt="Create Automation — choose events"></a>
-  <a href="docs/images/automations-wizard-step-3.png"><img src="docs/images/automations-wizard-step-3.png" width="33%" alt="Create Automation — choose people or keys"></a>
-</p>
-<p align="center">
-  <a href="docs/images/automations-wizard-step-4.png"><img src="docs/images/automations-wizard-step-4.png" width="33%" alt="Create Automation — choose notification services"></a>
-  <a href="docs/images/automations-wizard-step-5.png"><img src="docs/images/automations-wizard-step-5.png" width="33%" alt="Create Automation — notification options"></a>
-  <a href="docs/images/automations-wizard-step-6.png"><img src="docs/images/automations-wizard-step-6.png" width="33%" alt="Create Automation — name the automation"></a>
+<p>
+  <a href="docs/images/automations-wizard-step-1.jpeg"><img src="docs/images/automations-wizard-step-1.jpeg" width="33%" style="max-width: 450px" alt="Create Automation — choose doors"></a>
+  <a href="docs/images/automations-wizard-step-2.jpeg"><img src="docs/images/automations-wizard-step-2.jpeg" width="33%" style="max-width: 450px" alt="Create Automation — choose events"></a>
+  <a href="docs/images/automations-wizard-step-3.jpeg"><img src="docs/images/automations-wizard-step-3.jpeg" width="33%" style="max-width: 450px" alt="Create Automation — choose people or keys"></a>
+  <a href="docs/images/automations-wizard-step-4.jpeg"><img src="docs/images/automations-wizard-step-4.jpeg" width="33%" style="max-width: 450px" alt="Create Automation — choose notification services"></a>
+  <a href="docs/images/automations-wizard-step-5.jpeg"><img src="docs/images/automations-wizard-step-5.jpeg" width="33%" style="max-width: 450px" alt="Create Automation — notification options"></a>
+  <a href="docs/images/automations-wizard-step-6.jpeg"><img src="docs/images/automations-wizard-step-6.jpeg" width="33%" style="max-width: 450px" alt="Create Automation — name the automation"></a>
 </p>
 
 #### Automations via UI/YAML
@@ -126,7 +129,6 @@ For full control you can also use the **Door opened** device trigger or listen f
 | `device_id` | Home Assistant device ID for the matching door; present only when the door has a registered Home Assistant device. | Home Assistant device ID string |
 | `temporary_key_id` | Stable SmartPlus key ID; present only for a temporary-key unlock when the key name resolves to exactly one configured key. | `guest-key-123` |
 
-For compatibility, the original capitalized aliases (`Location`, `CaptureType`, `Initiator`, `RelayName`, `PicUrl`, and, when present, `TemporaryKeyId`) are emitted alongside their snake-case equivalents.
 
 ```yaml
 alias: Notify when someone rings the front door
@@ -144,22 +146,42 @@ actions:
 mode: single
 ```
 
-By default, the integration waits for an event image before it publishes an event. In **Settings → Door Events**, change that globally or for an individual camera when faster alerts matter more than including an image.
-
 ## Settings
 
 Use **Akuvox SmartPlus → Settings** to configure event-image timing, local history, camera image options, account sharing, SIP account details, and debug logging.
 
 ### Share an account
 
-Give another Home Assistant instance a restricted, revocable view without exposing your SmartPlus credentials.
+Share a restricted, revocable view of a SmartPlus account with another Home Assistant instance without giving it your SmartPlus username, password, or session tokens. The source instance remains in control: it chooses exactly what the receiver can use and can revoke that access at any time.
 
-1. On the source instance, open **Akuvox SmartPlus → Settings → Create pairing link**.
-2. Choose the cameras, relays, key permissions, activity, calls, and optional expiry to share.
-3. Transfer the one-time link securely. It expires after 10 minutes.
-4. On the receiving instance, choose **Credentials from another Home Assistant** and paste the link.
+<p><a href="./docs/images/share-account-nodes-preview.jpeg"><img src="./docs/images/share-account-nodes-preview.jpeg" alt="Share an account settings showing connected, disconnected, waiting, expired, and revoked receivers" style="max-width: 700px"></a></p>
 
-Recipients receive only the data and permissions you select; they never sign in to SmartPlus directly. The source instance can review or revoke access at any time. Pairing requires a working HTTPS external URL.
+#### Create and transfer a pairing link
+
+1. On the source instance, open **Akuvox SmartPlus → Settings → Create pairing link** and give the receiving Home Assistant instance a recognizable name.
+2. Choose whether the link should remain valid indefinitely or expire at a specific date and time. The pairing link itself is single-use and expires after 10 minutes, even if the granted access is configured to last longer.
+
+<p><a href="./docs/images/share-account-wizard-step-1.jpeg"><img src="./docs/images/share-account-wizard-step-1.jpeg" alt="Create pairing link: name the remote instance and set its validity" style="max-width: 600px"></a></p>
+
+Transfer the link through a secure channel. Treat it like a password: anyone who uses it before it expires receives the selected access.
+
+#### Choose what the receiver can access
+
+Select the individual cameras and relays the receiving instance may use. For temporary keys, grant view, creation, and editing permissions independently. Access is limited to the choices made here; unselected devices and permissions remain unavailable to the receiver.
+
+<p><a href="./docs/images/share-account-wizard-step-2.jpeg"><img src="./docs/images/share-account-wizard-step-2.jpeg" alt="Create pairing link: select device and temporary key permissions" style="max-width: 600px"></a></p>
+
+Choose which family members appear in the receiver's **Latest Activity** and **Call History** views. This applies only to shared history and does not change the source account's own data.
+
+<p><a href="./docs/images/share-account-wizard-step-3.jpeg"><img src="./docs/images/share-account-wizard-step-3.jpeg" alt="Create pairing link: select family member activity and call history access" style="max-width: 600px"></a></p>
+
+#### Connect and manage the receiving instance
+
+On the receiving instance, choose **Credentials from another Home Assistant** during setup and paste the pairing link. Pairing requires the source instance to have a working HTTPS external URL so the receiving instance can connect securely.
+
+The source instance lists every receiver and its status in **Settings**. A receiver can be waiting for its first connection, connected, disconnected, revoked, or shown as expired when its unused pairing link has lapsed. Use the view button to review the granted scope, or revoke access immediately when a receiver is no longer trusted or needed. Revocation stops future shared access; create a new pairing link to reconnect it.
+
+Recipients never sign in to SmartPlus directly. Their access is restricted to the permissions selected by the source instance, and the source's SmartPlus credentials remain private.
 
 ### SIP export and local history
 
