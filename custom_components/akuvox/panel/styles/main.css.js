@@ -21,6 +21,7 @@ export const mainStyles = `
     color: var(--panel-text);
     display: block;
     max-width: 100%;
+    min-height: 100%;
     min-width: 0;
     overflow-x: hidden;
     overflow-x: clip;
@@ -54,8 +55,10 @@ export const mainStyles = `
 
   main {
     box-sizing: border-box;
-    max-width: 1600px;
-    margin: auto;
+    max-width: none;
+    margin: 0;
+    min-height: 100vh;
+    min-height: 100dvh;
     min-width: 0;
     overflow-x: hidden;
     overflow-x: clip;
@@ -688,10 +691,6 @@ export const mainStyles = `
   .notification-select-input svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; }
   .notification-preview { display: grid; gap: 9px; padding-top: 6px; }
   .notification-preview-heading { display: flex; align-items: center; justify-content: space-between; color: var(--panel-muted); font-size: 13px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; }
-  .notification-sound-preview { display: inline-grid; width: 34px; height: 34px; place-items: center; padding: 0; border: 1px solid var(--aqua); border-radius: 50%; color: #fff; background: var(--aqua); cursor: pointer; }
-  .notification-sound-preview:hover:not(:disabled) { filter: brightness(1.08); }
-  .notification-sound-preview:disabled { cursor: wait; opacity: .65; }
-  .notification-sound-preview svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
   .notification-preview-card { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 11px; padding: 13px; border: 1px solid var(--panel-outline); border-radius: 13px; background: color-mix(in srgb, var(--panel-card) 90%, var(--panel-surface)); }
   .notification-preview-icon { display: grid; width: 36px; height: 36px; place-items: center; border-radius: 10px; color: #fff; background: var(--aqua); }
   .notification-preview-icon svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 2; }
@@ -701,7 +700,6 @@ export const mainStyles = `
   .notification-preview-card p { margin: 3px 0 0; color: var(--panel-muted); font-size: 13px; line-height: 1.35; }
   .notification-preview-card img, .notification-preview-image-placeholder { display: grid; box-sizing: border-box; width: 100%; height: 96px; margin-top: 10px; place-items: center; border-radius: 8px; color: var(--panel-muted); background: color-mix(in srgb, var(--panel-muted) 10%, transparent); object-fit: cover; }
   .notification-preview-image-placeholder svg { width: 30px; height: 30px; fill: none; stroke: currentColor; stroke-width: 1.8; }
-  .notification-preview-status { min-height: 18px; margin: 0; color: var(--panel-muted); font-size: 12px; }
   .automation-name-field { align-self: center; display: grid; width: min(100%, 420px); gap: 7px; font-size: 14px; font-weight: 500; text-align: start; }
   .automation-name-field input { box-sizing: border-box; width: 100%; min-height: 42px; }
   .caller-picker { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 16px 12px; width: 100%; }
@@ -774,6 +772,18 @@ export const mainStyles = `
   .remote-instances-section .credential-share-receiver-row { margin: 0 2px; border-radius: 0; }
   .remote-instances-section .credential-share-receiver-row:first-of-type { border-radius: 7px 7px 0 0; }
   .remote-instances-section .credential-share-receiver-row:last-of-type { border-radius: 0 0 7px 7px; }
+  .remote-instances-section .credential-share-receivers .settings-list-label {
+    display: flex;
+    align-items: center;
+    box-sizing: border-box;
+    min-height: 57px;
+    margin: 0 2px;
+    padding: 11px 12px;
+    background: color-mix(in srgb, var(--panel-surface) 72%, var(--panel-card));
+  }
+  :host([dark]) .remote-instances-section .credential-share-receivers .settings-list-label { background: var(--secondary-background-color); }
+  .remote-instances-section .credential-share-receivers .credential-share-receiver-row { background: var(--panel-card); }
+  :host([dark]) .remote-instances-section .credential-share-receivers .credential-share-receiver-row { background: var(--panel-card); }
   .remote-instances-section .credential-share-status { margin-left: 10px; }
   .remote-instances-section .credential-share-actions { margin-right: 10px; }
   .remote-instances-section .credential-share-actions > button { display: inline-flex; align-items: center; justify-content: center; width: 64px; min-height: 38px; padding: 8px; }
@@ -998,26 +1008,32 @@ export const mainStyles = `
     background: var(--input-fill-color, var(--card-background-color, #fff));
     border-color: var(--divider-color, #999);
   }
-  .share-details-card { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px; margin: 24px 48px; padding: 20px 28px; border: 1px solid var(--divider-color, #d9e1eb); border-radius: 18px; background: color-mix(in srgb, var(--card-background-color, #fff) 84%, #edf4f9); }
+  .share-details-card { display: grid; flex: 0 0 auto; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px; margin: 24px 48px; padding: 20px 28px; border: 1px solid var(--divider-color, #d9e1eb); border-radius: 18px; background: color-mix(in srgb, var(--card-background-color, #fff) 84%, #edf4f9); }
   .share-detail { display: flex; align-items: flex-start; gap: 16px; min-width: 0; }
   .share-detail-icon { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; width: 48px; height: 48px; border: 1px solid var(--divider-color, #d9e1eb); border-radius: 13px; color: var(--secondary-text-color, #66758a); background: var(--card-background-color, #fff); }
   .share-detail-icon svg, .share-table-section-heading svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
   .share-detail-icon svg { width: 26px; height: 26px; }
   .share-detail > span:last-child { display: grid; min-width: 0; gap: 5px; }
   .share-detail small { color: var(--secondary-text-color, #66758a); font-size: 14px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
-  .share-detail strong { color: var(--primary-text-color, #111); font-size: 20px; }
-  .share-generation-details { align-items: stretch; }
-  .share-name-field > span:last-child, .share-expiry-field > span:last-child { flex: 1; }
-  .share-name-field input { box-sizing: border-box; width: 100%; min-height: 42px; padding: 9px 12px; border: 1px solid var(--panel-outline, var(--divider-color, #cbd5e1)); border-radius: 8px; color: var(--panel-text, inherit); background: var(--card-background-color, #fff); font: inherit; text-align: left; }
+  .share-detail strong { color: var(--primary-text-color, #111); font-size: 18px; }
+  .share-generation-details { display: grid; grid-template-columns: minmax(0, 1fr); width: min(640px, calc(100% - 96px)); margin: 16px auto; padding: 0; border: 0; border-radius: 0; background: transparent; }
+  .share-generation-details .share-detail { display: grid; gap: 12px; }
+  .share-generation-details .share-detail-heading { display: inline-flex; align-items: center; gap: 10px; }
+  .share-generation-details .share-detail-icon { width: 36px; height: 36px; border-radius: 10px; }
+  .share-generation-details .share-detail-icon svg { width: 20px; height: 20px; }
+  .share-generation-details .share-detail small { color: var(--primary-text-color, #111); font-size: 18px; font-weight: 600; letter-spacing: 0; text-transform: none; }
+  .share-name-field input { box-sizing: border-box; width: 100%; min-height: 52px; padding: 11px 16px; border: 1px solid var(--panel-outline, var(--divider-color, #cbd5e1)); border-radius: 12px; color: var(--panel-text, inherit); background: var(--card-background-color, #fff); font: inherit; text-align: left; }
   .share-name-field input:focus { outline: 2px solid color-mix(in srgb, var(--aqua, #03a9f4) 35%, transparent); outline-offset: 1px; border-color: var(--aqua, #03a9f4); }
+  .share-expiry-options { display: grid; gap: 16px; }
   .share-expiry-field .check { display: flex; align-items: center; gap: 7px; min-height: 24px; }
   .share-expiry-field [data-access-expiry-row] { align-items: center; flex-flow: row wrap; gap: 4px 10px; }
   .share-expiry-field [data-access-expiry-row] > span { display: inline-flex; align-items: center; gap: 7px; }
   .share-expiry-field [data-access-expiry] { box-sizing: border-box; width: min(210px, 100%); min-height: 42px; margin-left: 0; padding: 9px 12px; border: 1px solid var(--panel-outline, var(--divider-color, #cbd5e1)); border-radius: 8px; color: var(--panel-text, inherit); background: var(--card-background-color, #fff); font: inherit; text-align: left; }
   .share-expiry-field [data-access-expiry]:focus { outline: 2px solid color-mix(in srgb, var(--aqua, #03a9f4) 35%, transparent); outline-offset: 1px; border-color: var(--aqua, #03a9f4); }
-  .share-permissions { margin: 0 48px 24px; overflow: hidden; border: 1px solid var(--divider-color, #d9e1eb); border-radius: 18px; }
+  .share-permissions { flex: 0 0 auto; margin: 0 48px 24px; overflow: hidden; border: 1px solid var(--divider-color, #d9e1eb); border-radius: 18px; }
   .share-access-dialog .modal-actions { justify-content: center; gap: 12px; margin: 0; padding: 20px 48px; }
   .share-stage-content { display: flex; flex: 1 1 auto; flex-direction: column; justify-content: center; min-height: 0; overflow: auto; overscroll-behavior: contain; }
+  .share-stage-content-readonly { justify-content: flex-start; }
   .share-access-dialog .modal-actions { flex: 0 0 auto; }
   .share-access-table { width: 100%; border-collapse: collapse; }
   .share-access-table th, .share-access-table td { padding: 11px 12px; text-align: center; vertical-align: middle; border-bottom: 1px solid var(--divider-color, #e4eaf0); }
@@ -1089,6 +1105,7 @@ export const mainStyles = `
     .door-notification-dialog form { padding-right: 24px; padding-left: 24px; }
     .door-notification-close { top: 22px; right: 16px; }
     .share-details-card { grid-template-columns: 1fr; gap: 20px; margin: 22px 24px; padding: 22px; }
+    .share-generation-details { width: calc(100% - 48px); margin: 16px auto; padding: 0; }
     .share-permissions { margin: 0 24px 22px; overflow-x: auto; }
     .share-access-dialog .modal-actions { padding: 22px 24px; }
   }

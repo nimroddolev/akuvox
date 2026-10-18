@@ -1212,6 +1212,19 @@ export const viewStyles = `
     background: #143b2b;
   }
 
+  :host([dark]) .share-status-badge {
+    border-color: #1f6b4d;
+    color: #bbf7d0;
+    background: #143b2b;
+  }
+
+  :host([dark]) .share-status-badge.revoked,
+  :host([dark]) .share-status-badge.pairing-link-expired {
+    border-color: #7f1d1d;
+    color: #fecaca;
+    background: #4a2028;
+  }
+
   :host([dark]) .device-status.ready,
   :host([dark]) .key-status.active,
   :host([dark]) .call-status.answered {

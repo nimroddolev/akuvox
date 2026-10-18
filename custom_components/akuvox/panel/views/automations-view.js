@@ -144,10 +144,6 @@ export const asDoorNotification = (config, doors) => {
   requireActionAuthentication = Boolean(notificationData.actions?.some(
     (action) => action?.authenticationRequired === true
   ));
-  const sound = notificationData?.push?.sound;
-  const priorityAlert = Boolean(sound && typeof sound === "object" && sound.critical);
-  const iosSound = typeof sound === "string" ? sound : priorityAlert ? String(sound.name || "") : "";
-  const androidChannel = notificationData.channel === "alarm_stream" ? "" : String(notificationData.channel || "");
   const includeImage = Boolean(imageChoice.choose[0]?.sequence?.some(
     (action) => action?.data?.data?.image
   ));
@@ -163,9 +159,6 @@ export const asDoorNotification = (config, doors) => {
     ...(includeRelayAction ? { includeRelayAction } : {}),
     ...(requireActionAuthentication ? { requireActionAuthentication } : {}),
     ...(!includeImage ? { includeImage } : {}),
-    ...(iosSound ? { iosSound } : {}),
-    ...(androidChannel ? { androidChannel } : {}),
-    ...(priorityAlert ? { priorityAlert } : {}),
     initialState: isDisabled(config.initial_state) ? false : undefined,
   };
 };

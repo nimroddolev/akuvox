@@ -8,24 +8,9 @@ import { callWsWithBlocker, confirmModal, showNotice, showPairingLinkNotice } fr
 import { CAMERA_ORIENTATION_OPTIONS } from "../utils/orientation.js?v=20260830-combined-directional-labels";
 import { formatStorageAmount } from "../utils/formatters.js?v=20261014-shared-display-formatters";
 import { localizeElement, t } from "../utils/i18n.js?v=20261005-pseudo-spanish";
+import { animateWizardHeight, setWizardProgress, wizardProgress } from "../components/wizard-dialog.js";
 
 const RECEIVER_CONTACT_TIMEOUT_MS = 2 * 60 * 1000;
-
-/** Render the shared, discrete progress indicator used by modal wizards. */
-const wizardProgress = ({ label, totalStages, stage, attribute }) => `<div class="wizard-stage-progress" role="progressbar" aria-label="${escapeHtml(label)}" aria-valuemin="0" aria-valuemax="${totalStages}" aria-valuenow="${stage}" ${attribute}>
-  ${Array.from({ length: totalStages }, (_, index) => `<span data-wizard-stage="${index + 1}"${index < stage ? " class=\"is-complete\"" : ""}></span>`).join("")}
-</div>`;
-
-/** Update a wizard progress indicator without relying on a continuous width fill. */
-const setWizardProgress = (dialog, selector, stage) => {
-  const progress = dialog.querySelector(selector);
-  if (!progress) return;
-  const completedStages = Math.max(0, Number(stage) || 0);
-  progress.querySelectorAll("[data-wizard-stage]").forEach((segment) => {
-    segment.classList.toggle("is-complete", Number(segment.dataset.wizardStage) <= completedStages);
-  });
-  progress.setAttribute("aria-valuenow", String(completedStages));
-};
 
 const receiverIsConnected = (share) => {
   if (typeof share.connected === "boolean") return share.connected;
@@ -263,26 +248,15 @@ const temporaryKeys = (host) => {
     .sort((left, right) => left.name.localeCompare(right.name));
 };
 
-const notificationAction = (service, withImage, relayActions = [], options = {}, localize = (source, values = {}) => Object.entries(values).reduce((result, [key, value]) => result.replaceAll(`{${key}}`, String(value)), source)) => {
-  const isCompanionApp = service.startsWith("notify.mobile_app_");
-  const mobileData = isCompanionApp ? {
-    ...((options.iosSound || options.priorityAlert) ? { push: {
-      sound: options.priorityAlert
-        ? { name: options.iosSound || "default", critical: 1, volume: 1.0 }
-        : options.iosSound,
-    } } : {}),
-    ...(options.priorityAlert ? { ttl: 0, priority: "high", channel: "alarm_stream" }
-      : options.androidChannel ? { channel: options.androidChannel } : {}),
-  } : {};
+const notificationAction = (service, withImage, relayActions = [], localize = (source, values = {}) => Object.entries(values).reduce((result, [key, value]) => result.replaceAll(`{${key}}`, String(value)), source)) => {
   return {
     action: service,
     data: {
     title: `{{ trigger.event.data.location }} {% if trigger.event.data.capture_type == 'Call' %}${localize("doorbell")}{% else %}${localize("opened")}{% endif %}`,
     message: `{% if trigger.event.data.capture_type == 'Call' %}${localize("Someone is calling from the {door} door.", { door: "{{ trigger.event.data.location }}" })}{% else %}${localize("The {door} door was opened by {initiator}.", { door: "{{ trigger.event.data.location }}", initiator: "{{ trigger.event.data.initiator | default('Unknown', true) }}" })}{% endif %}`,
-    ...((withImage || relayActions.length || Object.keys(mobileData).length) ? { data: {
+    ...((withImage || relayActions.length) ? { data: {
       ...(withImage ? { image: "{{ trigger.event.data.pic_url }}" } : {}),
       ...(relayActions.length ? { actions: relayActions } : {}),
-      ...mobileData,
     } } : {}),
   },
   };
@@ -366,9 +340,6 @@ const notificationSelection = (existing) => ({
   services: [],
   includeRelayAction: false,
   includeImage: true,
-  iosSound: "",
-  androidChannel: "",
-  priorityAlert: false,
   requireActionAuthentication: false,
   name: "",
   initialState: undefined,
@@ -396,7 +367,7 @@ const callerConditionSummary = (rules) => {
   return `Triggered if ${excludedClause}.`;
 };
 
-export const buildDoorNotificationAutomation = ({ name, doors, services, includeOpened, includeCalls, callerRules = [], includeRelayAction = false, includeImage = true, iosSound = "", androidChannel = "", priorityAlert = false, requireActionAuthentication = false, relayEntities = [], initialState, localize = defaultLocalize }) => {
+export const buildDoorNotificationAutomation = ({ name, doors, services, includeOpened, includeCalls, callerRules = [], includeRelayAction = false, includeImage = true, requireActionAuthentication = false, relayEntities = [], initialState, localize = defaultLocalize }) => {
   const captureTypes = [
     ...(includeOpened ? ["Face Unlock", "Unlock on SmartPlus", "Temp Key Unlock"] : []),
     ...(includeCalls ? ["Call"] : []),
@@ -406,7 +377,6 @@ export const buildDoorNotificationAutomation = ({ name, doors, services, include
   const selectedRelayEntities = includeRelayAction && includeCalls
     ? doors.flatMap((door) => relaysByDoor.get(door.deviceId) || []) : [];
   const actionServices = companionNotificationServices(services);
-  const notificationOptions = { iosSound, androidChannel, priorityAlert };
   const relayActions = (relays) => relays.map((relay) => ({
     action: `{{ akuvox_relay_action_${selectedRelayEntities.indexOf(relay)} }}`,
     title: localize("Open {name}", { name: relay.name }),
@@ -419,11 +389,11 @@ export const buildDoorNotificationAutomation = ({ name, doors, services, include
         value_template: "{{ trigger.event.data.pic_url | default('', true) != '' }}",
       }],
       sequence: services.map((service) => notificationAction(
-        service, includeImage, actionServices.includes(service) ? relayActions(relays) : [], notificationOptions, localize
+        service, includeImage, actionServices.includes(service) ? relayActions(relays) : [], localize
       )),
     }],
     default: services.map((service) => notificationAction(
-      service, false, actionServices.includes(service) ? relayActions(relays) : [], notificationOptions, localize
+      service, false, actionServices.includes(service) ? relayActions(relays) : [], localize
     )),
   });
   const notification = selectedRelayEntities.length && actionServices.length ? {
@@ -484,8 +454,8 @@ export const buildDoorNotificationAutomation = ({ name, doors, services, include
 
 const requestDoorNotificationStep = (host, { title = "Create Automation", description, headerContent = "", stage, totalStages = 6, progressFromStage = stage - 1, progressToStage = stage, content, backLabel, nextLabel, submit, bind, focusCancel = false }) => new Promise((resolve) => {
   const dialog = host.shadowRoot.ownerDocument.createElement("dialog");
-  dialog.className = "door-notification-dialog";
-  dialog.innerHTML = `<button class="door-notification-close" type="button" data-cancel aria-label="Close" title="Close" ${focusCancel ? "autofocus" : ""}>×</button><div class="remote-instance-dialog-header"><h2>${escapeHtml(title)}</h2>
+  dialog.className = "door-notification-dialog wizard-dialog";
+  dialog.innerHTML = `<button class="door-notification-close wizard-dialog-close" type="button" data-cancel aria-label="Close" title="Close" ${focusCancel ? "autofocus" : ""}>×</button><div class="remote-instance-dialog-header"><h2>${escapeHtml(title)}</h2>
     ${wizardProgress({ label: "Automation setup progress", totalStages, stage: progressFromStage, attribute: "data-door-notification-progress" })}
     ${headerContent ? `<div class="door-notification-heading-row"><p data-door-notification-description>${escapeHtml(description)}</p>${headerContent}</div>` : `<p data-door-notification-description>${escapeHtml(description)}</p>`}</div>
     <form data-door-notification-form>
@@ -543,9 +513,6 @@ export const requestDoorNotificationAutomation = async (host, existing = null) =
   const clearMobileNotificationOptions = () => {
     selection.includeRelayAction = false;
     selection.requireActionAuthentication = false;
-    selection.iosSound = "";
-    selection.androidChannel = "";
-    selection.priorityAlert = false;
   };
   let step = 0;
   let progressFromStage = 0;
@@ -753,27 +720,17 @@ export const requestDoorNotificationAutomation = async (host, existing = null) =
       const previewCamera = (host._account?.()?.cameras || []).find(
         (camera) => selection.doorIds.includes(camera?.device_id) && camera?.preview_url
       );
-      const iosSoundOptions = [...new Set([
-        ...IOS_NOTIFICATION_SOUNDS,
-        ...(selection.iosSound && !IOS_NOTIFICATION_SOUNDS.includes(selection.iosSound)
-          ? [selection.iosSound] : []),
-      ])];
-      const mobileOptions = mobileServices.length ? `<label class="door-notification-option"><input type="checkbox" name="include-image" ${selection.includeImage ? "checked" : ""}><span>Display the captured still as the notification image</span></label><label class="notification-select-option"><span>iOS notification sound</span><select name="ios-sound" aria-label="iOS notification sound">${iosSoundOptions.map((sound) => `<option value="${escapeHtml(sound)}" ${selection.iosSound === sound || (!selection.iosSound && sound === "default") ? "selected" : ""}>${escapeHtml(sound === "default" ? "Default (Tri-tone)" : sound === "none" ? "No sound" : sound)}</option>`).join("")}</select></label><label class="notification-select-option"><span>Android notification channel</span><input data-android-channel name="android-channel" value="${escapeHtml(selection.androidChannel)}" placeholder="General (default)"><small data-android-channel-note hidden>Priority alerts use Android's alarm stream.</small></label><label class="door-notification-option"><input type="checkbox" name="priority-alert" ${selection.priorityAlert ? "checked" : ""}><span>Priority alert (critical on iOS, alarm stream on Android)</span></label>` : "";
-      const notificationPreview = mobileServices.length ? `<section class="notification-preview" aria-label="${escapeHtml(t(host, "Notification preview"))}"><div class="notification-preview-heading"><span>${escapeHtml(t(host, "Notification preview"))}</span><button type="button" class="notification-sound-preview" data-preview-sound aria-label="${escapeHtml(t(host, "Play notification sound preview"))}" title="${escapeHtml(t(host, "Play notification sound preview"))}">${icons.speaker}</button></div><article class="notification-preview-card"><span class="notification-preview-icon" aria-hidden="true">${icons.bell}</span><div><div class="notification-preview-app">Akuvox SmartPlus <small>${escapeHtml(t(host, "now"))}</small></div><strong data-notification-preview-title>${escapeHtml(t(host, "{name} door event", { name: previewDoorName }))}</strong><p data-notification-preview-message></p>${previewCamera?.preview_url ? `<img data-notification-preview-image src="${escapeHtml(previewCamera.preview_url)}" alt="" ${selection.includeImage ? "" : "hidden"}>` : `<span class="notification-preview-image-placeholder" data-notification-preview-image ${selection.includeImage ? "" : "hidden"}>${icons.cameraDoor}</span>`}</div></article><p class="notification-preview-status" data-notification-preview-status aria-live="polite"></p></section>` : "";
+      const mobileOptions = mobileServices.length ? `<label class="door-notification-option"><input type="checkbox" name="include-image" ${selection.includeImage ? "checked" : ""}><span>Display the captured still as the notification image</span></label>` : "";
+      const notificationPreview = mobileServices.length ? `<section class="notification-preview" aria-label="${escapeHtml(t(host, "Notification preview"))}"><div class="notification-preview-heading"><span>${escapeHtml(t(host, "Notification preview"))}</span></div><article class="notification-preview-card"><span class="notification-preview-icon" aria-hidden="true">${icons.bell}</span><div><div class="notification-preview-app">Akuvox SmartPlus <small>${escapeHtml(t(host, "now"))}</small></div><strong data-notification-preview-title>${escapeHtml(t(host, "{name} door event", { name: previewDoorName }))}</strong><p data-notification-preview-message></p>${previewCamera?.preview_url ? `<img data-notification-preview-image src="${escapeHtml(previewCamera.preview_url)}" alt="" ${selection.includeImage ? "" : "hidden"}>` : `<span class="notification-preview-image-placeholder" data-notification-preview-image ${selection.includeImage ? "" : "hidden"}>${icons.cameraDoor}</span>`}</div></article></section>` : "";
       result = await requestDoorNotificationStep(host, {
         title,
         stage: 5, progressFromStage, progressToStage: 5,
         description: "Notification options", backLabel: "Back", nextLabel: "Next",
         content: `<div class="notification-options">${canOfferRelayAction() ? `<label class="door-notification-option"><input type="checkbox" name="open-called-door" ${selection.includeRelayAction ? "checked" : ""}><span>Include actions to open the called door relay</span></label><label class="door-notification-option"><input type="checkbox" name="require-action-authentication" ${selection.requireActionAuthentication ? "checked" : ""}><span>Require the phone to be unlocked to open a relay</span></label>` : ""}${mobileOptions}${notificationPreview}</div>`,
         bind: (dialog) => {
-          const priorityAlert = dialog.querySelector('[name="priority-alert"]');
-          const androidChannel = dialog.querySelector('[data-android-channel]');
-          const note = dialog.querySelector('[data-android-channel-note]');
           const includeImage = dialog.querySelector('[name="include-image"]');
           const previewImage = dialog.querySelector('[data-notification-preview-image]');
           const previewMessage = dialog.querySelector('[data-notification-preview-message]');
-          const previewButton = dialog.querySelector('[data-preview-sound]');
-          const previewStatus = dialog.querySelector('[data-notification-preview-status]');
           const updatePreview = () => {
             if (previewImage) previewImage.hidden = !includeImage?.checked;
             if (previewMessage) {
@@ -784,48 +741,13 @@ export const requestDoorNotificationAutomation = async (host, existing = null) =
                   : t(host, "{name} was called or opened.", { name: previewDoorName });
             }
           };
-          const updateAndroidChannel = () => {
-            if (!androidChannel || !note) return;
-            const isPriority = priorityAlert.checked;
-            androidChannel.disabled = isPriority;
-            note.hidden = !isPriority;
-          };
-          priorityAlert?.addEventListener("change", updateAndroidChannel);
           includeImage?.addEventListener("change", updatePreview);
-          previewButton?.addEventListener("click", async () => {
-            previewButton.disabled = true;
-            if (previewStatus) previewStatus.textContent = t(host, "Sending sound preview…");
-            try {
-              const iosSound = dialog.querySelector('[name="ios-sound"]')?.value || "default";
-              const data = {
-                title: "Akuvox SmartPlus",
-                message: t(host, "Notification sound preview"),
-                data: {
-                  push: { sound: priorityAlert.checked ? { name: iosSound, critical: 1, volume: 1.0 } : iosSound },
-                  ...(priorityAlert.checked ? { ttl: 0, priority: "high", channel: "alarm_stream" }
-                    : androidChannel?.value.trim() ? { channel: androidChannel.value.trim() } : {}),
-                },
-              };
-              await Promise.all(mobileServices.map((service) => host._hass.callService(
-                "notify", service.replace(/^notify\./, ""), data
-              )));
-              if (previewStatus) previewStatus.textContent = t(host, "Sound preview sent to the selected mobile device.");
-            } catch (error) {
-              if (previewStatus) previewStatus.textContent = error?.message || t(host, "Could not send the sound preview.");
-            } finally {
-              previewButton.disabled = false;
-            }
-          });
-          updateAndroidChannel();
           updatePreview();
         },
         submit: (form) => ({
           includeRelayAction: canOfferRelayAction() && form.querySelector('[name="open-called-door"]').checked,
           requireActionAuthentication: canOfferRelayAction() && form.querySelector('[name="require-action-authentication"]').checked,
           includeImage: form.querySelector('[name="include-image"]').checked,
-          iosSound: form.querySelector('[name="ios-sound"]')?.value.trim() || "",
-          androidChannel: form.querySelector('[name="android-channel"]')?.value.trim() || "",
-          priorityAlert: form.querySelector('[name="priority-alert"]')?.checked || false,
         }),
       });
     } else {
@@ -968,9 +890,11 @@ const pairedReceiversSection = (host, shares = []) => {
       const pendingExpired = !share.activated && (!Number.isFinite(expiresAt) || expiresAt <= Date.now());
       const status = pendingExpired ? "Pairing link expired" : share.revoked ? "Revoked" : !share.activated ? "Waiting to pair" : receiverIsConnected(share) ? "Connected" : "Disconnected";
       const statusClass = status === "Connected" ? "connected" : status === "Waiting to pair" ? "waiting" : "disconnected";
-      const detail = status === "Waiting to pair"
-        ? `${t(host, "Pairing link expires in")} <span data-pairing-expiry="${expiresAt}">${formatPairingTimeRemaining(expiresAt - Date.now())}</span>`
-        : share.last_sync ? relativeContactTime(host, share.last_sync) : t(host, "Waiting for the first connection");
+      const detail = pendingExpired
+        ? ""
+        : status === "Waiting to pair"
+          ? `${t(host, "Pairing link expires in")} <span data-pairing-expiry="${expiresAt}">${formatPairingTimeRemaining(expiresAt - Date.now())}</span>`
+          : share.last_sync ? relativeContactTime(host, share.last_sync) : t(host, "Waiting for the first connection");
       return `<div class="credential-share-receiver-row ${statusClass}">
         <span class="credential-share-status"><span class="remote-node-indicator" aria-hidden="true"></span><span><strong>${escapeHtml(share.receiver_name)}</strong><small><em>${escapeHtml(t(host, status))}</em>${detail ? `<span class="credential-share-separator" aria-hidden="true">·</span><span>${detail}</span>` : ""}</small></span></span>
         <span class="credential-share-actions"><button class="action credential-share-view-button" type="button" data-view-credential-share="${escapeHtml(share.share_id)}" aria-label="View paired Home Assistant" title="View paired Home Assistant">${icons.eye}</button>${share.revoked
@@ -1009,7 +933,7 @@ const requestShareAccess = (host, viewedShare = null) => new Promise((resolve) =
     ? readOnlyCheck(value)
     : `<span class="share-permission-control"><input ${attribute} type="checkbox" value="${escapeHtml(inputValue)}" ${checked(value)}></span>`;
   const dialog = host.shadowRoot.ownerDocument.createElement("dialog");
-  dialog.className = "share-access-dialog";
+  dialog.className = "share-access-dialog wizard-dialog";
   dialog.classList.toggle("theme-dark", Boolean(host._hass?.themes?.darkMode));
   const hasMultipleRelays = relays.some((relay) => relays.filter((item) => (item.source_name || item.name) === (relay.source_name || relay.name)).length > 1);
   const relayIds = availableRelayIds;
@@ -1059,7 +983,7 @@ const requestShareAccess = (host, viewedShare = null) => new Promise((resolve) =
   ];
   const basics = readOnly
     ? `<section class="share-details-card"><div class="share-detail"><span class="share-detail-icon">${icons.calendar}</span><span><small>Validity</small><strong>${escapeHtml(formattedExpiry)}</strong></span></div><div class="share-detail"><span class="share-detail-icon">${icons.calendar}</span><span><small>Registered on</small><strong>${escapeHtml(createdAt ? new Date(createdAt).toLocaleString() : "—")}</strong></span></div></section>`
-    : `<section class="share-details-card share-generation-details"><label class="share-detail share-name-field"><span class="share-detail-icon">${icons.idCard}</span><span><small>Remote instance name</small><input data-receiver-name maxlength="100" required placeholder="e.g. Holiday home" autofocus></span></label><div class="share-detail share-expiry-field"><span class="share-detail-icon">${icons.calendar}</span><span><small>Validity</small><label class="check"><input data-never-expire name="access-duration" type="radio" checked> Never expires</label><label class="check" data-access-expiry-row><span><input data-expiring name="access-duration" type="radio"> Set expiry date &amp; time</span><input data-access-expiry type="datetime-local" min="${earliestExpiry}" disabled hidden></label></span></div></section>`;
+    : `<section class="share-details-card share-generation-details"><label class="share-detail share-name-field"><span class="share-detail-heading"><span class="share-detail-icon">${icons.idCard}</span><small>Remote instance name</small></span><input data-receiver-name maxlength="100" required placeholder="e.g. Holiday home" autofocus></label><div class="share-detail share-expiry-field"><span class="share-detail-heading"><span class="share-detail-icon">${icons.calendar}</span><small>Validity</small></span><span class="share-expiry-options"><label class="check"><input data-never-expire name="access-duration" type="radio" checked> Never expires</label><label class="check" data-access-expiry-row><span><input data-expiring name="access-duration" type="radio"> Set expiry date &amp; time</span><input data-access-expiry type="datetime-local" min="${earliestExpiry}" disabled hidden></label></span></div></section>`;
   const stageProgress = readOnly ? "" : wizardProgress({ label: "Pairing link setup progress", totalStages: 3, stage: 0, attribute: "data-share-stage-progress" });
   const heading = readOnly
     ? `<h2>${escapeHtml(viewedShare.receiver_name)} <span class="share-status-badge ${status.toLocaleLowerCase().replaceAll(" ", "-")}"><i></i>${escapeHtml(status)}</span></h2><p>Review the access permissions granted to this Home Assistant instance.</p>`
@@ -1067,7 +991,7 @@ const requestShareAccess = (host, viewedShare = null) => new Promise((resolve) =
   const devicesTable = `<section class="share-permissions" data-share-stage="2"${readOnly ? "" : " hidden"}><div class="table-wrap"><table class="share-access-table share-device-access-table"><thead><tr><th></th><th colspan="2"><span class="share-table-section-heading">${icons.cameraDoor}<span>Devices</span></span></th><th colspan="3"><span class="share-table-section-heading">${icons.key}<span>Temporary keys</span></span></th></tr><tr><th>Name</th><th><span class="share-permission-label">Camera</span></th><th><span class="share-permission-label">${hasMultipleRelays ? "Relays" : "Relay"}</span></th><th><span class="share-permission-label">View</span></th><th><span class="share-permission-label">Create</span></th><th><span class="share-permission-label">Edit</span></th></tr></thead><tbody>${readOnly ? "" : selectAllRow}${deviceRows}</tbody></table></div></section>`;
   const dataTable = `<section class="share-permissions" data-share-stage="3"${readOnly ? "" : " hidden"}><div class="table-wrap share-data-table"><table class="share-access-table"><thead><tr><th></th><th colspan="2"><span class="share-table-section-heading">${icons.database}<span>Data</span></span></th></tr><tr><th>Family Members</th><th><span class="share-permission-label">Latest Activity</span></th><th><span class="share-permission-label">Call History</span></th></tr></thead><tbody>${readOnly ? "" : dataSelectAllRow}${dataRows || '<tr><td colspan="3">No family members available.</td></tr>'}</tbody></table></div></section>`;
   const createActions = `<button class="modal-cancel" data-previous type="button" hidden>Previous</button><button class="modal-action" data-next type="button">Next</button><button class="modal-action" data-confirm type="button" hidden>Create pairing link</button>`;
-  dialog.innerHTML = `<button class="share-access-close" type="button" data-cancel aria-label="Close">×</button><div class="remote-instance-dialog-header">${heading}</div><div class="share-stage-content">${readOnly ? basics : `<div data-share-stage="1">${basics}</div>`}<p class="notice share-error" data-share-error hidden></p>${devicesTable}${dataTable}</div><div class="modal-actions">${readOnly ? '<button class="modal-cancel" data-cancel type="button">Close</button>' : createActions}</div>`;
+  dialog.innerHTML = `<button class="share-access-close wizard-dialog-close" type="button" data-cancel aria-label="Close">×</button><div class="remote-instance-dialog-header">${heading}</div><div class="share-stage-content${readOnly ? " share-stage-content-readonly" : ""}">${readOnly ? basics : `<div data-share-stage="1">${basics}</div>`}<p class="notice share-error" data-share-error hidden></p>${devicesTable}${dataTable}</div><div class="modal-actions">${readOnly ? '<button class="modal-cancel" data-cancel type="button">Close</button>' : createActions}</div>`;
   const devices = [...dialog.querySelectorAll("[data-share-device], [data-share-relay]")];
   const activity = [...dialog.querySelectorAll("[data-share-activity]")];
   const calls = [...dialog.querySelectorAll("[data-share-calls]")];
@@ -1159,7 +1083,7 @@ const requestShareAccess = (host, viewedShare = null) => new Promise((resolve) =
     // Keep this button click from being interpreted as an outside click.
     event.stopPropagation();
     stage = Math.max(1, stage - 1);
-    updateStage();
+    animateWizardHeight(dialog, updateStage);
   });
   nextButton?.addEventListener("click", (event) => {
     event.stopPropagation();
@@ -1175,7 +1099,7 @@ const requestShareAccess = (host, viewedShare = null) => new Promise((resolve) =
       return;
     }
     stage = Math.min(3, stage + 1);
-    updateStage();
+    animateWizardHeight(dialog, updateStage);
   });
   if (!readOnly) updateStage();
   dialog.querySelectorAll("[data-cancel]").forEach((button) => button.addEventListener("click", () => dialog.close()));
