@@ -3,7 +3,7 @@ import {
   bindMultiSelectFilters,
   matchesSelectedFilter,
   renderMultiSelectFilter,
-} from "../utils/multi-select-filter.js?v=20260925-option-labels";
+} from "../utils/multi-select-filter.js?v=20261014-persist-filters";
 import { icons } from "../utils/icons.js?v=20260928-detailed-qr-icon";
 import {
   keyTileTimestamp,
@@ -21,11 +21,11 @@ import {
 } from "../utils/formatters.js?v=20261013-key-tile-timestamps";
 import { copyText } from "../utils/clipboard.js";
 import { showNotice, confirmModal, callWsWithBlocker } from "../components/dialogs.js?v=20261013-danger-confirmation";
-import { showDateRangePicker } from "../components/date-range-picker.js?v=20261003-i18n-modal";
 import { showTemporaryKeyQrDialog } from "../components/qr-dialog.js?v=20260928-qr-loading-modal-v2";
 import { showKeyActionsMenu, closeKeyActionsMenu } from "../components/key-menu.js?v=20260928-disabled-edit-muted";
 import { bindListOrdering, bindTileOrdering } from "../utils/tile-ordering.js?v=20260917-list-drop-position";
 import { localizeElement, t } from "../utils/i18n.js?v=20261005-pseudo-spanish";
+import { animateWizardHeight, setWizardProgress, wizardProgress } from "../components/wizard-dialog.js";
 
 /**
  * Update visibility of validation error messages under vehicle registration and UHF card fields.
@@ -329,27 +329,42 @@ export const renderKeysView = (host, account) => {
         <tbody data-list-order="keys">${rows}</tbody>
       </table>`}
 
-      <dialog class="key-create-dialog" data-key-dialog>
-        <header class="key-create-dialog-header">
-          <span class="key-create-dialog-icon">${icons.idCard}</span>
-          <div><h2>Create Temporary Key</h2><p>Generate guest access PINs, set validity limits, and assign permitted door relays.</p></div>
-          <button type="button" class="key-create-dialog-close" data-close-key-dialog aria-label="Close">×</button>
+      <dialog class="key-create-dialog wizard-dialog" data-key-dialog>
+        <button type="button" class="wizard-dialog-close" data-close-key-dialog aria-label="Close">×</button>
+        <header class="remote-instance-dialog-header">
+          <h2>Create Temporary Key</h2>
+          ${wizardProgress({ label: "Temporary key setup progress", totalStages: 3, stage: 0, attribute: "data-key-stage-progress" })}
+          <p data-key-stage-description>Enter temporary key name and validity period</p>
         </header>
         <form data-key-form class="key-modal-form key-create-form">
-          <div class="key-create-dialog-body">
+          <div class="key-create-dialog-body" data-key-stage="1">
             <label class="key-create-field">
               <span>Key name<sup class="required-asterisk">*</sup></span>
               <input required name="description" maxlength="100" placeholder="e.g. Cleaner access, Delivery guest">
             </label>
-            <label class="key-create-field">
+            <fieldset class="key-create-field key-validity-field">
               <span>Validity period<sup class="required-asterisk">*</sup></span>
               <input required name="begin_time" type="hidden">
               <input required name="end_time" type="hidden">
-              <button type="button" class="date-range-field" data-validity-picker>
-                ${icons.calendar}<span data-validity-label>Select date and time range</span>
-              </button>
+              <div class="key-validity-options" data-key-validity-options>
+                <div class="key-validity-card">
+                  <label class="key-validity-option"><input type="radio" name="key-validity-mode" value="relative"><span><strong>Relative Range</strong><small>Access valid for a set duration after activation or issuance.</small></span></label>
+                  <div class="key-validity-controls" data-key-validity-relative hidden>
+                    <div class="key-relative-duration"><input data-key-duration type="number" min="0" max="1000" step="1" value="1" aria-label="Duration amount"><select data-key-duration-unit aria-label="Duration unit"><option value="day">day</option><option value="week">week</option><option value="month">month</option></select></div>
+                    <div class="key-relative-times"><label>Start time<input data-key-relative-start type="time"></label><label>End time<input data-key-relative-end type="time" value="23:59"></label></div>
+                  </div>
+                </div>
+                <div class="key-validity-card">
+                  <label class="key-validity-option"><input type="radio" name="key-validity-mode" value="absolute"><span><strong>Absolute Range</strong><small>Explicit start and end calendar dates with time stamps.</small></span></label>
+                  <div class="key-validity-controls key-absolute-validity-controls" data-key-validity-absolute hidden>
+                    <label>Start date &amp; time<input data-key-absolute-start type="datetime-local"></label><label>End date &amp; time<input data-key-absolute-end type="datetime-local"></label>
+                  </div>
+                </div>
+              </div>
               <small>Key access ends automatically after this window expires.</small>
-            </label>
+            </fieldset>
+          </div>
+          <div class="key-create-dialog-body" data-key-stage="2" hidden>
             <label class="key-create-field key-create-counts">
               <span>Allowed uses<sup class="required-asterisk">*</sup></span>
               <span class="key-use-stepper">
@@ -359,10 +374,6 @@ export const renderKeysView = (host, account) => {
               </span>
               <small>Number of times this key can unlock a permitted door.</small>
             </label>
-            <details class="key-optional-identifiers">
-              <summary>Optional identifiers</summary>
-              <div class="key-form-extra-fields" data-key-identifiers></div>
-            </details>
             <section class="key-relay-row">
               <div class="key-relay-heading"><span>Permitted relays<sup class="required-asterisk">*</sup></span><small>Select which doors this key can open.</small></div>
               <div class="relay-options">
@@ -370,10 +381,14 @@ export const renderKeysView = (host, account) => {
               </div>
             </section>
           </div>
+          <div class="key-create-dialog-body" data-key-stage="3" hidden>
+            <div class="key-form-extra-fields key-identifiers-step" data-key-identifiers></div>
+          </div>
           <footer class="modal-actions">
-            <button class="modal-cancel" type="button" data-close-key-dialog>Cancel</button>
-            <button class="modal-action" type="submit" data-create-key-submit disabled>
-              <span data-create-key-label>Create key</span><span class="key-create-spinner" data-create-key-spinner hidden aria-hidden="true"></span>
+            <button class="modal-cancel" type="button" data-key-previous hidden>Previous</button>
+            <button class="modal-action" type="button" data-key-next disabled>Next</button>
+            <button class="modal-action" type="submit" data-create-key-submit disabled hidden>
+              <span data-create-key-label>Create</span><span class="key-create-spinner" data-create-key-spinner hidden aria-hidden="true"></span>
             </button>
           </footer>
         </form>
@@ -397,17 +412,90 @@ const updateCreateKeyState = (host) => {
   const licensePlate = form.querySelector('[name="license_plate"]')?.value || "";
   const uhfCard = form.querySelector('[name="uhf_card"]')?.value || "";
 
-  const enabled =
-    form.checkValidity() &&
+  const stage = Number(form.dataset.stage || 1);
+  const hasBasics =
     Boolean(String(form.querySelector('[name="description"]')?.value || "").trim()) &&
     !Number.isNaN(begin.valueOf()) &&
     !Number.isNaN(end.valueOf()) &&
-    end > begin &&
-    LICENSE_PLATE_REGEX.test(licensePlate) &&
-    UHF_CARD_REGEX.test(uhfCard) &&
-    form.querySelectorAll('[name="relay"]:checked').length > 0;
+    end > begin;
+  const hasValidUseCount = Number(form.querySelector('[name="counts"]')?.value || 0) >= 1;
+  const hasRelay = form.querySelectorAll('[name="relay"]:checked').length > 0;
+  const identifiersValid = LICENSE_PLATE_REGEX.test(licensePlate) && UHF_CARD_REGEX.test(uhfCard);
+  const nextButton = form.querySelector("[data-key-next]");
+  if (nextButton) nextButton.disabled = stage === 1 ? !hasBasics : !(hasValidUseCount && hasRelay);
   const submitBtn = form.querySelector("[data-create-key-submit]");
-  if (submitBtn) submitBtn.disabled = !enabled;
+  if (submitBtn) submitBtn.disabled = !(hasBasics && hasValidUseCount && hasRelay && identifiersValid);
+};
+
+const updateCreateKeyStage = (host, stage, animate = false) => {
+  const dialog = host.shadowRoot.querySelector("[data-key-dialog]");
+  const form = dialog?.querySelector("[data-key-form]");
+  if (!dialog || !form) return;
+  const descriptions = [
+    "Enter temporary key name and validity period",
+    "Which relays should the temporary key open?",
+    "Enter additional identifiers (optional)",
+  ];
+  const update = () => {
+    form.dataset.stage = String(stage);
+    dialog.querySelectorAll("[data-key-stage]").forEach((element) => {
+      element.hidden = Number(element.dataset.keyStage) !== stage;
+    });
+    dialog.querySelector("[data-key-previous]").hidden = stage === 1;
+    dialog.querySelector("[data-key-next]").hidden = stage === 3;
+    dialog.querySelector("[data-create-key-submit]").hidden = stage !== 3;
+    dialog.querySelector("[data-key-stage-description]").textContent = descriptions[stage - 1];
+    setWizardProgress(dialog, "[data-key-stage-progress]", stage);
+    updateCreateKeyState(host);
+  };
+  if (animate) animateWizardHeight(dialog, update);
+  else update();
+};
+
+const localDateTime = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}T${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+
+const bindInlineKeyValidity = (host, form) => {
+  const now = new Date();
+  now.setSeconds(0, 0);
+  const relativeStart = form.querySelector("[data-key-relative-start]");
+  if (relativeStart && !relativeStart.value) relativeStart.value = now.toTimeString().slice(0, 5);
+  const update = () => {
+    const mode = form.querySelector('[name="key-validity-mode"]:checked')?.value;
+    const relative = form.querySelector("[data-key-validity-relative]");
+    const absolute = form.querySelector("[data-key-validity-absolute]");
+    if (relative) relative.hidden = mode !== "relative";
+    if (absolute) absolute.hidden = mode !== "absolute";
+    const begin = form.querySelector('[name="begin_time"]');
+    const end = form.querySelector('[name="end_time"]');
+    let start = null;
+    let finish = null;
+    if (mode === "relative") {
+      const amount = Number(form.querySelector("[data-key-duration]")?.value);
+      const unit = form.querySelector("[data-key-duration-unit]")?.value;
+      const startTime = form.querySelector("[data-key-relative-start]")?.value;
+      const endTime = form.querySelector("[data-key-relative-end]")?.value;
+      if (Number.isInteger(amount) && amount >= 0 && amount <= 1000 && startTime && endTime) {
+        start = new Date(`${localDateTime(now).slice(0, 10)}T${startTime}`);
+        finish = new Date(start);
+        if (unit === "day") finish.setDate(finish.getDate() + amount);
+        else if (unit === "week") finish.setDate(finish.getDate() + amount * 7);
+        else finish.setMonth(finish.getMonth() + amount);
+        finish.setHours(Number(endTime.slice(0, 2)), Number(endTime.slice(3, 5)), 0, 0);
+      }
+    } else if (mode === "absolute") {
+      start = new Date(form.querySelector("[data-key-absolute-start]")?.value || "");
+      finish = new Date(form.querySelector("[data-key-absolute-end]")?.value || "");
+    }
+    const valid = start && finish && !Number.isNaN(start.valueOf()) && !Number.isNaN(finish.valueOf()) && start >= now && finish > start;
+    begin.value = valid ? localDateTime(start) : "";
+    end.value = valid ? localDateTime(finish) : "";
+    updateCreateKeyState(host);
+  };
+  form.querySelectorAll('[name="key-validity-mode"], [data-key-duration], [data-key-duration-unit], [data-key-relative-start], [data-key-relative-end], [data-key-absolute-start], [data-key-absolute-end]').forEach((input) => {
+    input.addEventListener("input", update);
+    input.addEventListener("change", update);
+  });
+  update();
 };
 
 /**
@@ -444,7 +532,7 @@ const showCreateKeyDialog = (host) => {
   if (!form.classList.contains("key-create-form")) applyKeyFormRowLayout(form);
   host._keyDialogOpen = true;
   dialog.showModal();
-  updateCreateKeyState(host);
+  updateCreateKeyStage(host, 1);
 };
 
 /**
@@ -457,16 +545,14 @@ export const showEditKeyDialog = (host, keyId) => {
   const key = account?.temporary_keys?.find((item) => String(item.key_id) === String(keyId));
   if (!key) return;
 
-  const selected = new Set((key.doors || []).map((door) => `${door.mac}|${door.relay}`));
-  const relays = (account.relays || [])
-    .map(
-      (relay) => `
-      <label class="check">
-        <input type="checkbox" disabled ${selected.has(`${relay.mac}|${relay.relay_id}`) ? "checked" : ""}>
-        ${escapeHtml(relay.name || relay.door_name)} (relay ${escapeHtml(relay.relay_id)})
-      </label>
-    `
-    )
+  const relays = (key.doors || [])
+    .map((door) => {
+      const relay = (account.relays || []).find((item) =>
+        String(item.mac) === String(door.mac) && String(item.relay_id) === String(door.relay)
+      );
+      const label = relay?.name || relay?.door_name || `Relay ${door.relay}`;
+      return `<li>${escapeHtml(label)} (relay ${escapeHtml(door.relay)})</li>`;
+    })
     .join("");
 
   const beginTime = parseDateTimeInput(key.begin_time);
@@ -495,8 +581,12 @@ export const showEditKeyDialog = (host, keyId) => {
           <div class="key-readonly-field"><span>${t(host, "Allowed uses")}</span><strong>${escapeHtml(key.allowed_times || 1)}</strong></div>
           <div class="key-readonly-field"><span>${t(host, "Access ID")}</span><strong>${escapeHtml(key.id_number || "—")}</strong></div>
         </div>
-        <details class="key-optional-identifiers">
-          <summary>${t(host, "Optional identifiers")}</summary>
+        <section class="key-edit-relay-section">
+          <div class="key-relay-heading"><span>${t(host, "Permitted relays")}</span><small>${t(host, "Relays assigned when this key was created.")}</small></div>
+          ${relays ? `<ul class="key-edit-relay-list">${relays}</ul>` : '<span class="muted">No permitted relays are available.</span>'}
+        </section>
+        <section class="key-edit-identifiers">
+          <div class="key-relay-heading"><span>${t(host, "Optional identifiers")}</span></div>
           <div class="key-form-extra-fields">
             <label>
               <span>${t(host, "Vehicle registration")}</span>
@@ -513,10 +603,6 @@ export const showEditKeyDialog = (host, keyId) => {
               </span>
             </label>
           </div>
-        </details>
-        <section class="key-relay-row">
-          <div class="key-relay-heading"><span>${t(host, "Permitted relays")}</span><small>${t(host, "Relays assigned when this key was created.")}</small></div>
-          <div class="relay-options">${relays || '<span class="muted">No relays are available.</span>'}</div>
         </section>
       </div>
       <footer class="modal-actions">
@@ -844,6 +930,7 @@ export const bindKeysEvents = (host) => {
       const selectionEnd = isTextInput ? input.selectionEnd : null;
       const filter = input.dataset.keyFilter;
       host._keyFilters[filter] = input.value;
+      host._persistFilterState?.();
       host._render();
       if (!isTextInput) return;
       const replacement = host.shadowRoot.querySelector(`[data-key-filter="${filter}"]`);
@@ -870,6 +957,7 @@ export const bindKeysEvents = (host) => {
     ?.addEventListener("click", () => {
       host._keyFilters = { description: "", status: [], door: [] };
       host._openFilterMenu = "";
+      host._persistFilterState?.();
       host._render();
     });
 
@@ -973,6 +1061,11 @@ export const bindKeysEvents = (host) => {
     closeOnBackdrop(keyDialog);
     keyDialog.addEventListener("close", () => {
       host._keyDialogOpen = false;
+      const form = keyDialog.querySelector("[data-key-form]");
+      form?.reset();
+      if (form) delete form.dataset.creating;
+      const validityLabel = keyDialog.querySelector("[data-validity-label]");
+      if (validityLabel) validityLabel.textContent = "Select date and time range";
       host._requestLoad?.();
     });
   }
@@ -985,6 +1078,21 @@ export const bindKeysEvents = (host) => {
     updateCreateKeyState(host);
   });
   keyForm?.addEventListener("change", () => updateCreateKeyState(host));
+  if (keyForm) bindInlineKeyValidity(host, keyForm);
+
+  host.shadowRoot.querySelector("[data-key-next]")?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    const stage = Number(keyForm?.dataset.stage || 1);
+    updateCreateKeyState(host);
+    const button = keyForm?.querySelector("[data-key-next]");
+    if (button?.disabled) return;
+    updateCreateKeyStage(host, Math.min(3, stage + 1), true);
+  });
+  host.shadowRoot.querySelector("[data-key-previous]")?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    const stage = Number(keyForm?.dataset.stage || 1);
+    updateCreateKeyStage(host, Math.max(1, stage - 1), true);
+  });
 
   host.shadowRoot.querySelector("[data-key-count-decrement]")?.addEventListener("click", () => {
     const input = host.shadowRoot.querySelector('[data-key-form] [name="counts"]');
@@ -1002,15 +1110,4 @@ export const bindKeysEvents = (host) => {
     button.addEventListener("mousedown", (event) => event.preventDefault())
   );
 
-  // Date range picker trigger
-  host.shadowRoot
-    .querySelector("[data-validity-picker]")
-    ?.addEventListener("click", () =>
-      showDateRangePicker(
-        host,
-        host.shadowRoot.querySelector("[data-key-form]"),
-        "[data-validity-label]",
-        () => updateCreateKeyState(host)
-      )
-    );
 };

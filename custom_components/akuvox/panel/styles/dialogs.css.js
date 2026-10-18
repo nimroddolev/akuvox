@@ -113,6 +113,49 @@ export const dialogStyles = `
     background: color-mix(in srgb, var(--aqua, #0ea5e9) 10%, var(--panel-card, #fff));
   }
 
+  /* Shared frame for Automation, Pairing Link, and Temporary Key wizards. */
+  dialog.wizard-dialog[open] {
+    display: flex;
+    flex-direction: column;
+    width: min(690px, calc(100vw - 32px));
+    height: fit-content;
+    max-height: calc(100dvh - 32px);
+    padding: 0;
+    overflow: hidden;
+    text-align: left;
+    transition: height 220ms cubic-bezier(.2, .8, .2, 1);
+  }
+  .wizard-dialog .remote-instance-dialog-header { flex: 0 0 auto; padding: 24px 48px 20px; }
+  .wizard-dialog .remote-instance-dialog-header h2 { margin: 0; padding-right: 42px; color: var(--panel-text, inherit); font-size: 30px; line-height: 1.15; }
+  .wizard-dialog .remote-instance-dialog-header p { margin: 8px 0 0; color: var(--panel-muted, var(--secondary-text-color)); font-size: 17px; line-height: 1.45; }
+  .wizard-dialog-close {
+    position: absolute;
+    z-index: 1;
+    top: 20px;
+    right: 24px;
+    box-sizing: border-box;
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+    min-height: 32px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    color: var(--panel-muted, var(--secondary-text-color));
+    background: transparent;
+    font: inherit;
+    font-size: 27px;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .wizard-dialog-close:hover, .wizard-dialog-close:focus-visible {
+    color: var(--panel-text, inherit);
+    background: color-mix(in srgb, currentColor 9%, transparent);
+    outline: none;
+  }
+  .wizard-dialog .wizard-stage-progress { margin: 14px 0 12px; }
+  .key-create-dialog [data-key-stage-progress] { --wizard-stage-count: 3; box-sizing: border-box; width: 100%; }
+
   .modal-icon {
     display: inline-flex;
     align-items: center;
@@ -415,10 +458,30 @@ export const dialogStyles = `
   .key-create-dialog-close { box-sizing: border-box; width: 32px; min-width: 32px; height: 32px; min-height: 32px; flex: 0 0 32px; aspect-ratio: 1; margin: -5px -5px 0 auto; padding: 0; border: 0; border-radius: 50%; color: var(--panel-muted, var(--secondary-text-color)); background: transparent; font: inherit; font-size: 27px; line-height: 1; }
   .key-create-dialog-close:hover { color: var(--panel-text, inherit); background: color-mix(in srgb, currentColor 9%, transparent); }
 
-  dialog.key-create-dialog .key-create-form { display: flex; min-height: 0; flex: 1 1 auto; flex-direction: column; align-items: stretch; }
-  dialog.key-create-dialog .key-create-dialog-body { display: grid; align-self: stretch; box-sizing: border-box; width: 100%; min-width: 0; min-height: 0; flex: 1 1 auto; gap: 16px; padding: 20px 24px; overflow-y: auto; overscroll-behavior: contain; }
+  /* Do not let a short wizard step expand to the dialog's maximum height. */
+  dialog.key-create-dialog .key-create-form { display: flex; min-height: 0; flex: 0 1 auto; flex-direction: column; align-items: stretch; }
+  dialog.key-create-dialog .key-create-dialog-body { display: grid; align-self: stretch; box-sizing: border-box; width: 100%; min-width: 0; flex: 0 1 auto; max-height: calc(100dvh - 250px); gap: 16px; padding: 20px 24px; overflow-y: auto; overscroll-behavior: contain; }
+  dialog.key-create-dialog [data-key-stage][hidden] { display: none !important; }
   dialog.key-create-dialog .key-create-dialog-body > * { box-sizing: border-box; width: 100%; min-width: 0; }
   dialog.key-create-dialog .key-create-field { display: grid; grid-template-columns: 1fr; align-items: stretch; width: 100%; gap: 6px; margin: 0; font-weight: 400; }
+  dialog.key-create-dialog .key-validity-field { width: 100%; padding: 0; border: 0; text-align: left; justify-items: stretch; }
+  .key-validity-options { display: grid; gap: 10px; }
+  .key-validity-card { border: 1px solid var(--panel-outline, var(--divider-color, #dbe2e8)); border-radius: 8px; overflow: hidden; }
+  .key-validity-card:has(input:checked) { border-color: var(--aqua, #03a9f4); background: color-mix(in srgb, var(--aqua, #03a9f4) 8%, transparent); }
+  .key-validity-option { display: flex; align-items: flex-start; gap: 10px; padding: 9px 12px; cursor: pointer; }
+  dialog.key-create-dialog .key-validity-option > input[type="radio"] { box-sizing: border-box; width: 18px !important; min-width: 18px; height: 18px; min-height: 18px; flex: 0 0 18px; margin: 2px 0 0; padding: 0; accent-color: var(--aqua, #03a9f4); }
+  .key-validity-option span { display: grid; gap: 2px; }
+  .key-validity-option strong { font-size: 14px; }
+  .key-validity-option small { color: var(--panel-muted, var(--secondary-text-color)); font-size: 12px; line-height: 1.35; }
+  .key-validity-controls { display: grid; gap: 10px; padding: 0 12px 12px 40px; color: var(--panel-muted, var(--secondary-text-color)); font-size: 13px; }
+  .key-validity-controls label { display: grid; gap: 4px; font-size: 12px; }
+  .key-validity-controls input, .key-validity-controls select { box-sizing: border-box; width: 100%; min-height: 38px; padding: 7px 9px; border: 1px solid var(--panel-outline, var(--divider-color, #cbd5e1)); border-radius: 7px; color: var(--panel-text, inherit); background: var(--card-background-color, #fff); font: inherit; }
+  .key-validity-controls label input { min-width: 0; }
+  .key-validity-controls[hidden] { display: none; }
+  .key-relative-duration { display: flex; align-items: center; gap: 8px; }
+  dialog.key-create-dialog .key-relative-duration [data-key-duration] { width: 72px !important; min-width: 72px; }
+  dialog.key-create-dialog .key-relative-duration [data-key-duration-unit] { width: 92px !important; min-width: 92px; }
+  .key-relative-times, .key-absolute-validity-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
   .key-create-field > span, .key-relay-heading > span { color: var(--panel-text, inherit); font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
   .key-create-field input:not([type="hidden"]) { box-sizing: border-box; width: 100%; min-height: 42px; padding: 9px 12px; border: 1px solid var(--panel-outline, var(--divider-color, #cbd5e1)); border-radius: 8px; color: var(--panel-text, inherit); background: var(--card-background-color, #fff); font: inherit; text-align: left; }
   .key-create-field input:focus { outline: 2px solid color-mix(in srgb, var(--aqua, #03a9f4) 35%, transparent); outline-offset: 1px; border-color: var(--aqua, #03a9f4); }
@@ -426,10 +489,15 @@ export const dialogStyles = `
 
   /* Edit temporary key uses the same dialog frame and field treatment as creation,
      while clearly separating values that cannot be changed after issuance. */
-  .key-edit-readonly-fields { display: grid; gap: 10px; }
-  .key-readonly-field { display: grid; gap: 5px; padding: 11px 12px; border: 1px solid var(--panel-outline, var(--divider-color, #dbe2e8)); border-radius: 8px; background: color-mix(in srgb, var(--panel-surface, #f8fafc) 55%, transparent); }
-  .key-readonly-field > span { color: var(--panel-muted, var(--secondary-text-color)); font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
-  .key-readonly-field > strong { color: var(--panel-text, inherit); font-size: 14px; line-height: 1.4; overflow-wrap: anywhere; }
+  .key-edit-readonly-fields { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 0 16px; overflow: hidden; border: 1px solid var(--panel-outline, var(--divider-color, #dbe2e8)); border-radius: 8px; background: color-mix(in srgb, var(--panel-surface, #f8fafc) 55%, transparent); }
+  .key-readonly-field { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; align-items: center; padding: 11px 12px; }
+  .key-readonly-field + .key-readonly-field { border-top: 1px solid var(--panel-outline, var(--divider-color, #dbe2e8)); }
+  .key-readonly-field > span { white-space: nowrap; color: var(--panel-muted, var(--secondary-text-color)); font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+  .key-readonly-field > strong { justify-self: start; color: var(--panel-text, inherit); font-size: 14px; line-height: 1.4; overflow-wrap: anywhere; text-align: left; }
+  .key-edit-relay-section, .key-edit-identifiers { display: grid; gap: 10px; padding: 14px; border: 1px solid var(--panel-outline, var(--divider-color, #dbe2e8)); border-radius: 10px; background: color-mix(in srgb, var(--panel-surface, #f8fafc) 55%, transparent); }
+  .key-edit-relay-list { display: grid; gap: 6px; margin: 0; padding-left: 20px; color: var(--panel-text, inherit); }
+  .key-edit-relay-list li { padding-left: 2px; }
+  .key-edit-identifiers .key-form-extra-fields { padding: 0; background: transparent; }
   .key-use-stepper { display: grid; grid-template-columns: 48px minmax(0, 1fr) 48px; width: min(100%, 240px); overflow: hidden; border: 1px solid var(--panel-outline, var(--divider-color, #cbd5e1)); border-radius: 9px; background: var(--card-background-color, #fff); }
   .key-use-stepper button { display: grid; min-height: 42px; place-items: center; padding: 0; border: 0; color: var(--panel-muted, var(--secondary-text-color)); background: color-mix(in srgb, var(--panel-surface, #f8fafc) 72%, transparent); font: inherit; font-size: 26px; line-height: 1; user-select: none; -webkit-user-select: none; }
   .key-use-stepper button:hover { color: var(--aqua, #03a9f4); background: color-mix(in srgb, var(--aqua, #03a9f4) 9%, transparent); }
@@ -448,6 +516,7 @@ export const dialogStyles = `
   .key-optional-identifiers[open] summary { border-bottom: 1px solid var(--panel-outline, var(--divider-color, #dbe2e8)); border-radius: 9px 9px 0 0; }
   .key-optional-identifiers[open] summary::before { transform: rotate(90deg); }
   .key-form-extra-fields { display: grid; gap: 12px; padding: 14px; background: color-mix(in srgb, var(--panel-surface, #f8fafc) 55%, transparent); }
+  .key-identifiers-step { padding: 0; background: transparent; }
   dialog.key-create-dialog .key-form-extra-fields > label { display: grid; grid-template-columns: 1fr; align-items: stretch; width: 100%; gap: 6px; margin: 0; color: var(--panel-muted, var(--secondary-text-color)); font-size: 12px; font-weight: 600; }
   .key-form-extra-fields input { box-sizing: border-box; width: 100%; min-height: 38px; padding: 8px 10px; border: 1px solid var(--panel-outline, var(--divider-color, #cbd5e1)); border-radius: 7px; color: var(--panel-text, inherit); background: var(--card-background-color, #fff); font: inherit; text-align: left; }
 
@@ -461,10 +530,16 @@ export const dialogStyles = `
   dialog.key-create-dialog .key-create-form > .modal-actions { display: flex; flex: 0 0 auto; justify-content: flex-end; box-sizing: border-box; width: 100%; margin: 0; padding: 14px 24px; border: 0; background: transparent; }
   .key-create-dialog .modal-action, .key-create-dialog .modal-cancel { min-width: 108px; }
 
+  /* Keep Temporary Key within the same shared wizard frame as the other flows. */
+  dialog.key-create-dialog.wizard-dialog[open] { width: min(690px, calc(100vw - 32px)); height: fit-content; }
+  dialog.key-create-dialog.wizard-dialog .key-create-form > .modal-actions { justify-content: center; }
+
   @media (max-width: 500px) {
     .key-create-dialog-header, .key-create-dialog-body, .key-create-dialog .modal-actions { padding-left: 18px; padding-right: 18px; }
-    .key-create-dialog-header { min-height: 112px; padding-top: 16px; padding-bottom: 14px; }
-    .key-create-dialog-header h2 { margin-top: 0; }
+    .wizard-dialog .remote-instance-dialog-header { padding: 20px 18px 16px; }
+    .wizard-dialog .remote-instance-dialog-header h2 { font-size: 24px; }
+    .wizard-dialog-close { top: 16px; right: 12px; }
+    .key-validity-controls { padding-left: 12px; }
   }
 
   @media (max-width: 500px) {
