@@ -67,7 +67,7 @@ Only Home Assistant administrators can open the panel and use its sensitive cont
 
 ### Devices
 
-View live streams and still previews, open RTSP links, and unlock relays from the **Devices** tab.
+View live streams and still previews, open RTSP links, and unlock relays from the **Devices** tab. Copied RTSP URLs can contain camera credentials, so treat them like a password and share them only through a trusted channel.
 
 <p><a href="docs/images/devices-preview.jpeg"><img src="docs/images/devices-preview.jpeg" alt="Devices tab with a front-door camera preview and relay controls" width="100%" style="max-width: 1350px"></a></p>
 
@@ -185,7 +185,7 @@ Recipients never sign in to SmartPlus directly. Their access is restricted to th
 
 ### SIP export and local history
 
-The panel can export SIP account mappings as a password-protected PDF. It can also retain local activity history, which defaults to a 5 MB limit. You can limit, clear, export, or import this history; set the limit to `0` for unlimited storage.
+The panel can export SIP account mappings as a password-protected PDF. It can also retain local activity history, which defaults to a 5 MB limit. A local-history export can include activity records, call records, and available image previews. You can limit, clear, export, or import this history; set the limit to `0` for unlimited storage. Clearing history removes only the copy stored by this integration in Home Assistant; it does not delete activity or calls from SmartPlus cloud data.
 
 ## Security and privacy
 
@@ -205,6 +205,19 @@ python3 -m unittest discover -s tests -v
 ```
 
 The tests simulate SmartPlus responses and never access a live account.
+
+### Browser smoke test
+
+The opt-in browser smoke test signs in to a dedicated Home Assistant test instance and visits every non-destructive panel tab. Do not point it at a production instance. Install the browser test dependencies and Chromium, then provide credentials for an administrator account on an instance where Akuvox SmartPlus is configured:
+
+```sh
+npm install
+npx playwright install chromium
+AKUVOX_HA_URL=http://localhost:8123 \
+AKUVOX_HA_USERNAME=smoke-test-admin \
+AKUVOX_HA_PASSWORD=change-me \
+npm run test:panel-browser
+```
 
 ## Help and support
 
