@@ -125,6 +125,8 @@ export const dialogStyles = `
     text-align: left;
     transition: height 220ms cubic-bezier(.2, .8, .2, 1);
   }
+  /* The caller picker may open above its trigger in the automation wizard. */
+  dialog.door-notification-dialog.wizard-dialog[open] { overflow: visible; }
   .wizard-dialog .remote-instance-dialog-header { flex: 0 0 auto; padding: 24px 48px 20px; }
   .wizard-dialog .remote-instance-dialog-header h2 { margin: 0; padding-right: 42px; color: var(--panel-text, inherit); font-size: 30px; line-height: 1.15; }
   .wizard-dialog .remote-instance-dialog-header p { margin: 8px 0 0; color: var(--panel-muted, var(--secondary-text-color)); font-size: 17px; line-height: 1.45; }

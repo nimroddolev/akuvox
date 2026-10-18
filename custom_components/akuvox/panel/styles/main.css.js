@@ -766,6 +766,7 @@ export const mainStyles = `
   .caller-picker-add-menu { position: absolute; z-index: 3; top: calc(100% + 6px); left: 50%; display: grid; min-width: 180px; max-height: 190px; overflow: auto; border: 1px solid var(--panel-outline); border-radius: 8px; background: var(--panel-card); box-shadow: 0 8px 18px #0003; transform: translateX(-50%); overscroll-behavior: contain; }
   .caller-picker-add.opens-upward .caller-picker-add-menu { top: auto; bottom: calc(100% + 6px); }
   .caller-picker-add-menu[hidden] { display: none; }
+  .door-notification-step-content:has(.caller-picker-add-menu:not([hidden])) { overflow: visible; }
   .caller-picker-add-menu button { display: flex; align-items: center; gap: 9px; padding: 9px 12px; border: 0; border-bottom: 1px solid var(--panel-outline); color: var(--panel-text); background: transparent; font: inherit; text-align: left; cursor: pointer; }
   .caller-picker-add-menu button:last-child { border-bottom: 0; }
   .caller-picker-add-menu button:hover, .caller-picker-add-menu button:focus-visible { background: color-mix(in srgb, var(--aqua) 16%, var(--panel-card)); outline: none; }
