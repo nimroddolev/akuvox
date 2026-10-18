@@ -10,11 +10,51 @@ import {
   buildDoorNotificationAutomation,
   requestDoorNotificationAutomation,
   showDoorNotificationCreated,
-} from "./settings-view.js";
+} from "./settings-view.js?v=20261016-notification-preview-expanded";
 
 const captureTypesForOpened = ["Face Unlock", "Unlock on SmartPlus"];
 const temporaryKeyCaptureType = "Temp Key Unlock";
 const isDisabled = (value) => ["off", "false", "disabled"].includes(String(value).toLowerCase());
+const AUTOMATION_ID_CACHE_PREFIX = "akuvox-panel-door-notification-automation-ids";
+
+const automationIdCacheKey = (host) => `${AUTOMATION_ID_CACHE_PREFIX}-${host._activeAccount || "default"}`;
+
+const cachedAutomationIds = (host) => {
+  try {
+    const value = JSON.parse(localStorage.getItem(automationIdCacheKey(host)) || "[]");
+    return Array.isArray(value) ? [...new Set(value.filter((id) => typeof id === "string" && id))] : [];
+  } catch (_) {
+    return [];
+  }
+};
+
+const persistAutomationIds = (host, ids) => {
+  try {
+    localStorage.setItem(automationIdCacheKey(host), JSON.stringify([...new Set(ids)]));
+  } catch (_) {
+    // Automation discovery remains functional when persistent storage is unavailable.
+  }
+};
+
+const fetchAutomationConfigs = async (host, ids) => {
+  const pending = [...ids];
+  const configs = [];
+  const worker = async () => {
+    while (pending.length) {
+      const id = pending.shift();
+      try {
+        configs.push([id, await host._hass.callApi(
+          "GET", `config/automation/config/${encodeURIComponent(id)}`
+        )]);
+      } catch (_) {
+        // Automations managed outside automations.yaml cannot be edited by the
+        // native config endpoint and are not candidates for this wizard.
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(6, pending.length) }, worker));
+  return configs;
+};
 
 const accountDoors = (host) => {
   const doors = new Map();
@@ -164,12 +204,9 @@ export const asDoorNotification = (config, doors) => {
 };
 
 const loadAutomations = async (host) => {
-  host._doorNotificationAutomationsLoading = true;
   try {
     const entityRegistry = await host._hass.callWS({ type: "config/entity_registry/list" });
-    const entityStates = await host._hass.callWS({ type: "get_states" }).catch(
-      () => Object.values(host._hass.states || {})
-    );
+    const entityStates = Object.values(host._hass.states || {});
     const statesByEntityId = new Map((entityStates || []).map((state) => [state.entity_id, state.state]));
     const automationEntries = (entityRegistry || [])
       .filter((entry) => String(entry.entity_id || "").startsWith("automation."))
@@ -178,20 +215,16 @@ const loadAutomations = async (host) => {
       String(entry.unique_id), String(entry.entity_id),
     ]));
     const automationIds = [...entityIdsByAutomationId.keys()];
-    const configs = await Promise.all(automationIds.map(async (id) => {
-      try {
-        return [id, await host._hass.callApi(
-          "GET", `config/automation/config/${encodeURIComponent(id)}`
-        )];
-      } catch (_) {
-        // Automations managed outside automations.yaml cannot be edited by the
-        // native config endpoint and are not candidates for this wizard.
-        return null;
-      }
-    }));
+    const savedIds = new Set(cachedAutomationIds(host));
+    const cachedCandidateIds = savedIds.size
+      ? automationIds.filter((id) => savedIds.has(id))
+      : automationIds;
+    const candidateIds = savedIds.size && !cachedCandidateIds.length
+      ? automationIds
+      : cachedCandidateIds;
+    const configs = await fetchAutomationConfigs(host, candidateIds);
     const doors = accountDoors(host);
     host._doorNotificationAutomations = configs
-      .filter(Boolean)
       .map(([id, config]) => {
         const selection = asDoorNotification(config, doors);
         const entityId = entityIdsByAutomationId.get(id);
@@ -202,11 +235,12 @@ const loadAutomations = async (host) => {
       })
       .filter((automation) => automation.id && automation.selection)
       .sort((left, right) => left.selection.name.localeCompare(right.selection.name));
+    persistAutomationIds(host, host._doorNotificationAutomations.map((automation) => automation.id));
   } catch (error) {
     host._doorNotificationAutomations = [];
     host._doorNotificationAutomationsError = error?.message || "Home Assistant could not load automations.";
   } finally {
-    host._doorNotificationAutomationsLoading = false;
+    host._automationDiscoveryLoading = false;
   }
 };
 
@@ -227,6 +261,7 @@ const upsertAutomation = (host, id, selection) => {
   host._doorNotificationAutomations = automations.sort(
     (left, right) => left.selection.name.localeCompare(right.selection.name)
   );
+  persistAutomationIds(host, host._doorNotificationAutomations.map((automation) => automation.id));
 };
 
 const automationCard = (host, automation, doors) => {
@@ -315,7 +350,7 @@ const showAutomationActionsMenu = (host, trigger, event, automation, { onEdit, o
 
 export const renderAutomationsView = (host) => {
   const automations = host._doorNotificationAutomations;
-  if (automations === null || host._doorNotificationAutomationsLoading) {
+  if (automations === null) {
     return `<div class="card"><h2>Automations</h2><p class="muted">Loading automations…</p></div>`;
   }
   const doors = accountDoors(host);
@@ -333,11 +368,13 @@ export const renderAutomationsView = (host) => {
     </div>
     ${host._doorNotificationAutomationsError ? `<p class="form-error">${escapeHtml(host._doorNotificationAutomationsError)}</p>` : ""}
     <div class="automation-list">
-      ${automations.map((automation) => automationCard(host, automation, doors)).join("") || `<section class="automation-empty">
+      ${automations.map((automation) => automationCard(host, automation, doors)).join("") || (host._automationDiscoveryLoading
+        ? `<p class="muted">${escapeHtml(t(host, "Loading automations…"))}</p>`
+        : `<section class="automation-empty">
         <div class="automation-empty-icon" aria-hidden="true">${icons.automation}</div>
         <h3>No automations yet</h3>
         <p>Start with a notification for doorbell calls, door opens, or unlocks.</p>
-      </section>`}
+      </section>`)}
     </div>
   </div>`;
 };
@@ -345,6 +382,9 @@ export const renderAutomationsView = (host) => {
 export const bindAutomationsEvents = (host) => {
   const refresh = async () => {
     host._doorNotificationAutomationsError = "";
+    host._doorNotificationAutomations ??= [];
+    host._automationDiscoveryLoading = true;
+    host._render();
     await loadAutomations(host);
     host._render();
   };
@@ -386,6 +426,9 @@ export const bindAutomationsEvents = (host) => {
     )) return;
     try {
       await host._hass.callApi("DELETE", `config/automation/config/${encodeURIComponent(automation.id)}`);
+      persistAutomationIds(host, host._doorNotificationAutomations
+        .filter((item) => item.id !== automation.id)
+        .map((item) => item.id));
       await refresh();
       showNotice(host, "", "Automation Deleted");
     } catch (error) {
