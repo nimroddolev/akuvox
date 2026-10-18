@@ -681,7 +681,8 @@ export const mainStyles = `
   .notification-service-list, .selection-list { display: grid; gap: 10px; padding: 0; border: 0; border-radius: 0; background: transparent; }
   .notification-service-list .door-picker-option, .selection-list .door-picker-option { box-sizing: border-box; width: 100%; border: 1px solid var(--panel-outline); border-radius: 10px; background: var(--panel-card); }
   .notification-service-list .door-picker-option:hover, .notification-service-list .door-picker-option:focus-visible, .selection-list .door-picker-option:hover, .selection-list .door-picker-option:focus-visible { background: color-mix(in srgb, var(--aqua) 14%, var(--panel-card)); }
-  .notification-options { align-self: center; display: grid; width: min(100%, 420px); gap: 14px; }
+  .notification-options { align-self: center; display: grid; width: min(100%, 420px); gap: 8px; }
+  .notification-options > .door-notification-option { padding: 6px 0; }
   .notification-select-option { display: grid; gap: 7px; font-size: 14px; font-weight: 500; text-align: start; }
   .notification-select-option select, .notification-select-option > input { box-sizing: border-box; width: 100%; min-height: 42px; padding: 9px 12px; border: 1px solid var(--panel-outline); border-radius: 10px; color: var(--panel-text); background: var(--panel-card); font: inherit; }
   .notification-select-option select { appearance: auto; }
@@ -690,15 +691,45 @@ export const mainStyles = `
   .notification-select-input i { position: absolute; top: 50%; right: 13px; display: grid; width: 18px; height: 18px; place-items: center; color: var(--panel-muted); pointer-events: none; transform: translateY(-50%); }
   .notification-select-input svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; }
   .notification-preview { display: grid; gap: 9px; padding-top: 6px; }
-  .notification-preview-heading { display: flex; align-items: center; justify-content: space-between; color: var(--panel-muted); font-size: 13px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; }
-  .notification-preview-card { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 11px; padding: 13px; border: 1px solid var(--panel-outline); border-radius: 13px; background: color-mix(in srgb, var(--panel-card) 90%, var(--panel-surface)); }
+  .notification-preview-heading { color: var(--panel-muted); font-size: 13px; font-weight: 700; letter-spacing: .03em; text-align: center; text-transform: uppercase; }
+  .notification-preview-controls { display: flex; align-items: center; justify-content: center; gap: 6px; }
+  .notification-preview-select { position: relative; }
+  .notification-preview-select-button { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 30px; width: 150px; padding: 3px 8px; border: 1px solid var(--panel-outline); border-radius: 7px; color: var(--panel-text); background: var(--panel-card); font: inherit; font-size: 12px; font-weight: 600; letter-spacing: 0; text-align: left; text-transform: none; }
+  .notification-preview-select-button i { font-size: 16px; font-style: normal; line-height: 1; }
+  .notification-preview-device { width: 86px; }
+  .notification-preview-select-menu { position: absolute; z-index: 4; top: calc(100% + 4px); left: 0; display: grid; min-width: 100%; overflow: hidden; border: 1px solid var(--panel-outline); border-radius: 7px; background: var(--panel-surface); box-shadow: 0 5px 14px color-mix(in srgb, #000 28%, transparent); }
+  .notification-preview-device-select .notification-preview-select-menu { right: 0; left: auto; }
+  .notification-preview-select-menu[hidden] { display: none; }
+  .notification-preview-select-menu button { min-height: 30px; padding: 5px 8px; border: 0; color: var(--panel-text); background: transparent; font: inherit; font-size: 12px; font-weight: 600; text-align: left; white-space: nowrap; }
+  .notification-preview-select-menu button:hover, .notification-preview-select-menu button:focus-visible { color: var(--panel-text); background: color-mix(in srgb, var(--aqua) 20%, var(--panel-surface)); outline: none; }
+  .notification-preview-send { position: relative; display: grid; width: 64px; min-width: 64px; min-height: 30px; place-items: center; padding: 3px 8px; border: 1px solid var(--aqua); border-radius: 7px; color: #fff; background: var(--aqua); font: inherit; font-size: 12px; font-weight: 700; }
+  .notification-preview-send:disabled { cursor: wait; opacity: .8; }
+  .notification-preview-send-spinner { display: none; box-sizing: border-box; width: 15px; height: 15px; border: 2px solid rgb(255 255 255 / .45); border-top-color: #fff; border-radius: 50%; animation: notification-preview-spin 700ms linear infinite; }
+  .notification-preview-send.is-sending > span { visibility: hidden; }
+  .notification-preview-send.is-sending .notification-preview-send-spinner { position: absolute; display: block; }
+  .notification-preview-send.is-sent { border-color: #16803c; background: #16803c; }
+  .notification-preview-card { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 11px; padding: 13px; border: 1px solid var(--panel-outline); border-radius: 10px; background: color-mix(in srgb, var(--panel-card) 90%, var(--panel-surface)); }
+  .notification-preview-card.is-ios { border-color: #d1d1d6; border-radius: 15px; color: #1c1c1e; background: #f2f2f7; }
+  .notification-preview-card.is-ios .notification-preview-icon { border-radius: 10px; background: #007aff; }
+  .notification-preview-card.is-ios .notification-preview-app, .notification-preview-card.is-ios p { color: #636366; }
+  .notification-preview-card.is-android { border-radius: 9px; }
   .notification-preview-icon { display: grid; width: 36px; height: 36px; place-items: center; border-radius: 10px; color: #fff; background: var(--aqua); }
   .notification-preview-icon svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 2; }
   .notification-preview-app { display: flex; justify-content: space-between; gap: 8px; color: var(--panel-muted); font-size: 12px; font-weight: 600; }
   .notification-preview-app small { font: inherit; font-weight: 400; }
   .notification-preview-card strong { display: block; margin-top: 3px; font-size: 14px; }
   .notification-preview-card p { margin: 3px 0 0; color: var(--panel-muted); font-size: 13px; line-height: 1.35; }
-  .notification-preview-card img, .notification-preview-image-placeholder { display: grid; box-sizing: border-box; width: 100%; height: 96px; margin-top: 10px; place-items: center; border-radius: 8px; color: var(--panel-muted); background: color-mix(in srgb, var(--panel-muted) 10%, transparent); object-fit: cover; }
+  .notification-preview-action { grid-column: 1 / -1; min-height: 30px; margin-top: 1px; padding: 5px 10px; border: 0; border-radius: 7px; color: var(--panel-text); background: color-mix(in srgb, var(--panel-muted) 14%, var(--panel-card)); font: inherit; font-size: 12px; font-weight: 600; }
+  .notification-preview-card.is-ios .notification-preview-action { box-sizing: border-box; width: 100%; margin-top: 1px; border-top: 1px solid #d1d1d6; border-radius: 0; color: #007aff; background: transparent; text-align: center; }
+  .notification-preview-card.is-android .notification-preview-action { padding: 4px 0; color: var(--aqua); background: transparent; font-size: 11px; letter-spacing: .04em; text-align: left; text-transform: uppercase; }
+  .notification-preview-image, .notification-preview-image-placeholder { display: grid; grid-column: 1 / -1; box-sizing: border-box; width: 100%; height: 96px; margin-top: 10px; place-items: center; border-radius: 8px; color: var(--panel-muted); background: color-mix(in srgb, var(--panel-muted) 10%, transparent); }
+  .notification-preview-image[hidden], .notification-preview-image-placeholder[hidden] { display: none; }
+  .notification-preview-image { position: relative; overflow: hidden; }
+  .notification-preview-image img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: center center; opacity: 1; transition: opacity 120ms ease; }
+  .notification-preview-image.is-loading img { opacity: 0; }
+  .notification-preview-image-spinner { position: absolute; width: 24px; height: 24px; border: 3px solid color-mix(in srgb, var(--panel-muted) 25%, transparent); border-top-color: var(--aqua); border-radius: 50%; animation: notification-preview-spin 700ms linear infinite; }
+  .notification-preview-image:not(.is-loading) .notification-preview-image-spinner { display: none; }
+  @keyframes notification-preview-spin { to { transform: rotate(360deg); } }
   .notification-preview-image-placeholder svg { width: 30px; height: 30px; fill: none; stroke: currentColor; stroke-width: 1.8; }
   .automation-name-field { align-self: center; display: grid; width: min(100%, 420px); gap: 7px; font-size: 14px; font-weight: 500; text-align: start; }
   .automation-name-field input { box-sizing: border-box; width: 100%; min-height: 42px; }
@@ -835,6 +866,7 @@ export const mainStyles = `
     .credential-share-intro { flex-direction: column; gap: 0; }
     .credential-share-intro .settings-inline-action { align-self: flex-end; }
     .remote-instances-section .settings-section-description, .sip-section .settings-section-description { padding-right: 0; }
+    .notification-preview-controls { flex-wrap: wrap; }
   }
 
   .check {
@@ -1015,7 +1047,7 @@ export const mainStyles = `
   .share-detail-icon svg { width: 26px; height: 26px; }
   .share-detail > span:last-child { display: grid; min-width: 0; gap: 5px; }
   .share-detail small { color: var(--secondary-text-color, #66758a); font-size: 14px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
-  .share-detail strong { color: var(--primary-text-color, #111); font-size: 18px; }
+  .share-detail strong { color: var(--primary-text-color, #111); font-size: 12px; }
   .share-generation-details { display: grid; grid-template-columns: minmax(0, 1fr); width: min(640px, calc(100% - 96px)); margin: 16px auto; padding: 0; border: 0; border-radius: 0; background: transparent; }
   .share-generation-details .share-detail { display: grid; gap: 12px; }
   .share-generation-details .share-detail-heading { display: inline-flex; align-items: center; gap: 10px; }
@@ -1094,7 +1126,7 @@ export const mainStyles = `
   .share-status-badge { display: inline-flex; align-items: center; gap: 7px; padding: 7px 12px; border: 1px solid #93e8c5; border-radius: 999px; color: #087a54; background: #effcf5; font-size: 16px; font-weight: 700; }
   .share-status-badge i { width: 11px; height: 11px; border-radius: 50%; background: currentColor; box-shadow: 0 0 0 4px color-mix(in srgb, currentColor 18%, transparent); }
   .share-status-badge.waiting-to-pair { border-color: #f3ca67; color: #8a6100; background: #fff8e4; }
-  .share-status-badge.revoked { border-color: #f3aaaa; color: #b42318; background: #fff0ef; }
+  .share-status-badge.revoked, .share-status-badge.pairing-link-expired { border-color: #f3aaaa; color: #b42318; background: #fff0ef; }
   @media (max-width: 680px) {
     .share-access-dialog { width: calc(100vw - 24px); height: auto; max-height: calc(100vh - 24px); }
     .door-notification-dialog { height: calc(100vh - 24px); }

@@ -71,6 +71,13 @@ const companionNotificationServices = (services) => services.filter(
   (service) => service.startsWith("notify.mobile_app_")
 );
 
+const previewDeviceTypeForServices = (services) => {
+  const serviceNames = services.join(" ").toLocaleLowerCase();
+  if (/iphone|ipad|ios|apple/.test(serviceNames)) return "ios";
+  if (/android|pixel|galaxy|samsung/.test(serviceNames)) return "android";
+  return "ios";
+};
+
 const IOS_NOTIFICATION_SOUNDS = [
   "default",
   "none",
@@ -509,11 +516,6 @@ export const requestDoorNotificationAutomation = async (host, existing = null) =
   const canOfferRelayAction = () => selection.includeCalls &&
     companionNotificationServices(selection.services).length > 0 &&
     availableRelayEntities.some((relay) => selection.doorIds.includes(relay.deviceId));
-  const hasMobileNotificationOptions = () => companionNotificationServices(selection.services).length > 0;
-  const clearMobileNotificationOptions = () => {
-    selection.includeRelayAction = false;
-    selection.requireActionAuthentication = false;
-  };
   let step = 0;
   let progressFromStage = 0;
   while (step >= 0 && step < 6) {
@@ -715,13 +717,15 @@ export const requestDoorNotificationAutomation = async (host, existing = null) =
       });
     } else if (step === 4) {
       const mobileServices = companionNotificationServices(selection.services);
+      const previewDeviceType = previewDeviceTypeForServices(mobileServices);
       const previewDoor = doors.find((door) => selection.doorIds.includes(door.deviceId));
       const previewDoorName = previewDoor?.name || t(host, "Door");
       const previewCamera = (host._account?.()?.cameras || []).find(
         (camera) => selection.doorIds.includes(camera?.device_id) && camera?.preview_url
       );
+      const previewRelay = availableRelayEntities.find((relay) => relay.deviceId === previewDoor?.deviceId);
       const mobileOptions = mobileServices.length ? `<label class="door-notification-option"><input type="checkbox" name="include-image" ${selection.includeImage ? "checked" : ""}><span>Display the captured still as the notification image</span></label>` : "";
-      const notificationPreview = mobileServices.length ? `<section class="notification-preview" aria-label="${escapeHtml(t(host, "Notification preview"))}"><div class="notification-preview-heading"><span>${escapeHtml(t(host, "Notification preview"))}</span></div><article class="notification-preview-card"><span class="notification-preview-icon" aria-hidden="true">${icons.bell}</span><div><div class="notification-preview-app">Akuvox SmartPlus <small>${escapeHtml(t(host, "now"))}</small></div><strong data-notification-preview-title>${escapeHtml(t(host, "{name} door event", { name: previewDoorName }))}</strong><p data-notification-preview-message></p>${previewCamera?.preview_url ? `<img data-notification-preview-image src="${escapeHtml(previewCamera.preview_url)}" alt="" ${selection.includeImage ? "" : "hidden"}>` : `<span class="notification-preview-image-placeholder" data-notification-preview-image ${selection.includeImage ? "" : "hidden"}>${icons.cameraDoor}</span>`}</div></article></section>` : "";
+      const notificationPreview = `<section class="notification-preview" aria-label="${escapeHtml(t(host, "Notification preview"))}"><div class="notification-preview-heading"><span>${escapeHtml(t(host, "Notification preview"))}</span></div><div class="notification-preview-controls"><span class="notification-preview-select"><button class="notification-preview-select-button notification-preview-event" type="button" data-notification-preview-event data-value="opened" aria-haspopup="listbox" aria-expanded="false">Door opened <i aria-hidden="true">⌄</i></button><span class="notification-preview-select-menu" data-notification-preview-menu="event" role="listbox" hidden><button type="button" role="option" aria-selected="true" data-notification-preview-option="opened">Door opened</button><button type="button" role="option" aria-selected="false" data-notification-preview-option="call">Doorbell call</button></span></span><span class="notification-preview-select notification-preview-device-select"><button class="notification-preview-select-button notification-preview-device" type="button" data-notification-preview-device data-value="${previewDeviceType}" aria-haspopup="listbox" aria-expanded="false">${previewDeviceType === "ios" ? "iOS" : "Android"} <i aria-hidden="true">⌄</i></button><span class="notification-preview-select-menu" data-notification-preview-menu="device" role="listbox" hidden><button type="button" role="option" aria-selected="${previewDeviceType === "ios"}" data-notification-preview-option="ios">iOS</button><button type="button" role="option" aria-selected="${previewDeviceType === "android"}" data-notification-preview-option="android">Android</button></span></span><button class="notification-preview-send" type="button" data-notification-preview-send><span>Send</span><i class="notification-preview-send-spinner" aria-hidden="true"></i></button></div><article class="notification-preview-card is-${previewDeviceType}" data-notification-preview-card><span class="notification-preview-icon" aria-hidden="true">${icons.bell}</span><div><div class="notification-preview-app">Akuvox SmartPlus <small>${escapeHtml(t(host, "now"))}</small></div><strong data-notification-preview-title></strong><p data-notification-preview-message></p></div>${previewCamera?.preview_url ? `<div class="notification-preview-image is-loading" data-notification-preview-image-area ${selection.includeImage ? "" : "hidden"}><span class="notification-preview-image-spinner" aria-hidden="true"></span><img data-notification-preview-image src="${escapeHtml(previewCamera.preview_url)}" alt=""></div>` : `<span class="notification-preview-image-placeholder" data-notification-preview-image ${selection.includeImage ? "" : "hidden"}>${icons.cameraDoor}</span>`}<button class="notification-preview-action" type="button" data-notification-preview-action disabled hidden></button></article></section>`;
       result = await requestDoorNotificationStep(host, {
         title,
         stage: 5, progressFromStage, progressToStage: 5,
@@ -729,25 +733,129 @@ export const requestDoorNotificationAutomation = async (host, existing = null) =
         content: `<div class="notification-options">${canOfferRelayAction() ? `<label class="door-notification-option"><input type="checkbox" name="open-called-door" ${selection.includeRelayAction ? "checked" : ""}><span>Include actions to open the called door relay</span></label><label class="door-notification-option"><input type="checkbox" name="require-action-authentication" ${selection.requireActionAuthentication ? "checked" : ""}><span>Require the phone to be unlocked to open a relay</span></label>` : ""}${mobileOptions}${notificationPreview}</div>`,
         bind: (dialog) => {
           const includeImage = dialog.querySelector('[name="include-image"]');
-          const previewImage = dialog.querySelector('[data-notification-preview-image]');
+          const previewImage = dialog.querySelector('img[data-notification-preview-image]');
+          const previewImageArea = dialog.querySelector('[data-notification-preview-image-area]');
+          const previewEvent = dialog.querySelector('[data-notification-preview-event]');
+          const previewDevice = dialog.querySelector('[data-notification-preview-device]');
+          const previewCard = dialog.querySelector('[data-notification-preview-card]');
+          const previewTitle = dialog.querySelector('[data-notification-preview-title]');
           const previewMessage = dialog.querySelector('[data-notification-preview-message]');
+          const previewAction = dialog.querySelector('[data-notification-preview-action]');
+          const sendPreview = dialog.querySelector('[data-notification-preview-send]');
+          const includeRelayAction = dialog.querySelector('[name="open-called-door"]');
+          const setPreviewImageLoading = (loading) => previewImageArea?.classList.toggle("is-loading", loading);
+          if (previewImage) {
+            previewImage.addEventListener("load", () => setPreviewImageLoading(false));
+            previewImage.addEventListener("error", () => setPreviewImageLoading(false));
+            if (previewImage.complete) setPreviewImageLoading(false);
+          }
           const updatePreview = () => {
-            if (previewImage) previewImage.hidden = !includeImage?.checked;
+            const showImage = Boolean(includeImage?.checked);
+            if (previewImageArea) previewImageArea.hidden = !showImage;
+            else if (previewImage) previewImage.hidden = !showImage;
+            if (showImage && previewImage && !previewImage.complete) setPreviewImageLoading(true);
+            const isDoorbellCall = previewEvent?.dataset.value === "call";
+            previewCard?.classList.toggle("is-ios", previewDevice?.dataset.value === "ios");
+            previewCard?.classList.toggle("is-android", previewDevice?.dataset.value === "android");
+            if (previewTitle) {
+              previewTitle.textContent = `${previewDoorName} ${t(host, isDoorbellCall ? "doorbell" : "opened")}`;
+            }
             if (previewMessage) {
-              previewMessage.textContent = selection.includeCalls && !selection.includeOpened
-                ? t(host, "Someone is calling from {name}.", { name: previewDoorName })
-                : selection.includeOpened && !selection.includeCalls
-                  ? t(host, "{name} was opened.", { name: previewDoorName })
-                  : t(host, "{name} was called or opened.", { name: previewDoorName });
+              previewMessage.textContent = isDoorbellCall
+                ? t(host, "Someone is calling from the {door} door.", { door: previewDoorName })
+                : t(host, "The {door} door was opened by {initiator}.", { door: previewDoorName, initiator: "Unknown" });
+            }
+            if (previewAction) {
+              const showRelayAction = isDoorbellCall && includeRelayAction?.checked && previewRelay;
+              previewAction.hidden = !showRelayAction;
+              if (showRelayAction) previewAction.textContent = t(host, "Open {name}", { name: previewRelay.name });
             }
           };
           includeImage?.addEventListener("change", updatePreview);
+          includeRelayAction?.addEventListener("change", updatePreview);
+          const previewPickers = [...dialog.querySelectorAll(".notification-preview-select")];
+          const closePreviewPickers = () => previewPickers.forEach((picker) => {
+            picker.querySelector(".notification-preview-select-button")?.setAttribute("aria-expanded", "false");
+            const menu = picker.querySelector(".notification-preview-select-menu");
+            if (menu) menu.hidden = true;
+          });
+          previewPickers.forEach((picker) => {
+            const button = picker.querySelector(".notification-preview-select-button");
+            const menu = picker.querySelector(".notification-preview-select-menu");
+            button?.addEventListener("click", () => {
+              const opening = menu?.hidden;
+              closePreviewPickers();
+              if (menu) menu.hidden = !opening;
+              button.setAttribute("aria-expanded", String(opening));
+            });
+            picker.querySelectorAll("[data-notification-preview-option]").forEach((option) => option.addEventListener("click", () => {
+              button.dataset.value = option.dataset.notificationPreviewOption;
+              button.innerHTML = `${escapeHtml(option.textContent)} <i aria-hidden="true">⌄</i>`;
+              picker.querySelectorAll("[data-notification-preview-option]").forEach((item) => item.setAttribute("aria-selected", String(item === option)));
+              closePreviewPickers();
+              updatePreview();
+            }));
+          });
+          dialog.addEventListener("click", (event) => {
+            if (!event.target.closest(".notification-preview-select")) closePreviewPickers();
+          });
+          dialog.addEventListener("keydown", (event) => {
+            if (event.key === "Escape") closePreviewPickers();
+          });
+          sendPreview?.addEventListener("click", async () => {
+            if (sendPreview.disabled) return;
+            const isDoorbellCall = previewEvent?.dataset.value === "call";
+            const titleText = `${previewDoorName} ${t(host, isDoorbellCall ? "doorbell" : "opened")}`;
+            const messageText = isDoorbellCall
+              ? t(host, "Someone is calling from the {door} door.", { door: previewDoorName })
+              : t(host, "The {door} door was opened by {initiator}.", { door: previewDoorName, initiator: "Unknown" });
+            const notificationData = { title: titleText, message: messageText };
+            if (includeImage?.checked && previewCamera) {
+              notificationData.data = {
+                ...(previewCamera.entity_id ? { entity_id: previewCamera.entity_id } : {}),
+                ...(previewCamera.preview_url ? { image: previewCamera.preview_url } : {}),
+              };
+            }
+            if (isDoorbellCall && includeRelayAction?.checked && previewRelay) {
+              notificationData.data = {
+                ...(notificationData.data || {}),
+                actions: [{
+                  action: `AKUVOX_TEST_OPEN_RELAY_${previewRelay.entityId}`,
+                  title: t(host, "Open {name}", { name: previewRelay.name }),
+                }],
+              };
+            }
+            sendPreview.disabled = true;
+            sendPreview.classList.add("is-sending");
+            try {
+              await Promise.all(selection.services.map((service) => host._hass.callService(
+                "notify", service.replace(/^notify\./, ""), notificationData
+              )));
+              sendPreview.classList.remove("is-sending");
+              sendPreview.classList.add("is-sent");
+              sendPreview.querySelector("span").textContent = "✓";
+              window.setTimeout(() => {
+                if (!sendPreview.isConnected) return;
+                sendPreview.classList.remove("is-sent");
+                sendPreview.querySelector("span").textContent = "Send";
+                sendPreview.disabled = false;
+              }, 1000);
+            } catch (error) {
+              sendPreview.classList.remove("is-sending");
+              sendPreview.disabled = false;
+              const formError = dialog.querySelector("[data-door-notification-error]");
+              if (formError) {
+                formError.textContent = error?.message || t(host, "Could not send the test notification.");
+                formError.hidden = false;
+              }
+            }
+          });
           updatePreview();
         },
         submit: (form) => ({
           includeRelayAction: canOfferRelayAction() && form.querySelector('[name="open-called-door"]').checked,
           requireActionAuthentication: canOfferRelayAction() && form.querySelector('[name="require-action-authentication"]').checked,
-          includeImage: form.querySelector('[name="include-image"]').checked,
+          includeImage: form.querySelector('[name="include-image"]')?.checked ?? selection.includeImage,
         }),
       });
     } else {
@@ -780,17 +888,11 @@ export const requestDoorNotificationAutomation = async (host, existing = null) =
     progressFromStage = step + 1;
     if (result.direction === "back") {
       step -= 1;
-      if (step === 4 && !hasMobileNotificationOptions()) step -= 1;
       continue;
     }
     Object.assign(selection, result.value);
     if (step === 3 && !canOfferRelayAction()) selection.includeRelayAction = false;
-    if (step === 3 && !hasMobileNotificationOptions()) {
-      clearMobileNotificationOptions();
-      step += 2;
-    } else {
-      step += 1;
-    }
+    step += 1;
   }
   return {
     ...selection,
@@ -975,7 +1077,9 @@ const requestShareAccess = (host, viewedShare = null) => new Promise((resolve) =
     const pairingExpiry = Date.parse(viewedShare?.expires_at || "");
     return Number.isFinite(pairingExpiry) ? new Date(pairingExpiry - 10 * 60 * 1000).toISOString() : null;
   })();
-  const status = viewedShare?.revoked ? "Revoked" : viewedShare?.activated ? "Connected" : "Waiting to pair";
+  const pairingExpiresAt = Date.parse(viewedShare?.expires_at || "");
+  const pairingLinkExpired = !viewedShare?.activated && (!Number.isFinite(pairingExpiresAt) || pairingExpiresAt <= Date.now());
+  const status = pairingLinkExpired ? "Pairing link expired" : viewedShare?.revoked ? "Revoked" : viewedShare?.activated ? "Connected" : "Waiting to pair";
   const stageDescriptions = [
     "Enter a name for the remote instance and the validity duration.",
     "Choose the devices and temporary key permissions that should be made available to the remote instance.",
@@ -986,7 +1090,7 @@ const requestShareAccess = (host, viewedShare = null) => new Promise((resolve) =
     : `<section class="share-details-card share-generation-details"><label class="share-detail share-name-field"><span class="share-detail-heading"><span class="share-detail-icon">${icons.idCard}</span><small>Remote instance name</small></span><input data-receiver-name maxlength="100" required placeholder="e.g. Holiday home" autofocus></label><div class="share-detail share-expiry-field"><span class="share-detail-heading"><span class="share-detail-icon">${icons.calendar}</span><small>Validity</small></span><span class="share-expiry-options"><label class="check"><input data-never-expire name="access-duration" type="radio" checked> Never expires</label><label class="check" data-access-expiry-row><span><input data-expiring name="access-duration" type="radio"> Set expiry date &amp; time</span><input data-access-expiry type="datetime-local" min="${earliestExpiry}" disabled hidden></label></span></div></section>`;
   const stageProgress = readOnly ? "" : wizardProgress({ label: "Pairing link setup progress", totalStages: 3, stage: 0, attribute: "data-share-stage-progress" });
   const heading = readOnly
-    ? `<h2>${escapeHtml(viewedShare.receiver_name)} <span class="share-status-badge ${status.toLocaleLowerCase().replaceAll(" ", "-")}"><i></i>${escapeHtml(status)}</span></h2><p>Review the access permissions granted to this Home Assistant instance.</p>`
+    ? `<h2>${escapeHtml(viewedShare.receiver_name)} <span class="share-status-badge ${status.toLocaleLowerCase().replaceAll(" ", "-")}"><i></i>${escapeHtml(t(host, status))}</span></h2><p>Review the access permissions granted to this Home Assistant instance.</p>`
     : `<h2>Create Pairing Link</h2>${stageProgress}<p data-share-stage-description>${stageDescriptions[0]}</p>`;
   const devicesTable = `<section class="share-permissions" data-share-stage="2"${readOnly ? "" : " hidden"}><div class="table-wrap"><table class="share-access-table share-device-access-table"><thead><tr><th></th><th colspan="2"><span class="share-table-section-heading">${icons.cameraDoor}<span>Devices</span></span></th><th colspan="3"><span class="share-table-section-heading">${icons.key}<span>Temporary keys</span></span></th></tr><tr><th>Name</th><th><span class="share-permission-label">Camera</span></th><th><span class="share-permission-label">${hasMultipleRelays ? "Relays" : "Relay"}</span></th><th><span class="share-permission-label">View</span></th><th><span class="share-permission-label">Create</span></th><th><span class="share-permission-label">Edit</span></th></tr></thead><tbody>${readOnly ? "" : selectAllRow}${deviceRows}</tbody></table></div></section>`;
   const dataTable = `<section class="share-permissions" data-share-stage="3"${readOnly ? "" : " hidden"}><div class="table-wrap share-data-table"><table class="share-access-table"><thead><tr><th></th><th colspan="2"><span class="share-table-section-heading">${icons.database}<span>Data</span></span></th></tr><tr><th>Family Members</th><th><span class="share-permission-label">Latest Activity</span></th><th><span class="share-permission-label">Call History</span></th></tr></thead><tbody>${readOnly ? "" : dataSelectAllRow}${dataRows || '<tr><td colspan="3">No family members available.</td></tr>'}</tbody></table></div></section>`;

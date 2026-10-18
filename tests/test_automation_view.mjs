@@ -130,7 +130,7 @@ test("builds a unique Companion App action for every selected door relay", () =>
   ]))?.includeRelayAction, true);
 });
 
-test("preserves notification options in an editable automation", () => {
+test("preserves editable notification options", () => {
   const config = buildDoorNotificationAutomation({
     name: "Priority front door call",
     doors: [{ deviceId: "door-1", name: "Front door" }],
@@ -138,17 +138,12 @@ test("preserves notification options in an editable automation", () => {
     includeOpened: false,
     includeCalls: true,
     includeImage: false,
-    iosSound: "alarm.caf",
-    androidChannel: "doorbell",
-    priorityAlert: true,
     includeRelayAction: true,
     requireActionAuthentication: true,
     relayEntities: [{ deviceId: "door-1", entityId: "button.front_door", name: "Front door" }],
   });
 
   const notification = config.actions[1].choose[0].sequence[0].default[0].data.data;
-  assert.deepEqual(notification.push.sound, { name: "alarm.caf", critical: 1, volume: 1 });
-  assert.equal(notification.channel, "alarm_stream");
   assert.equal(notification.image, undefined);
   assert.equal(notification.actions[0].authenticationRequired, true);
   assert.deepEqual(asDoorNotification(config, doors), {
@@ -162,8 +157,6 @@ test("preserves notification options in an editable automation", () => {
     includeRelayAction: true,
     requireActionAuthentication: true,
     includeImage: false,
-    iosSound: "alarm.caf",
-    priorityAlert: true,
     initialState: undefined,
   });
 });
