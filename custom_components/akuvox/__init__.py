@@ -79,12 +79,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         entry.async_on_unload(remote_sync.async_stop)
     refresh_task = hass.async_create_task(_async_refresh_cloud_data(hass, entry))
     entry.async_on_unload(refresh_task.cancel)
-    entry.async_on_unload(
-        async_at_started(
-            hass,
-            lambda _hass: _async_start_runtime_after_start(hass, entry),
+    # Reauthentication reloads an entry while Home Assistant is already
+    # running. Deferring platform forwarding through ``async_at_started`` in
+    # that case leaves the old camera, relay, and event entities unloaded
+    # until the callback is scheduled, which presents them as unavailable.
+    # Start the runtime directly for a live reload; only defer it during HA
+    # startup, when platforms must wait for the core to be ready.
+    if getattr(hass, "is_running", False):
+        await _async_start_runtime(hass, entry)
+    else:
+        entry.async_on_unload(
+            async_at_started(
+                hass,
+                lambda _hass: _async_start_runtime_after_start(hass, entry),
+            )
         )
-    )
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
     entry.async_on_unload(coordinator.client.async_stop_proactive_token_refresh)
     return True

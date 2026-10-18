@@ -11,6 +11,7 @@ from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
 from custom_components.akuvox import (
+    PLATFORMS,
     async_reload_entry,
     async_setup,
     async_setup_entry,
@@ -142,6 +143,7 @@ class _Hass:
 
     def __init__(self) -> None:
         self.data = {}
+        self.is_running = False
         self.config_entries = _ConfigEntries()
         self.http = MagicMock()
         self.http.async_register_static_paths = AsyncMock()
@@ -226,6 +228,30 @@ class TestIntegrationLifecycleE2E(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(await async_unload_entry(hass, entry))
         self.assertTrue(coordinator.client.stopped)
         self.assertNotIn(entry.entry_id, hass.data[DOMAIN])
+
+    async def test_live_setup_restored_platforms_without_waiting_for_startup_callback(self) -> None:
+        """A reauthenticated entry restores its entities while HA is already running."""
+        hass = _Hass()
+        hass.is_running = True
+        entry = _Entry()
+        with (
+            patch("custom_components.akuvox.async_load_and_migrate_credentials", new=AsyncMock(return_value={"auth_token": "auth", "token": "token"})),
+            patch("custom_components.akuvox.AkuvoxApiClient", _Client),
+            patch("custom_components.akuvox.AkuvoxDataUpdateCoordinator", _Coordinator),
+            patch("custom_components.akuvox.async_get_clientsession", return_value=object()),
+            patch("custom_components.akuvox.async_register_websocket_api"),
+            patch("custom_components.akuvox.async_refresh_panel", new=AsyncMock()),
+            patch("custom_components.akuvox.async_clear_authentication_failure"),
+            patch("custom_components.akuvox.async_at_started", return_value=MagicMock()) as at_started,
+        ):
+            self.assertTrue(await async_setup_entry(hass, entry))
+
+        coordinator = hass.data[DOMAIN][entry.entry_id]
+        self.assertTrue(coordinator.client.started)
+        hass.config_entries.forwarded.assert_awaited_once_with(entry, PLATFORMS)
+        at_started.assert_not_called()
+        with patch("custom_components.akuvox.async_refresh_panel", new=AsyncMock()):
+            self.assertTrue(await async_unload_entry(hass, entry))
 
     async def test_renaming_hub_did_not_reload_or_reauthenticate(self) -> None:
         """A presentation-only config-entry update leaves the session running."""
