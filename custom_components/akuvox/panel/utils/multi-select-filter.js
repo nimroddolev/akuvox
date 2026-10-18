@@ -75,6 +75,7 @@ export const bindMultiSelectFilters = (host, scope, filters, onChange) => {
           .filter((option) => !option.hasAttribute("data-filter-all") && option.checked)
           .map((option) => option.value);
       host._openFilterMenu = menuId;
+      host._persistFilterState?.();
       onChange();
     });
   });

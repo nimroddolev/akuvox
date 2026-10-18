@@ -8,9 +8,9 @@ import { PANEL_TAG, TAB_HASHES, TAB_HASH_BY_ID, TABS } from "./utils/constants.j
 import { closeOnBackdrop, escapeHtml } from "./utils/dom.js";
 import { copyText } from "./utils/clipboard.js";
 import { settingsRenderSignature } from "./utils/settings-signature.js";
-import { getPanelStyles } from "./styles/index.js?v=20261014-pairing-dialog-dynamic-height";
+import { getPanelStyles } from "./styles/index.js?v=20261017-notification-preview-image-toggle";
 import { showNotice, confirmModal, callWsWithBlocker } from "./components/dialogs.js?v=20261013-danger-confirmation";
-import { installCameraRelayActions } from "./components/camera-actions.js?v=20261004-snapshot-action-icon";
+import { installCameraRelayActions } from "./components/camera-actions.js?v=20261015-flexible-camera-action-widths";
 import { closeKeyActionsMenu } from "./components/key-menu.js";
 import { isRtlLanguage, localizeElement } from "./utils/i18n.js?v=20261004-relay-confirmation";
 
@@ -19,20 +19,31 @@ import {
   renderActivityView,
   bindActivityEvents,
   visibleActivityEvents,
-} from "./views/activity-view.js?v=20261006-activity-filter-alignment";
-import { renderCallsView, bindCallsEvents } from "./views/calls-view.js?v=20261006-conditional-image-column";
+} from "./views/activity-view.js?v=20261014-persist-filters";
+import { renderCallsView, bindCallsEvents } from "./views/calls-view.js?v=20261014-persist-filters";
 import {
   renderKeysView,
   bindKeysEvents,
   deleteSelectedKeys,
-} from "./views/keys-view.js?v=20261004-key-table-titles";
-import { renderAutomationsView, bindAutomationsEvents } from "./views/automations-view.js?v=20261006-create-action-alignment";
-import { renderSettingsView, bindSettingsEvents, updateActivityStorageProgress, updateRemoteShareConnectionStatus } from "./views/settings-view.js?v=20261013-mobile-options-conditional";
+} from "./views/keys-view.js?v=20261014-persist-filters";
+import { renderAutomationsView, bindAutomationsEvents } from "./views/automations-view.js?v=20261016-notification-preview-expanded";
+import { renderSettingsView, bindSettingsEvents, updateActivityStorageProgress, updateRemoteShareConnectionStatus } from "./views/settings-view.js?v=20261016-notification-preview-expanded";
 import { renderHelpView } from "./views/help-view.js";
 
 const ROW_VIEW_MODE_STORAGE_KEY = "akuvox-panel-row-view-mode";
 const TILE_ORDER_STORAGE_PREFIX = "akuvox-panel-tile-order";
 const ACTIVE_ACCOUNT_STORAGE_KEY = "akuvox-panel-active-account";
+const FILTER_STATE_STORAGE_PREFIX = "akuvox-panel-filter-state-v1";
+
+const emptyFilterState = () => ({
+  activity: { Location: [], CaptureType: [], Initiator: [] },
+  calls: { callerName: [], calleeName: [], status: [] },
+  keys: { description: "", status: [], door: [] },
+});
+
+const filterList = (value) => Array.isArray(value)
+  ? value.filter((item) => typeof item === "string" && item)
+  : [];
 
 const isValidRemoteShareLink = (value) => {
   try {
@@ -69,6 +80,7 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
     this._settingsSaving = false;
     this._doorNotificationAutomations = null;
     this._doorNotificationAutomationsLoading = false;
+    this._automationDiscoveryLoading = false;
     this._doorNotificationAutomationsError = "";
     this._blockingRequest = false;
     this._modalCount = 0;
@@ -102,6 +114,7 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
     this._callSort = { key: "startTime", direction: "desc" };
 
     this._keyFilters = { description: "", status: [], door: [] };
+    this._filterStateAccountId = null;
     this._keySort = { key: "description", direction: "asc" };
     this._keyTileSortMode = null;
     this._mobileFiltersOpen = { activity: false, calls: false, keys: false };
@@ -343,6 +356,52 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
     void this._load({ forceRender });
   }
 
+  _restoreFilterState() {
+    if (!this._activeAccount || this._filterStateAccountId === this._activeAccount) return;
+
+    const defaults = emptyFilterState();
+    let saved = defaults;
+    try {
+      const stored = localStorage.getItem(`${FILTER_STATE_STORAGE_PREFIX}-${this._activeAccount}`);
+      if (stored) saved = { ...defaults, ...JSON.parse(stored) };
+    } catch (_) {
+      // Filters remain available for the current panel instance if storage is unavailable.
+    }
+
+    this._activityFilters = {
+      Location: filterList(saved.activity?.Location),
+      CaptureType: filterList(saved.activity?.CaptureType),
+      Initiator: filterList(saved.activity?.Initiator),
+    };
+    this._callFilters = {
+      callerName: filterList(saved.calls?.callerName),
+      calleeName: filterList(saved.calls?.calleeName),
+      status: filterList(saved.calls?.status),
+    };
+    this._keyFilters = {
+      description: typeof saved.keys?.description === "string" ? saved.keys.description : "",
+      status: filterList(saved.keys?.status),
+      door: filterList(saved.keys?.door),
+    };
+    this._filterStateAccountId = this._activeAccount;
+  }
+
+  _persistFilterState() {
+    if (!this._activeAccount) return;
+    try {
+      localStorage.setItem(
+        `${FILTER_STATE_STORAGE_PREFIX}-${this._activeAccount}`,
+        JSON.stringify({
+          activity: this._activityFilters,
+          calls: this._callFilters,
+          keys: this._keyFilters,
+        })
+      );
+    } catch (_) {
+      // Persistence is best-effort in restricted browser contexts.
+    }
+  }
+
   _shouldDeferRender() {
     if (this._hasFocusedNativeSelect()) {
       this._renderDeferredForNativeSelect = true;
@@ -400,7 +459,10 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
           this._settingsDirty = false;
         }
         const activeAccountChanged = previousActiveAccount !== this._activeAccount;
-        if (activeAccountChanged) this._keyTileSortMode = null;
+        if (activeAccountChanged) {
+          this._keyTileSortMode = null;
+          this._restoreFilterState();
+        }
         let settingsChanged = false;
         const shouldRefreshSettings =
           this._activeAccount &&
@@ -1051,12 +1113,14 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
         // Persisting the preference is best-effort in restricted browser contexts.
       }
       this._keyTileSortMode = null;
+      this._restoreFilterState();
       this._settings = null;
       this._settingsEntryId = "";
       this._settingsSignature = null;
       this._settingsDirty = false;
       this._doorNotificationAutomations = null;
       this._doorNotificationAutomationsError = "";
+      this._automationDiscoveryLoading = false;
       this._selectingKeys = false;
       this._selectedKeyIds.clear();
       await this._loadSettings();

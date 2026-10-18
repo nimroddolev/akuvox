@@ -7,7 +7,7 @@ import {
   bindMultiSelectFilters,
   matchesSelectedFilter,
   renderMultiSelectFilter,
-} from "../utils/multi-select-filter.js?v=20260925-option-labels";
+} from "../utils/multi-select-filter.js?v=20261014-persist-filters";
 import {
   formatRelativeTimestamp,
   formatStorageAmount,
@@ -276,6 +276,7 @@ export const bindActivityEvents = (host) => {
       host._activityFilters = { Location: [], CaptureType: [], Initiator: [] };
       host._activityVisibleCount = ACTIVITY_INITIAL_PAGE_SIZE;
       host._openFilterMenu = "";
+      host._persistFilterState?.();
       host._render();
     });
 

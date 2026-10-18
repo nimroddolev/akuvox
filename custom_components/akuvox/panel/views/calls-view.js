@@ -7,7 +7,7 @@ import {
   bindMultiSelectFilters,
   matchesSelectedFilter,
   renderMultiSelectFilter,
-} from "../utils/multi-select-filter.js?v=20260925-option-labels";
+} from "../utils/multi-select-filter.js?v=20261014-persist-filters";
 import { formatRelativeTimestamp, tableTimestampFormatter } from "../utils/formatters.js?v=20261014-shared-display-formatters";
 import { showCallImageDialog } from "../components/image-dialog.js";
 import { t } from "../utils/i18n.js?v=20261003-hebrew-rtl-6";
@@ -183,6 +183,7 @@ export const bindCallsEvents = (host) => {
     ?.addEventListener("click", () => {
       host._callFilters = { callerName: [], calleeName: [], status: [] };
       host._openFilterMenu = "";
+      host._persistFilterState?.();
       host._render();
     });
 
