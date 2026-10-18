@@ -68,7 +68,7 @@ export const tableStyles = `
     justify-content: center;
     min-height: 28px;
     padding: 4px 7px;
-    color: #424a52;
+    color: var(--panel-text);
     background: transparent;
     box-shadow: none;
     border-radius: 8px;
@@ -89,13 +89,13 @@ export const tableStyles = `
   .view-mode-toggle .action.active,
   .view-mode-toggle .action[aria-pressed="true"] {
     color: var(--navy);
-    background: #fff;
+    background: var(--panel-control-active);
     box-shadow: var(--panel-shadow-sm, 0 3px 9px rgb(0 0 0 / 11%));
   }
 
   .mobile-filter-toggle[aria-expanded="true"] {
-    color: #006b9f;
-    background: #fff;
+    color: var(--navy);
+    background: var(--panel-control-active);
     box-shadow: 0 2px 7px rgb(0 0 0 / 12%);
   }
 
@@ -537,7 +537,7 @@ export const tableStyles = `
   .key-tile-title-group h3 {
     margin: 0;
     overflow: hidden;
-    color: #1b1c1c;
+    color: var(--panel-text);
     font-size: 16px;
     font-weight: 600;
     line-height: 22px;
@@ -548,7 +548,7 @@ export const tableStyles = `
   .key-tile .tile-grab {
     width: 18px;
     height: 22px;
-    color: #6e7882;
+    color: var(--panel-muted);
     font-size: 18px;
   }
 
@@ -559,15 +559,15 @@ export const tableStyles = `
     height: 28px;
     border: 0;
     border-radius: 50%;
-    color: #59656e;
+    color: var(--panel-muted);
     background: transparent;
     box-shadow: none;
     font-size: 20px;
   }
 
-  .key-tile .key-menu-button.danger { color: #ba1a1a; }
+  .key-tile .key-menu-button.danger { color: var(--panel-danger); }
 
-  .key-tile .key-menu-button:hover { background: #efeded; }
+  .key-tile .key-menu-button:hover { background: var(--panel-control-hover); }
 
   .key-tile-code {
     display: flex;
@@ -576,7 +576,7 @@ export const tableStyles = `
     min-height: 58px;
     padding: 8px 10px;
     border-radius: 8px;
-    background: #f5f3f3;
+    background: var(--panel-code-bg);
   }
 
   .key-tile-code > div {
@@ -588,7 +588,7 @@ export const tableStyles = `
 
   .key-tile-code span {
     display: block;
-    color: #59656e;
+    color: var(--panel-muted);
     font-size: 11px;
     font-weight: 600;
     letter-spacing: .06em;
@@ -600,7 +600,7 @@ export const tableStyles = `
     align-items: center;
     justify-content: center;
     min-height: 26px;
-    color: #006493;
+    color: var(--panel-code-text);
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: 20.8px;
     font-weight: 700;
@@ -612,15 +612,15 @@ export const tableStyles = `
     height: 34px;
     margin-left: 8px;
     border-radius: 8px;
-    color: #59656e;
-    background: #efeded;
+    color: var(--panel-muted);
+    background: var(--panel-control-bg);
   }
 
-  .key-tile-code .copy-code { border: 1px solid #c7d1dc; }
+  .key-tile-code .copy-code { border: 1px solid var(--panel-outline); }
 
   .key-tile-code .copy-code .qr-code-icon { stroke-width: 1.35; }
 
-  .key-tile-code .copy-code:hover { color: #fff; background: #006493; }
+  .key-tile-code .copy-code:hover { color: #fff; background: var(--panel-code-text); }
 
   .key-tile-code .copied-code {
     display: inline-flex;
@@ -628,7 +628,7 @@ export const tableStyles = `
     justify-content: center;
     gap: 6px;
     line-height: 1;
-    color: #18733d;
+    color: var(--panel-success);
     font-family: inherit;
     font-size: 13px;
     letter-spacing: 0;
@@ -651,8 +651,8 @@ export const tableStyles = `
     padding: 3px 7px;
     border: 0;
     border-radius: 999px;
-    color: #006493;
-    background: color-mix(in srgb, #006493 10%, transparent);
+    color: var(--panel-code-text);
+    background: color-mix(in srgb, var(--panel-code-text) 10%, transparent);
     font-size: 11px;
     font-weight: 650;
     letter-spacing: 0;
@@ -681,7 +681,7 @@ export const tableStyles = `
     align-items: center;
     gap: 4px;
     margin: 0;
-    color: #6e7882;
+    color: var(--panel-muted);
     font-size: 12px;
     font-weight: 400;
   }
@@ -696,7 +696,7 @@ export const tableStyles = `
 
   .key-tile-validity dd {
     margin: 0;
-    color: #1b1c1c;
+    color: var(--panel-text);
     font-size: 12px;
     font-weight: 500;
     white-space: nowrap;
@@ -704,14 +704,14 @@ export const tableStyles = `
 
   .key-tile-usage {
     padding-top: 8px;
-    border-top: 1px solid #efeded;
+    border-top: 1px solid var(--panel-outline);
   }
 
   .key-tile-usage > div {
     display: flex;
     justify-content: space-between;
     gap: 8px;
-    color: #59656e;
+    color: var(--panel-muted);
     font-size: 11px;
     font-weight: 500;
   }
@@ -726,7 +726,7 @@ export const tableStyles = `
     margin-top: 5px;
     overflow: hidden;
     border-radius: 999px;
-    background: #efeded;
+    background: var(--panel-control-bg);
   }
 
   .key-tile-usage b {

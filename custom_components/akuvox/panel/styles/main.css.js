@@ -15,6 +15,13 @@ export const mainStyles = `
     --panel-notice-bg: #ecf8ff;
     --panel-notice-text: #075985;
     --panel-notice-outline: #bae6fd;
+    --panel-control-bg: #f8fafc;
+    --panel-control-hover: #eaf3fa;
+    --panel-control-active: #ffffff;
+    --panel-code-bg: #f5f7fa;
+    --panel-code-text: #0369a1;
+    --panel-success: #15803d;
+    --panel-danger: #b91c1c;
     --panel-shadow-sm: 0 1px 2px rgb(15 23 42 / 4%), 0 2px 5px rgb(15 23 42 / 3%);
     --panel-shadow-md: 0 12px 28px rgb(15 23 42 / 8%), 0 3px 8px rgb(15 23 42 / 5%);
     --panel-radius: 16px;
@@ -42,6 +49,13 @@ export const mainStyles = `
     --panel-notice-bg: #102c3c;
     --panel-notice-text: #bae6fd;
     --panel-notice-outline: #334155;
+    --panel-control-bg: #252b34;
+    --panel-control-hover: #303a46;
+    --panel-control-active: #1c2026;
+    --panel-code-bg: #151c25;
+    --panel-code-text: #38bdf8;
+    --panel-success: #86efac;
+    --panel-danger: #fecaca;
     --primary-text-color: #e5e7eb;
     --secondary-text-color: #9ca3af;
     --disabled-text-color: #6b7280;
@@ -248,6 +262,15 @@ export const mainStyles = `
   }
   .action:hover:not(:disabled) { filter: brightness(1.04); box-shadow: 0 6px 14px rgb(2 132 199 / 24%); transform: translateY(-1px); }
   .action:active:not(:disabled) { transform: translateY(0); box-shadow: 0 1px 2px rgb(2 132 199 / 20%); }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      scroll-behavior: auto !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
 
   .settings-heading {
     align-items: flex-start;

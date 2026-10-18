@@ -1171,13 +1171,13 @@ export const viewStyles = `
   :host([dark]) .view-mode-toggle {
     border-color: var(--panel-outline);
     color: var(--panel-text);
-    background: #252c35;
+    background: var(--panel-control-bg);
   }
 
   :host([dark]) .settings-discard:hover:not(:disabled),
   :host([dark]) .camera-copy-rtsp:hover,
   :host([dark]) .key-select-action:hover {
-    background: #303a46;
+    background: var(--panel-control-hover);
   }
 
   :host([dark]) .sip-export,
@@ -1283,20 +1283,20 @@ export const viewStyles = `
   :host([dark]) .view-mode-toggle .action.active,
   :host([dark]) .view-mode-toggle .action[aria-pressed="true"] {
     color: #38bdf8;
-    background: #1c2026;
+    background: var(--panel-control-active);
     box-shadow: 0 2px 7px rgb(0 0 0 / 30%);
   }
 
   :host([dark]) .mobile-filter-toggle[aria-expanded="true"] {
     color: #38bdf8;
-    background: #1c2026;
+    background: var(--panel-control-active);
     box-shadow: 0 2px 7px rgb(0 0 0 / 30%);
   }
 
   :host([dark]) .key-select-action.is-selecting,
   :host([dark]) .key-select-action[aria-pressed="true"] {
     color: #38bdf8;
-    background: #1c2026;
+    background: var(--panel-control-active);
     box-shadow: 0 2px 7px rgb(0 0 0 / 30%);
   }
 
@@ -1340,11 +1340,11 @@ export const viewStyles = `
 
   :host([dark]) .key-tile-code .copy-code:hover {
     color: #e5e7eb;
-    background: #303a46;
+    background: var(--panel-control-hover);
   }
 
-  :host([dark]) .key-tile-code { background: #151c25; }
-  :host([dark]) .key-tile-code strong { color: #078bc7; }
+  :host([dark]) .key-tile-code { background: var(--panel-code-bg); }
+  :host([dark]) .key-tile-code strong { color: var(--panel-code-text); }
   :host([dark]) .key-tile .key-menu-button.danger { color: #aeb8c7; }
   :host([dark]) .key-tile .key-menu-button.danger:hover { color: #fecaca; background: #4a2028; }
 
