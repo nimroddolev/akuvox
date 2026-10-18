@@ -68,7 +68,7 @@ from .sharing import (
 
 _PANEL_MODULE = "akuvox-panel.js"
 _PANEL_ICONSET = "akuvox-iconset.js"
-_PANEL_ASSET_VERSION = "20261017-notification-preview-image-toggle-v179"
+_PANEL_ASSET_VERSION = "20261018-automation-mobile-layout-v180"
 DATA_CAMERA_PREVIEW_LOCK = f"{DOMAIN}_panel_camera_preview_lock"
 
 

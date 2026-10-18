@@ -360,9 +360,10 @@ export const renderAutomationsView = (host) => {
     <div class="automations-heading">
       <div class="automations-heading-copy">
         <div class="automations-heading-primary">
-          <div><h2>${t(host, "Automations")}</h2><span>${t(host, "Create and manage notification automations for doors in this Akuvox account.")}</span></div>
+          <div><h2>${t(host, "Automations")}</h2></div>
           <button class="action" type="button" data-create-door-notification>${icons.plus}<span>Create automation</span></button>
         </div>
+        <span class="automations-heading-description">${t(host, "Create and manage notification automations for doors in this Akuvox account.")}</span>
         <p>${escapeHtml(t(host, "{active} active · {disabled} disabled · {total} total", { active: activeCount, disabled: disabledCount, total: automations.length }))}</p>
       </div>
     </div>

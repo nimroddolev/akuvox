@@ -658,7 +658,7 @@ export const viewStyles = `
   .automations-heading-copy { width: 100%; }
   .automations-heading-primary { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
   .automations-heading-primary > div { min-width: 0; }
-  .automations-heading-primary > div > span { display: block; margin-top: 5px; color: var(--panel-muted); font-size: 14px; }
+  .automations-heading-description { display: block; margin-top: 5px; color: var(--panel-muted); font-size: 14px; }
   .automations-heading-copy > p { margin: 6px 0 0; color: var(--primary-text-color); font-size: 13px; font-weight: 700; }
   .automations-heading .action {
     display: inline-flex;
@@ -726,7 +726,8 @@ export const viewStyles = `
     .automation-row { grid-template-columns: auto minmax(0, 1fr); align-items: start; }
     .automation-row-actions { justify-content: flex-end; }
     .automation-row-actions { grid-column: 1 / -1; }
-    .automation-metadata { display: grid; gap: 4px; }
+    .automation-metadata { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+    .automation-metadata span { display: grid; grid-template-columns: max-content minmax(0, 1fr); align-items: baseline; }
   }
 
   :host([dark]) .automation-row { border-color: #62c78c; background: var(--secondary-background-color); }
