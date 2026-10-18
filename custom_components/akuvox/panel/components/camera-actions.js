@@ -133,7 +133,7 @@ export const installCameraRelayActions = (host, relays, orientation = "none", at
     if (snapshotButton) {
       snapshotButton.style.cssText +=
         ";display:inline-flex;align-items:center;justify-content:center;gap:5px;" +
-        "min-height:38px;height:38px;padding:8px 10px;text-align:center;white-space:nowrap;";
+        "width:auto;min-width:112px;min-height:38px;height:38px;padding:8px 10px;text-align:center;white-space:nowrap;";
       if (!snapshotButton.querySelector(".akuvox-snapshot-download-icon")) {
         const icon = documentRef.createElement("span");
         icon.className = "akuvox-snapshot-download-icon";
@@ -225,21 +225,17 @@ export const installCameraRelayActions = (host, relays, orientation = "none", at
       ["border-radius", relayStyle.borderRadius],
     ].forEach(([property, value]) => snapshotButton.style.setProperty(property, value, "important"));
 
-    // Keep the native download-snapshot control and every injected unlock
-    // control aligned, regardless of translated label length or icon size.
-    const actionWidth = Math.ceil(Math.max(
-      snapshotButton.getBoundingClientRect().width,
-      ...[...group.querySelectorAll("button")].map((button) => button.getBoundingClientRect().width),
-    ));
-    const width = `${actionWidth}px`;
-    snapshotButton.style.setProperty("width", width, "important");
-    snapshotButton.style.setProperty("min-width", width, "important");
-    nativeSnapshotAction.style.setProperty("width", width, "important");
-    nativeSnapshotAction.style.setProperty("min-width", width, "important");
+    // Use a consistent minimum touch target, but let translated labels grow
+    // rather than constraining them to the width of a shorter sibling button.
+    const minimumWidth = "112px";
+    snapshotButton.style.setProperty("width", "auto", "important");
+    snapshotButton.style.setProperty("min-width", minimumWidth, "important");
+    nativeSnapshotAction.style.setProperty("width", "auto", "important");
+    nativeSnapshotAction.style.setProperty("min-width", minimumWidth, "important");
     group.querySelectorAll("button").forEach((button) => {
-      button.style.width = width;
-      button.style.minWidth = width;
-      button.style.flex = `0 0 ${width}`;
+      button.style.width = "auto";
+      button.style.minWidth = minimumWidth;
+      button.style.flex = "0 0 auto";
     });
   }
 
