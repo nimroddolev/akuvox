@@ -1,7 +1,6 @@
 {
   "domain": "akuvox",
   "name": "Akuvox SmartPlus",
-  "requirements": ["python-bidi>=0.6.0", "reportlab>=4.0.0"],
   "codeowners": [
     "@nimroddolev"
   ],
@@ -11,6 +10,8 @@
     "ffmpeg",
     "frontend",
     "generic",
+    "http",
+    "logger",
     "panel_custom",
     "sensor"
   ],
@@ -18,5 +19,6 @@
   "integration_type": "hub",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/nimroddolev/akuvox/issues",
+  "requirements": ["python-bidi>=0.6.0", "reportlab>=4.0.0"],
   "version": "v0.2.0-beta3"
 }
