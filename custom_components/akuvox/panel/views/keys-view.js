@@ -112,9 +112,9 @@ const filteredAndSortedKeys = (host, keys, isManualTileOrder) => {
  * @returns {string}
  */
 export const renderKeysView = (host, account) => {
-  const showKeyTiles =
-    host._rowViewMode === "tiles" ||
-    window.matchMedia?.("(max-width: 600px)").matches;
+  const isNarrowKeyLayout =
+    host._isNarrowKeyLayout ?? window.matchMedia?.("(max-width: 600px)").matches;
+  const showKeyTiles = host._rowViewMode === "tiles" || isNarrowKeyLayout;
   const { permittedRelays, accessibleRelays, canCreateKeys, canEditKey } = keyPermissions(account);
   const relayOptions = permittedRelays
     .map(
@@ -275,13 +275,7 @@ export const renderKeysView = (host, account) => {
   return `
     <div class="card table-wrap">
       <div class="section-heading key-heading">
-        <div class="key-heading-top">
-          <div class="key-heading-copy">
-            <h2>Temporary keys</h2>
-            <p class="muted">Create and manage your temporary access keys.</p>
-          </div>
-          ${canCreateKeys ? `<button class="add-key" data-create-key>${icons.plus}<span>Add Key</span></button>` : ""}
-        </div>
+        <h2>Temporary keys</h2>
         <div class="key-heading-actions">
           ${selectedCount ? `<button type="button" class="danger" data-delete-selected>Delete Selected (${selectedCount})</button>` : ""}
           <button type="button" class="mobile-filter-toggle" data-mobile-filter-toggle="keys" aria-expanded="${Boolean(host._mobileFiltersOpen.keys)}">Filter${filterCount ? ` <span class="mobile-filter-count">${filterCount}</span>` : ""}</button>
@@ -291,9 +285,8 @@ export const renderKeysView = (host, account) => {
             <button type="button" class="action ${host._rowViewMode === "tiles" ? "" : "active"}" data-row-view-mode="table" aria-pressed="${host._rowViewMode !== "tiles"}">${icons.table}<span>Table</span></button>
           </div>
         </div>
-      </div>
-      <div class="mobile-key-primary-controls">
-        <button type="button" class="mobile-filter-toggle" data-mobile-filter-toggle="keys" aria-expanded="${Boolean(host._mobileFiltersOpen.keys)}">Filter${filterCount ? ` <span class="mobile-filter-count">${filterCount}</span>` : ""}</button>
+        ${canCreateKeys ? `<button class="add-key" data-create-key>${icons.plus}<span>Add Key</span></button>` : ""}
+        <p class="key-heading-subtitle muted">Create and manage your temporary access keys.</p>
       </div>
       <div class="activity-controls mobile-filter-panel key-filter-panel ${host._mobileFiltersOpen.keys ? "mobile-filter-panel-open" : ""}">
         <label>

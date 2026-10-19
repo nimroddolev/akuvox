@@ -73,8 +73,6 @@ export const viewStyles = `
     stroke-width: 2.5;
   }
 
-  .mobile-key-primary-controls { display: none; }
-
   .key-filter-toolbar { display: flex; margin: 12px 0 0; }
   .key-filter-toolbar .mobile-filter-toggle {
     display: inline-flex;
@@ -232,23 +230,22 @@ export const viewStyles = `
   /* Temporary Keys View */
   .key-heading {
     display: grid;
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) auto auto;
     width: 100%;
     box-sizing: border-box;
-    justify-content: stretch;
-    gap: 14px;
-  }
-
-  .key-heading-top {
-    display: flex;
-    width: 100%;
     align-items: center;
-    justify-content: space-between;
-    gap: 16px;
+    column-gap: 16px;
+    row-gap: 4px;
   }
 
-  .key-heading-copy .muted {
-    margin: 4px 0 0;
+  .table-wrap:has(.key-heading) {
+    container-type: inline-size;
+  }
+
+  .key-heading > h2 {
+    grid-column: 1;
+    grid-row: 1;
+    white-space: nowrap;
   }
 
   .key-heading-actions {
@@ -256,6 +253,34 @@ export const viewStyles = `
     flex-wrap: nowrap;
     justify-content: flex-start;
     gap: 8px;
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .key-heading > .add-key {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  .key-heading-subtitle {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    margin: 0;
+  }
+
+  @container (max-width: 640px) {
+    .key-heading { grid-template-columns: minmax(0, 1fr) auto; }
+
+    .key-heading-actions {
+      grid-column: 1 / -1;
+      grid-row: 3;
+      flex-wrap: wrap;
+    }
+
+    .key-heading > .add-key {
+      grid-column: 2;
+      grid-row: 1;
+    }
   }
 
   .key-select-action,
@@ -591,24 +616,8 @@ export const viewStyles = `
     .camera-options-table .camera-copy-rtsp { min-width: 34px; min-height: 34px; padding: 7px; }
     .camera-options-table .camera-copy-rtsp span { display: none; }
 
-    .key-heading-actions {
-      display: none;
-    }
-    .mobile-key-primary-controls {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr);
-      align-items: stretch;
-      gap: 8px;
-      margin: 14px 0 16px;
-    }
-    .mobile-key-primary-controls .mobile-filter-toggle,
-    .mobile-key-primary-controls .key-select-action,
-    .mobile-key-primary-controls .add-key {
-      min-height: 38px;
-      margin: 0;
-    }
-    .mobile-key-primary-controls .add-key { min-width: 0; }
-    .mobile-key-primary-controls .danger { grid-column: 1 / -1; }
+    .key-heading-actions .view-mode-toggle { display: none; }
+
     .key-filter-toolbar { display: none; }
 
     .remote-instances-section .credential-share-receiver-row {

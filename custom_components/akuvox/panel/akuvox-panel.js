@@ -25,7 +25,7 @@ import {
   renderKeysView,
   bindKeysEvents,
   deleteSelectedKeys,
-} from "./views/keys-view.js?v=20261014-persist-filters";
+} from "./views/keys-view.js?v=20261019-narrow-key-tiles";
 import { renderAutomationsView, bindAutomationsEvents } from "./views/automations-view.js?v=20261016-notification-preview-expanded";
 import { renderSettingsView, bindSettingsEvents, updateActivityStorageProgress, updatePairedReceiverStatuses, updateRemoteShareConnectionStatus } from "./views/settings-view.js?v=20261019-connected-node-actions-menu";
 import { renderHelpView } from "./views/help-view.js";
@@ -135,7 +135,15 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
 
     this._panelDataSubscriptionActive = false;
     this._tabResizeObserver = null;
-    this._onTabWindowResize = () => this._updateTabScrollControls();
+    this._isNarrowKeyLayout = window.matchMedia?.("(max-width: 600px)").matches ?? false;
+    this._onTabWindowResize = () => {
+      const isNarrowKeyLayout = window.matchMedia?.("(max-width: 600px)").matches ?? false;
+      if (isNarrowKeyLayout !== this._isNarrowKeyLayout) {
+        this._isNarrowKeyLayout = isNarrowKeyLayout;
+        this._render();
+      }
+      this._updateTabScrollControls();
+    };
 
     this._onHashChange = () => {
       const tab = TAB_HASHES[decodeURIComponent(window.location.hash.slice(1))];
