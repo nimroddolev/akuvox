@@ -1,0 +1,165 @@
+{
+    "config": {
+        "step": {
+            "user": {
+                "menu_options": {
+                    "sms_sign_in": "Iniciar sesión con SMS",
+                    "email_password_sign_in": "Iniciar sesión con correo electrónico y contraseña",
+                    "shared_credentials": "Usar credenciales de otro Home Assistant"
+                }
+            },
+            "sms_sign_in": {
+                "title": "Verificación por SMS",
+                "description": "Introduce tu número de teléfono móvil para recibir el SMS de verificación:",
+                "data": {
+                    "country_code": "País",
+                    "phone_number": "Número de teléfono (sin el código de país)",
+                    "subdomain": "Establecer manualmente el subdominio regional de la API"
+                }
+            },
+            "email_password_sign_in": {
+                "title": "Inicio de sesión con correo electrónico y contraseña",
+                "description": "Introduce la dirección de correo electrónico o el nombre de usuario y la contraseña de tu cuenta de SmartPlus. Se enviará un código de verificación a la dirección de correo electrónico de la cuenta.",
+                "data": {
+                    "login_account": "Dirección de correo electrónico o nombre de usuario",
+                    "password": "Contraseña"
+                }
+            },
+            "verify_email_code": {
+                "title": "Verificación del código de correo electrónico",
+                "description": "Introduce el código de verificación enviado a tu dirección de correo electrónico.",
+                "data": {
+                    "email_code": "Código de verificación"
+                }
+            },
+            "reauth_email_password": {
+                "title": "Volver a autenticar con correo electrónico/nombre de usuario y contraseña",
+                "description": "Introduce la dirección de correo electrónico o el nombre de usuario de SmartPlus y la contraseña para recibir un código de verificación.",
+                "data": {
+                    "login_account": "Dirección de correo electrónico o nombre de usuario",
+                    "password": "Contraseña"
+                }
+            },
+            "reauth_verify_email_code": {
+                "title": "Verificación del código de correo electrónico",
+                "description": "Introduce el código de verificación enviado a tu dirección de correo electrónico.",
+                "data": {
+                    "email_code": "Código de verificación"
+                }
+            },
+            "verify_sms_code": {
+                "title": "Verificación del código SMS",
+                "description": "Introduce el código SMS que recibiste.",
+                "data": {
+                    "sms_code": "Código SMS"
+                },
+                "data_description": {
+                    "sms_code": "El SMS puede tardar hasta 60 segundos en llegar."
+                }
+            },
+            "reauth_confirm": {
+                "title": "Volver a autenticar Akuvox SmartPlus",
+                "description": "Introduce el código SMS enviado al número de teléfono registrado en SmartPlus.",
+                "data": {
+                    "sms_code": "Código SMS"
+                }
+            },
+            "reauth_sms": {
+                "title": "Volver a autenticar con SMS",
+                "description": "Solicita un código de verificación para el número de teléfono registrado en SmartPlus."
+            },
+            "shared_credentials": {
+                "title": "Usar credenciales de otro Home Assistant",
+                "description": "Pega el enlace de emparejamiento de 10 minutos creado por la integración de Akuvox en el Home Assistant de origen.",
+                "data": {
+                    "pairing_link": "Enlace de emparejamiento"
+                }
+            },
+            "share_created": {
+                "title": "Emparejar otro Home Assistant",
+                "description": "Copia este enlace de emparejamiento de un solo uso para {receiver_name}. Caduca en 10 minutos.",
+                "data": {
+                    "pairing_link": "Enlace de emparejamiento"
+                }
+            }
+        },
+        "error": {
+            "cannot_connect": "No se pudo solicitar un código de verificación de SmartPlus. Comprueba los datos de tu cuenta e inténtalo de nuevo en breve.",
+            "cannot_reach_source": "No se pudo acceder al Home Assistant que creó este enlace de emparejamiento. Confirma que su URL HTTPS externa sea accesible desde este Home Assistant.",
+            "invalid_auth": "El código de verificación no es válido o ha caducado.",
+            "invalid_share": "Este enlace de emparejamiento no es válido, ha caducado o se ha revocado.",
+            "external_url_required": "Configura una URL externa HTTPS válida en Home Assistant antes de crear un enlace de emparejamiento."
+        },
+        "abort": {
+            "reauth_missing_account_data": "La cuenta guardada no incluye un número de teléfono ni código de país. Vuelve a configurar la integración.",
+            "reauth_successful": "Akuvox SmartPlus se volvió a autenticar correctamente."
+        }
+    },
+    "issues": {
+        "reauthentication_required": {
+            "title": "Se requiere volver a autenticar para {entry_title}",
+            "description": "Akuvox SmartPlus ya no acepta la sesión de esta cuenta. Abre la integración de Akuvox y completa la autenticación de nuevo para restaurar el acceso."
+        },
+        "activity_storage_90": {
+            "title": "El almacenamiento de actividad está casi lleno para {entry_title}",
+            "description": "El almacenamiento local de actividad ha superado el 90 % de su límite configurado. Aumenta el límite para evitar la limpieza automática."
+        },
+        "activity_storage_95": {
+            "title": "El almacenamiento de actividad está muy cerca de llenarse para {entry_title}",
+            "description": "El almacenamiento local de actividad ha superado el 95 % de su límite configurado. Aumenta el límite para evitar la limpieza automática."
+        },
+        "activity_storage_99": {
+            "title": "El almacenamiento de actividad está casi lleno para {entry_title}",
+            "description": "El almacenamiento local de actividad ha superado el 99 % de su límite configurado. Aumenta el límite para evitar la limpieza automática."
+        },
+        "activity_storage_full": {
+            "title": "El almacenamiento de actividad está lleno para {entry_title}",
+            "description": "El almacenamiento local de actividad ha alcanzado su límite configurado. Se eliminará la actividad más antigua para liberar espacio para nueva actividad."
+        },
+        "credential_source_unreachable": {
+            "title": "No se puede acceder al origen de las credenciales para {entry_title}",
+            "description": "Esta instancia no puede acceder a la instancia de Home Assistant que comparte sus credenciales de Akuvox. Las credenciales almacenadas en caché seguirán utilizándose hasta que SmartPlus las rechace."
+        },
+        "credential_source_revoked": {
+            "title": "Se revocó el uso compartido de credenciales para {entry_title}",
+            "fix_flow": {
+                "step": {
+                    "repair": {
+                        "title": "Sustituir enlace de emparejamiento",
+                        "description": "Pega un nuevo enlace de emparejamiento del Home Assistant de origen para restaurar el acceso.",
+                        "data": {
+                            "pairing_link": "Enlace de emparejamiento"
+                        }
+                    }
+                },
+                "error": {
+                    "cannot_reach_source": "No se pudo acceder al Home Assistant que creó este enlace de emparejamiento. Confirma que su URL HTTPS externa sea accesible desde este Home Assistant.",
+                    "invalid_share": "Este enlace de emparejamiento no es válido, ha caducado o se ha revocado."
+                }
+            }
+        },
+        "credential_source_source_needs_reauth": {
+            "title": "El origen de las credenciales proporcionó credenciales no válidas para {entry_title}",
+            "description": "SmartPlus rechazó el token proporcionado por el Home Assistant de origen. Vuelve a autenticar Akuvox SmartPlus en la instancia de origen y, después, actualiza las credenciales compartidas en esta instancia receptora."
+        }
+    },
+    "device_automation": {
+        "trigger_type": {
+            "door_unlocked": "Puerta abierta"
+        }
+    },
+    "options": {
+        "step": {
+            "init": {
+                "title": "Configuración de eventos de Akuvox SmartPlus",
+                "description": "Ajusta la configuración de eventos de puerta para esta integración.",
+                "data": {
+                    "country": "El país registrado en tu cuenta de Akuvox SmartPlus",
+                    "subdomain": "Establecer manualmente el subdominio regional de la API",
+                    "create_share_for": "Crear un enlace de emparejamiento de 10 minutos para este receptor",
+                    "revoke_pairing_link": "Revocar un enlace de emparejamiento creado por este Home Assistant"
+                }
+            }
+        }
+    }
+}
