@@ -1,9 +1,9 @@
-import { escapeHtml, closeOnBackdrop, applyKeyFormRowLayout } from "../utils/dom.js";
+import { escapeHtml, closeOnBackdrop, applyKeyFormRowLayout, formState } from "../utils/dom.js?v=20261019-discard-backdrop-changes";
 import {
   bindMultiSelectFilters,
   matchesSelectedFilter,
   renderMultiSelectFilter,
-} from "../utils/multi-select-filter.js?v=20261014-persist-filters";
+} from "../utils/multi-select-filter.js?v=20261019-unified-checkboxes";
 import { icons } from "../utils/icons.js?v=20260928-detailed-qr-icon";
 import {
   keyTileTimestamp,
@@ -20,7 +20,7 @@ import {
   tableTimestampFormatter,
 } from "../utils/formatters.js?v=20261013-key-tile-timestamps";
 import { copyText } from "../utils/clipboard.js";
-import { showNotice, confirmModal, callWsWithBlocker } from "../components/dialogs.js?v=20261013-danger-confirmation";
+import { showNotice, confirmModal, confirmDiscardChanges, callWsWithBlocker } from "../components/dialogs.js?v=20261019-discard-backdrop-changes-v2";
 import { showTemporaryKeyQrDialog } from "../components/qr-dialog.js?v=20260928-qr-loading-modal-v2";
 import { showKeyActionsMenu, closeKeyActionsMenu } from "../components/key-menu.js?v=20260928-disabled-edit-muted";
 import { bindListOrdering, bindTileOrdering } from "../utils/tile-ordering.js?v=20260917-list-drop-position";
@@ -120,7 +120,7 @@ export const renderKeysView = (host, account) => {
     .map(
       (relay) => `
       <label class="check">
-        <input type="checkbox" name="relay" value="${escapeHtml(relay.mac)}|${escapeHtml(relay.relay_id)}">
+        <input class="panel-checkbox" type="checkbox" name="relay" value="${escapeHtml(relay.mac)}|${escapeHtml(relay.relay_id)}">
         ${escapeHtml(relay.name || relay.door_name)} (relay ${escapeHtml(relay.relay_id)})
       </label>
     `
@@ -188,7 +188,7 @@ export const renderKeysView = (host, account) => {
     .map((key) => {
       const selected = host._selectedKeyIds.has(String(key.key_id));
       const selector = host._selectingKeys
-        ? `<td class="key-select-cell"><input type="checkbox" aria-label="Select ${escapeHtml(key.description)}" data-select-key="${escapeHtml(key.key_id)}" ${selected ? "checked" : ""}></td>`
+        ? `<td class="key-select-cell"><input class="panel-checkbox" type="checkbox" aria-label="Select ${escapeHtml(key.description)}" data-select-key="${escapeHtml(key.key_id)}" ${selected ? "checked" : ""}></td>`
         : "";
       const copied = host._copiedKeyCodes.has(String(key.key_id));
       const code = !key.expired && copied
@@ -254,7 +254,7 @@ export const renderKeysView = (host, account) => {
               </div>
             </div>
             <div class="key-actions">
-              ${host._selectingKeys ? `<input class="key-tile-select" type="checkbox" aria-label="Select ${escapeHtml(key.description)}" data-select-key="${escapeHtml(key.key_id)}" ${selected ? "checked" : ""}>` : ""}
+              ${host._selectingKeys ? `<input class="key-tile-select panel-checkbox" type="checkbox" aria-label="Select ${escapeHtml(key.description)}" data-select-key="${escapeHtml(key.key_id)}" ${selected ? "checked" : ""}>` : ""}
               ${menu}
             </div>
           </div>
@@ -526,6 +526,7 @@ const showCreateKeyDialog = (host) => {
   host._keyDialogOpen = true;
   dialog.showModal();
   updateCreateKeyStage(host, 1);
+  dialog.dataset.initialFormState = formState(form);
 };
 
 /**
@@ -630,6 +631,7 @@ export const showEditKeyDialog = (host, keyId) => {
 
   normaliseUhfCard(form.querySelector('[name="uhf_card"]'));
   updateEditKeyState();
+  const initialFormState = formState(form);
 
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -692,7 +694,7 @@ export const showEditKeyDialog = (host, keyId) => {
     }
   });
 
-  closeOnBackdrop(dialog);
+  closeOnBackdrop(dialog, () => confirmDiscardChanges(host, form, initialFormState));
   host._modalCount = (host._modalCount || 0) + 1;
   dialog.addEventListener(
     "close",
@@ -1051,7 +1053,10 @@ export const bindKeysEvents = (host) => {
 
   const keyDialog = host.shadowRoot.querySelector("[data-key-dialog]");
   if (keyDialog) {
-    closeOnBackdrop(keyDialog);
+    closeOnBackdrop(keyDialog, () => {
+      const form = keyDialog.querySelector("[data-key-form]");
+      return !form || confirmDiscardChanges(host, form, keyDialog.dataset.initialFormState || "");
+    });
     keyDialog.addEventListener("close", () => {
       host._keyDialogOpen = false;
       const form = keyDialog.querySelector("[data-key-form]");

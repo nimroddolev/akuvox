@@ -527,7 +527,7 @@ export const dialogStyles = `
   dialog.key-create-dialog .relay-options { display: grid; width: 100%; max-width: none; gap: 8px; margin: 0; }
   .key-create-form .relay-options .check { display: flex; align-items: center; gap: 10px; box-sizing: border-box; width: 100%; padding: 10px 12px; border: 1px solid var(--panel-outline, var(--divider-color, #dbe2e8)); border-radius: 8px; color: var(--panel-text, inherit); background: var(--card-background-color, #fff); font-size: 14px; font-weight: 600; }
   .key-create-form .relay-options .check:focus-within { border-color: var(--aqua, #03a9f4); }
-  .key-create-form .relay-options input { width: 16px; height: 16px; margin: 0; accent-color: var(--aqua, #03a9f4); }
+  .key-create-form .relay-options .panel-checkbox { width: 20px; height: 20px; min-width: 20px; min-height: 20px; }
 
   dialog.key-create-dialog .key-create-form > .modal-actions { display: flex; flex: 0 0 auto; justify-content: flex-end; box-sizing: border-box; width: 100%; margin: 0; padding: 14px 24px; border: 0; background: transparent; }
   .key-create-dialog .modal-action, .key-create-dialog .modal-cancel { min-width: 108px; }

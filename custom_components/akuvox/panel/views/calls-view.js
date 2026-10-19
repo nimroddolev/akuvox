@@ -7,7 +7,7 @@ import {
   bindMultiSelectFilters,
   matchesSelectedFilter,
   renderMultiSelectFilter,
-} from "../utils/multi-select-filter.js?v=20261014-persist-filters";
+} from "../utils/multi-select-filter.js?v=20261019-unified-checkboxes";
 import { formatRelativeTimestamp, tableTimestampFormatter } from "../utils/formatters.js?v=20261014-shared-display-formatters";
 import { showCallImageDialog } from "../components/image-dialog.js";
 import { t } from "../utils/i18n.js?v=20261003-hebrew-rtl-6";

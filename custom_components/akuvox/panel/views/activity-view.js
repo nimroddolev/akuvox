@@ -7,7 +7,7 @@ import {
   bindMultiSelectFilters,
   matchesSelectedFilter,
   renderMultiSelectFilter,
-} from "../utils/multi-select-filter.js?v=20261014-persist-filters";
+} from "../utils/multi-select-filter.js?v=20261019-unified-checkboxes";
 import {
   formatRelativeTimestamp,
   formatStorageAmount,

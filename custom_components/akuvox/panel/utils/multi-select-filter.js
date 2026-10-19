@@ -44,8 +44,8 @@ export const renderMultiSelectFilter = ({
   return `<details class="multi-select-filter" data-filter-menu="${escapeHtml(menuId)}" ${openMenu === menuId ? "open" : ""}>
     <summary><span>${escapeHtml(label)}</span><span class="multi-select-filter-summary">${escapeHtml(summary)}</span></summary>
     <div class="multi-select-filter-options" role="group" aria-label="${escapeHtml(label)} filter">
-      <label><input type="checkbox" data-multi-filter="${escapeHtml(scope)}" data-filter-key="${escapeHtml(key)}" data-filter-all ${selectedValues.length === 0 ? "checked" : ""}> ${escapeHtml(allLabel)}</label>
-      ${options.map((option) => `<label><input type="checkbox" data-multi-filter="${escapeHtml(scope)}" data-filter-key="${escapeHtml(key)}" value="${escapeHtml(option.value)}" ${selectedValues.includes(option.value) ? "checked" : ""}> ${escapeHtml(option.label)}</label>`).join("")}
+      <label><input class="panel-checkbox" type="checkbox" data-multi-filter="${escapeHtml(scope)}" data-filter-key="${escapeHtml(key)}" data-filter-all ${selectedValues.length === 0 ? "checked" : ""}> ${escapeHtml(allLabel)}</label>
+      ${options.map((option) => `<label><input class="panel-checkbox" type="checkbox" data-multi-filter="${escapeHtml(scope)}" data-filter-key="${escapeHtml(key)}" value="${escapeHtml(option.value)}" ${selectedValues.includes(option.value) ? "checked" : ""}> ${escapeHtml(option.label)}</label>`).join("")}
     </div>
   </details>`;
 };

@@ -736,11 +736,7 @@ export const tableStyles = `
     background: var(--key-usage-color, #03a9f4);
   }
 
-  .key-tile-select {
-    width: 18px;
-    height: 18px;
-    accent-color: var(--aqua);
-  }
+  .key-tile-select.panel-checkbox { margin: 0; }
 
   .activity-updated {
     font-size: 12px;
@@ -1018,7 +1014,7 @@ export const tableStyles = `
     background: color-mix(in srgb, var(--aqua) 14%, transparent);
   }
 
-  .multi-select-filter-options input { accent-color: var(--aqua); }
+  .multi-select-filter-options .panel-checkbox { flex: 0 0 20px; }
 
   /* Sort buttons */
   .sort-button {

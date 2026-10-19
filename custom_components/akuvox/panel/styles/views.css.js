@@ -384,11 +384,7 @@ export const viewStyles = `
     text-align: center;
   }
 
-  .key-select-cell input {
-    width: 18px;
-    height: 18px;
-    accent-color: var(--aqua);
-  }
+  .key-select-cell .panel-checkbox { margin: 0; }
 
   .key-code,
   .copied-code {
@@ -696,7 +692,7 @@ export const viewStyles = `
     border-radius: 12px;
     background: var(--panel-surface);
   }
-  .automation-row.is-disabled { opacity: .68; }
+  .automation-row.is-disabled { border-color: var(--panel-outline); opacity: .68; }
   .automation-row-icon, .automation-empty-icon {
     display: grid;
     place-items: center;
