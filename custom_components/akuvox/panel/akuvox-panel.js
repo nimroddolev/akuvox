@@ -27,7 +27,7 @@ import {
   deleteSelectedKeys,
 } from "./views/keys-view.js?v=20261019-narrow-key-tiles";
 import { renderAutomationsView, bindAutomationsEvents } from "./views/automations-view.js?v=20261016-notification-preview-expanded";
-import { renderSettingsView, bindSettingsEvents, updateActivityStorageProgress, updatePairedReceiverStatuses, updateRemoteShareConnectionStatus } from "./views/settings-view.js?v=20261019-connected-node-actions-menu";
+import { renderSettingsView, bindSettingsEvents, updateActivityStorageProgress, updatePairedReceiverStatuses, updateRemoteShareConnectionStatus } from "./views/settings-view.js?v=20261019-skip-nonmobile-notification-options";
 import { renderHelpView } from "./views/help-view.js";
 
 const ROW_VIEW_MODE_STORAGE_KEY = "akuvox-panel-row-view-mode";

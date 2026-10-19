@@ -514,8 +514,10 @@ export const requestDoorNotificationAutomation = async (host, existing = null) =
   const selection = notificationSelection(existing);
   selection.callerRules = withCurrentTemporaryKeyNames(selection.callerRules, keys);
   const title = editing ? "Edit Automation" : "Create Automation";
+  const hasMobileNotificationService = () => companionNotificationServices(selection.services).length > 0;
+  const totalStages = () => hasMobileNotificationService() ? 6 : 5;
   const canOfferRelayAction = () => selection.includeCalls &&
-    companionNotificationServices(selection.services).length > 0 &&
+    hasMobileNotificationService() &&
     availableRelayEntities.some((relay) => selection.doorIds.includes(relay.deviceId));
   let step = 0;
   let progressFromStage = 0;
@@ -523,7 +525,7 @@ export const requestDoorNotificationAutomation = async (host, existing = null) =
     let result;
     if (step === 0) {
       result = await requestDoorNotificationStep(host, {
-        title,
+        title, totalStages: totalStages(),
         stage: 1, progressFromStage, progressToStage: selection.doorIds.length ? 1 : 0, description: "Which doors should trigger the automation?", nextLabel: "Next", focusCancel: true,
         content: `<div class="door-picker-control selection-list-picker-control"><label class="door-picker-search"><span aria-hidden="true">${icons.searchThumbnail}</span><input type="search" data-door-search aria-label="Search doors" placeholder="Search doors" autocomplete="off"></label><div class="door-picker-results selection-list" data-door-picker-results role="listbox" aria-label="Doors"></div></div>`,
         bind: (dialog) => {
@@ -559,7 +561,7 @@ export const requestDoorNotificationAutomation = async (host, existing = null) =
       });
     } else if (step === 1) {
       result = await requestDoorNotificationStep(host, {
-        title,
+        title, totalStages: totalStages(),
         stage: 2, progressFromStage, progressToStage: selection.includeOpened || selection.includeCalls ? 2 : 1, description: "Which events should trigger the automation?", backLabel: "Back", nextLabel: "Next",
         content: `<section class="event-types-options" role="group" aria-labelledby="event-types-heading"><h3 id="event-types-heading">Event types</h3><label class="door-notification-option"><input type="checkbox" name="opened" ${selection.includeOpened ? "checked" : ""}><span>Door opened / unlocked</span></label><label class="door-notification-option"><input type="checkbox" name="call" ${selection.includeCalls ? "checked" : ""}><span>Doorbell call</span></label></section>`,
         bind: (dialog) => {
@@ -582,7 +584,7 @@ export const requestDoorNotificationAutomation = async (host, existing = null) =
       });
     } else if (step === 2) {
       result = await requestDoorNotificationStep(host, {
-        title,
+        title, totalStages: totalStages(),
         stage: 3, progressFromStage, description: "Who should trigger the automation?", backLabel: "Back", nextLabel: "Next",
         content: members.length || keys.length
           ? `<div class="caller-picker"><div class="caller-picker-add" data-caller-picker-add><button class="caller-picker-add-button" type="button" data-add-caller aria-label="Add a person or temporary key" aria-expanded="false"><span aria-hidden="true">+</span></button><span class="caller-picker-add-label">Add person or key</span><div class="caller-picker-add-menu" data-add-caller-menu role="menu" hidden></div></div><div class="caller-condition-summary muted" data-caller-condition-summary hidden></div></div>`
@@ -679,7 +681,7 @@ export const requestDoorNotificationAutomation = async (host, existing = null) =
       });
     } else if (step === 3) {
       result = await requestDoorNotificationStep(host, {
-        title,
+        title, totalStages: totalStages(),
         stage: 4, progressFromStage, progressToStage: selection.services.length ? 4 : 3, description: "Which notify services should be run?", backLabel: "Back", nextLabel: "Next",
         content: services.length
           ? `<div class="door-picker-control notification-service-picker-control"><label class="door-picker-search"><span aria-hidden="true">${icons.searchThumbnail}</span><input type="search" data-service-search aria-label="Search notification services" placeholder="Search notification services" autocomplete="off"></label><div class="door-picker-results notification-service-list" data-service-picker-results role="listbox" aria-label="Notification services"></div></div>`
@@ -716,7 +718,7 @@ export const requestDoorNotificationAutomation = async (host, existing = null) =
           error.textContent = t(host, "Select at least one notification service."); error.hidden = false; return null;
         },
       });
-    } else if (step === 4) {
+    } else if (step === 4 && hasMobileNotificationService()) {
       const mobileServices = companionNotificationServices(selection.services);
       const previewDeviceType = previewDeviceTypeForServices(mobileServices);
       const previewDoor = doors.find((door) => selection.doorIds.includes(door.deviceId));
@@ -728,7 +730,7 @@ export const requestDoorNotificationAutomation = async (host, existing = null) =
       const mobileOptions = mobileServices.length ? `<label class="door-notification-option"><input type="checkbox" name="include-image" ${selection.includeImage ? "checked" : ""}><span>Display the captured still as the notification image</span></label>` : "";
       const notificationPreview = `<section class="notification-preview" aria-label="${escapeHtml(t(host, "Notification preview"))}"><div class="notification-preview-heading"><span>${escapeHtml(t(host, "Notification preview"))}</span></div><div class="notification-preview-controls"><span class="notification-preview-select"><button class="notification-preview-select-button notification-preview-event" type="button" data-notification-preview-event data-value="opened" aria-haspopup="listbox" aria-expanded="false">Door opened <i aria-hidden="true">⌄</i></button><span class="notification-preview-select-menu" data-notification-preview-menu="event" role="listbox" hidden><button type="button" role="option" aria-selected="true" data-notification-preview-option="opened">Door opened</button><button type="button" role="option" aria-selected="false" data-notification-preview-option="call">Doorbell call</button></span></span><span class="notification-preview-select notification-preview-device-select"><button class="notification-preview-select-button notification-preview-device" type="button" data-notification-preview-device data-value="${previewDeviceType}" aria-haspopup="listbox" aria-expanded="false">${previewDeviceType === "ios" ? "iOS" : "Android"} <i aria-hidden="true">⌄</i></button><span class="notification-preview-select-menu" data-notification-preview-menu="device" role="listbox" hidden><button type="button" role="option" aria-selected="${previewDeviceType === "ios"}" data-notification-preview-option="ios">iOS</button><button type="button" role="option" aria-selected="${previewDeviceType === "android"}" data-notification-preview-option="android">Android</button></span></span><button class="notification-preview-send" type="button" data-notification-preview-send><span>Send</span><i class="notification-preview-send-spinner" aria-hidden="true"></i></button></div><article class="notification-preview-card is-${previewDeviceType}" data-notification-preview-card><span class="notification-preview-icon" aria-hidden="true">${icons.bell}</span><div><div class="notification-preview-app">Akuvox SmartPlus <small>${escapeHtml(t(host, "now"))}</small></div><strong data-notification-preview-title></strong><p data-notification-preview-message></p></div>${previewCamera?.preview_url ? `<div class="notification-preview-image is-loading" data-notification-preview-image-area ${selection.includeImage ? "" : "hidden"}><span class="notification-preview-image-spinner" aria-hidden="true"></span><img data-notification-preview-image src="${escapeHtml(previewCamera.preview_url)}" alt=""></div>` : `<span class="notification-preview-image-placeholder" data-notification-preview-image ${selection.includeImage ? "" : "hidden"}>${icons.cameraDoor}</span>`}<button class="notification-preview-action" type="button" data-notification-preview-action disabled hidden></button></article></section>`;
       result = await requestDoorNotificationStep(host, {
-        title,
+        title, totalStages: totalStages(),
         stage: 5, progressFromStage, progressToStage: 5,
         description: "Notification options", backLabel: "Back", nextLabel: "Next",
         content: `<div class="notification-options">${canOfferRelayAction() ? `<label class="door-notification-option"><input type="checkbox" name="open-called-door" ${selection.includeRelayAction ? "checked" : ""}><span>Include actions to open the called door relay</span></label><label class="door-notification-option"><input type="checkbox" name="require-action-authentication" ${selection.requireActionAuthentication ? "checked" : ""}><span>Require the phone to be unlocked to open a relay</span></label>` : ""}${mobileOptions}${notificationPreview}</div>`,
@@ -870,12 +872,16 @@ export const requestDoorNotificationAutomation = async (host, existing = null) =
       });
       result = await requestDoorNotificationStep(host, {
         title,
-        stage: 6, progressFromStage, progressToStage: (selection.name || defaultName).trim() ? 6 : 5, description: "Enter the automation name.", backLabel: "Back", nextLabel: editing ? "Save automation" : "Create automation",
+        totalStages: totalStages(), stage: totalStages(), progressFromStage, progressToStage: (selection.name || defaultName).trim() ? totalStages() : totalStages() - 1, description: "Enter the automation name.", backLabel: "Back", nextLabel: editing ? "Save automation" : "Create automation",
         content: `<label class="automation-name-field"><span>Automation name</span><input name="automation-name" type="text" value="${escapeHtml(selection.name || defaultName)}" aria-label="Automation name" required></label>`,
         bind: (dialog) => {
           const nameInput = dialog.querySelector('[name="automation-name"]');
           nameInput?.addEventListener("input", () => {
-            setWizardProgress(dialog, "[data-door-notification-progress]", nameInput.value.trim() ? 6 : 5);
+            setWizardProgress(
+              dialog,
+              "[data-door-notification-progress]",
+              nameInput.value.trim() ? totalStages() : totalStages() - 1,
+            );
           });
         },
         submit: (form, error) => {
@@ -886,12 +892,20 @@ export const requestDoorNotificationAutomation = async (host, existing = null) =
       });
     }
     if (!result) return null;
-    progressFromStage = step + 1;
     if (result.direction === "back") {
-      step -= 1;
+      step -= step === 5 && !hasMobileNotificationService() ? 2 : 1;
+      progressFromStage = step + 1;
       continue;
     }
+    progressFromStage = step + 1;
     Object.assign(selection, result.value);
+    if (step === 3 && !hasMobileNotificationService()) {
+      selection.includeImage = false;
+      selection.includeRelayAction = false;
+      selection.requireActionAuthentication = false;
+      step += 2;
+      continue;
+    }
     if (step === 3 && !canOfferRelayAction()) selection.includeRelayAction = false;
     step += 1;
   }

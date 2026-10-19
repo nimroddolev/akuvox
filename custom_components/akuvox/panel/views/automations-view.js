@@ -10,7 +10,7 @@ import {
   buildDoorNotificationAutomation,
   requestDoorNotificationAutomation,
   showDoorNotificationCreated,
-} from "./settings-view.js?v=20261019-connected-node-actions-menu";
+} from "./settings-view.js?v=20261019-skip-nonmobile-notification-options";
 
 const captureTypesForOpened = ["Face Unlock", "Unlock on SmartPlus"];
 const temporaryKeyCaptureType = "Temp Key Unlock";
