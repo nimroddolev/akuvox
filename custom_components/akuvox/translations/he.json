@@ -1,31 +1,165 @@
 {
-  "config": {
-    "step": {
-      "user": { "menu_options": { "sms_sign_in": "כניסה באמצעות SMS", "email_password_sign_in": "כניסה באמצעות דוא״ל וסיסמה", "shared_credentials": "שימוש בפרטי גישה ממופע Home Assistant אחר" } },
-      "sms_sign_in": { "title": "אימות SMS", "description": "יש להזין את מספר הטלפון הנייד לקבלת הודעת האימות:", "data": { "country_code": "מדינה", "phone_number": "מספר טלפון", "subdomain": "הגדרת תת־דומיין אזורי של API" } },
-      "email_password_sign_in": { "title": "כניסה באמצעות דוא״ל וסיסמה", "description": "יש להזין את כתובת הדוא״ל או שם המשתמש והסיסמה של חשבון SmartPlus. קוד אימות יישלח לכתובת הדוא״ל של החשבון.", "data": { "login_account": "דוא״ל או שם משתמש", "password": "סיסמה" } },
-      "verify_email_code": { "title": "אימות קוד דוא״ל", "description": "יש להזין את קוד האימות שנשלח לכתובת הדוא״ל.", "data": { "email_code": "קוד אימות" } },
-      "reauth_email_password": { "title": "התחברות מחדש", "description": "יש להזין את פרטי חשבון SmartPlus כדי לקבל קוד אימות.", "data": { "login_account": "דוא״ל או שם משתמש", "password": "סיסמה" } },
-      "reauth_verify_email_code": { "title": "אימות קוד דוא״ל", "description": "יש להזין את קוד האימות שנשלח לכתובת הדוא״ל.", "data": { "email_code": "קוד אימות" } },
-      "verify_sms_code": { "title": "אימות קוד SMS", "description": "יש להזין את קוד ה־SMS שהתקבל.", "data": { "sms_code": "קוד SMS" }, "data_description": { "sms_code": "קבלת ההודעה עשויה להימשך עד 60 שניות." } },
-      "reauth_confirm": { "title": "התחברות מחדש ל־Akuvox SmartPlus", "description": "יש להזין את קוד ה־SMS שנשלח למספר הטלפון הרשום ב־SmartPlus.", "data": { "sms_code": "קוד SMS" } },
-      "reauth_sms": { "title": "התחברות מחדש באמצעות SMS", "description": "בקשת קוד אימות למספר הטלפון הרשום ב־SmartPlus." },
-      "shared_credentials": { "title": "שימוש בפרטי גישה ממופע אחר", "description": "יש להדביק קישור צימוד בתוקף ל־10 דקות שנוצר במופע המקור.", "data": { "pairing_link": "קישור צימוד" } },
-      "share_created": { "title": "צימוד מופע Home Assistant אחר", "description": "יש להעתיק את קישור הצימוד החד־פעמי עבור {receiver_name}. תוקפו יפוג בעוד 10 דקות.", "data": { "pairing_link": "קישור צימוד" } }
+    "config": {
+        "step": {
+            "user": {
+                "menu_options": {
+                    "sms_sign_in": "כניסה באמצעות SMS",
+                    "email_password_sign_in": "כניסה באמצעות דוא״ל וסיסמה",
+                    "shared_credentials": "שימוש בפרטי גישה ממופע Home Assistant אחר"
+                }
+            },
+            "sms_sign_in": {
+                "title": "אימות SMS",
+                "description": "יש להזין את מספר הטלפון הנייד לקבלת הודעת האימות:",
+                "data": {
+                    "country_code": "מדינה",
+                    "phone_number": "מספר טלפון",
+                    "subdomain": "הגדרת תת־דומיין אזורי של API"
+                }
+            },
+            "email_password_sign_in": {
+                "title": "כניסה באמצעות דוא״ל וסיסמה",
+                "description": "יש להזין את כתובת הדוא״ל או שם המשתמש והסיסמה של חשבון SmartPlus. קוד אימות יישלח לכתובת הדוא״ל של החשבון.",
+                "data": {
+                    "login_account": "דוא״ל או שם משתמש",
+                    "password": "סיסמה"
+                }
+            },
+            "verify_email_code": {
+                "title": "אימות קוד דוא״ל",
+                "description": "יש להזין את קוד האימות שנשלח לכתובת הדוא״ל.",
+                "data": {
+                    "email_code": "קוד אימות"
+                }
+            },
+            "reauth_email_password": {
+                "title": "התחברות מחדש",
+                "description": "יש להזין את פרטי חשבון SmartPlus כדי לקבל קוד אימות.",
+                "data": {
+                    "login_account": "דוא״ל או שם משתמש",
+                    "password": "סיסמה"
+                }
+            },
+            "reauth_verify_email_code": {
+                "title": "אימות קוד דוא״ל",
+                "description": "יש להזין את קוד האימות שנשלח לכתובת הדוא״ל.",
+                "data": {
+                    "email_code": "קוד אימות"
+                }
+            },
+            "verify_sms_code": {
+                "title": "אימות קוד SMS",
+                "description": "יש להזין את קוד ה־SMS שהתקבל.",
+                "data": {
+                    "sms_code": "קוד SMS"
+                },
+                "data_description": {
+                    "sms_code": "קבלת ההודעה עשויה להימשך עד 60 שניות."
+                }
+            },
+            "reauth_confirm": {
+                "title": "התחברות מחדש ל־Akuvox SmartPlus",
+                "description": "יש להזין את קוד ה־SMS שנשלח למספר הטלפון הרשום ב־SmartPlus.",
+                "data": {
+                    "sms_code": "קוד SMS"
+                }
+            },
+            "reauth_sms": {
+                "title": "התחברות מחדש באמצעות SMS",
+                "description": "בקשת קוד אימות למספר הטלפון הרשום ב־SmartPlus."
+            },
+            "shared_credentials": {
+                "title": "שימוש בפרטי גישה ממופע אחר",
+                "description": "יש להדביק קישור צימוד בתוקף ל־10 דקות שנוצר במופע המקור.",
+                "data": {
+                    "pairing_link": "קישור צימוד"
+                }
+            },
+            "share_created": {
+                "title": "צימוד מופע Home Assistant אחר",
+                "description": "יש להעתיק את קישור הצימוד החד־פעמי עבור {receiver_name}. תוקפו יפוג בעוד 10 דקות.",
+                "data": {
+                    "pairing_link": "קישור צימוד"
+                }
+            }
+        },
+        "error": {
+            "cannot_connect": "לא ניתן לבקש קוד אימות של SmartPlus. יש לבדוק את פרטי החשבון ולנסות שוב.",
+            "cannot_reach_source": "לא ניתן להגיע למופע Home Assistant שיצר את קישור הצימוד.",
+            "invalid_auth": "קוד האימות שגוי או שפג תוקפו.",
+            "invalid_share": "קישור הצימוד לא תקין, פג תוקף או בוטל.",
+            "external_url_required": "יש להגדיר כתובת HTTPS חיצונית תקינה ב־Home Assistant לפני יצירת קישור צימוד."
+        },
+        "abort": {
+            "reauth_missing_account_data": "החשבון השמור אינו כולל פרטי טלפון. יש להגדיר מחדש את השילוב.",
+            "reauth_successful": "החיבור מחדש ל־Akuvox SmartPlus הצליח."
+        }
     },
-    "error": { "cannot_connect": "לא ניתן לבקש קוד אימות של SmartPlus. יש לבדוק את פרטי החשבון ולנסות שוב.", "cannot_reach_source": "לא ניתן להגיע למופע Home Assistant שיצר את קישור הצימוד.", "invalid_auth": "קוד האימות שגוי או שפג תוקפו.", "invalid_share": "קישור הצימוד לא תקין, פג תוקף או בוטל.", "external_url_required": "יש להגדיר כתובת HTTPS חיצונית תקינה ב־Home Assistant לפני יצירת קישור צימוד." },
-    "abort": { "reauth_missing_account_data": "החשבון השמור אינו כולל פרטי טלפון. יש להגדיר מחדש את השילוב.", "reauth_successful": "החיבור מחדש ל־Akuvox SmartPlus הצליח." }
-  },
-  "issues": {
-    "reauthentication_required": { "title": "נדרשת התחברות מחדש עבור {entry_title}", "description": "יש לפתוח את שילוב Akuvox ולהשלים התחברות מחדש כדי לשחזר את הגישה." },
-    "activity_storage_90": { "title": "אחסון הפעילות עבור {entry_title} כמעט מלא", "description": "אחסון הפעילות המקומי עבר 90% מהמגבלה שהוגדרה. יש להגדיל את המגבלה כדי למנוע ניקוי אוטומטי." },
-    "activity_storage_95": { "title": "אחסון הפעילות עבור {entry_title} כמעט מלא מאוד", "description": "אחסון הפעילות המקומי עבר 95% מהמגבלה שהוגדרה. יש להגדיל את המגבלה כדי למנוע ניקוי אוטומטי." },
-    "activity_storage_99": { "title": "אחסון הפעילות עבור {entry_title} מלא כמעט לגמרי", "description": "אחסון הפעילות המקומי עבר 99% מהמגבלה שהוגדרה. יש להגדיל את המגבלה כדי למנוע ניקוי אוטומטי." },
-    "activity_storage_full": { "title": "אחסון הפעילות עבור {entry_title} מלא", "description": "אחסון הפעילות המקומי הגיע למגבלה שהוגדרה." },
-    "credential_source_unreachable": { "title": "מקור פרטי הגישה עבור {entry_title} אינו זמין", "description": "מופע זה אינו יכול להגיע למופע Home Assistant שמשתף את פרטי הגישה ל־Akuvox. ייעשה שימוש בפרטי גישה שמורים במטמון עד ש־SmartPlus ידחה אותם." },
-    "credential_source_revoked": { "title": "שיתוף פרטי הגישה עבור {entry_title} בוטל", "description": "מופע Home Assistant המקור ביטל את המקבל הזה. יש לצמד מחדש את השילוב כדי לשחזר את הגישה." },
-    "credential_source_source_needs_reauth": { "title": "מקור פרטי הגישה עבור {entry_title} סיפק פרטי גישה לא תקינים", "description": "SmartPlus דחה את האסימון שסופק על־ידי מופע Home Assistant המקור. יש להתחבר מחדש ל־Akuvox SmartPlus במופע המקור ולאחר מכן לרענן את פרטי הגישה המשותפים במופע המקבל הזה." }
-  },
-  "device_automation": { "trigger_type": { "door_unlocked": "דלת נפתחה" } },
-  "options": { "step": { "init": { "title": "תצורת אירועי Akuvox SmartPlus", "description": "התאמת הגדרות אירועי הדלת עבור שילוב זה.", "data": { "country": "המדינה הרשומה בחשבון Akuvox SmartPlus", "subdomain": "הגדרת תת־דומיין אזורי של API", "create_share_for": "יצירת קישור צימוד בתוקף ל־10 דקות", "revoke_pairing_link": "ביטול קישור הצימוד" } } } }
+    "issues": {
+        "reauthentication_required": {
+            "title": "נדרשת התחברות מחדש עבור {entry_title}",
+            "description": "יש לפתוח את שילוב Akuvox ולהשלים התחברות מחדש כדי לשחזר את הגישה."
+        },
+        "activity_storage_90": {
+            "title": "אחסון הפעילות עבור {entry_title} כמעט מלא",
+            "description": "אחסון הפעילות המקומי עבר 90% מהמגבלה שהוגדרה. יש להגדיל את המגבלה כדי למנוע ניקוי אוטומטי."
+        },
+        "activity_storage_95": {
+            "title": "אחסון הפעילות עבור {entry_title} כמעט מלא מאוד",
+            "description": "אחסון הפעילות המקומי עבר 95% מהמגבלה שהוגדרה. יש להגדיל את המגבלה כדי למנוע ניקוי אוטומטי."
+        },
+        "activity_storage_99": {
+            "title": "אחסון הפעילות עבור {entry_title} מלא כמעט לגמרי",
+            "description": "אחסון הפעילות המקומי עבר 99% מהמגבלה שהוגדרה. יש להגדיל את המגבלה כדי למנוע ניקוי אוטומטי."
+        },
+        "activity_storage_full": {
+            "title": "אחסון הפעילות עבור {entry_title} מלא",
+            "description": "אחסון הפעילות המקומי הגיע למגבלה שהוגדרה."
+        },
+        "credential_source_unreachable": {
+            "title": "מקור פרטי הגישה עבור {entry_title} אינו זמין",
+            "description": "מופע זה אינו יכול להגיע למופע Home Assistant שמשתף את פרטי הגישה ל־Akuvox. ייעשה שימוש בפרטי גישה שמורים במטמון עד ש־SmartPlus ידחה אותם."
+        },
+        "credential_source_revoked": {
+            "title": "שיתוף פרטי הגישה עבור {entry_title} בוטל",
+            "fix_flow": {
+                "step": {
+                    "repair": {
+                        "title": "החלפת קישור הצימוד",
+                        "description": "יש להדביק קישור צימוד חדש ממופע Home Assistant המקור כדי לשחזר את הגישה.",
+                        "data": {
+                            "pairing_link": "קישור צימוד"
+                        }
+                    }
+                },
+                "error": {
+                    "cannot_reach_source": "לא ניתן להגיע למופע Home Assistant שיצר את קישור הצימוד. יש לוודא שכתובת ה-HTTPS החיצונית שלו זמינה ממופע Home Assistant זה.",
+                    "invalid_share": "קישור הצימוד אינו חוקי, פג תוקף או בוטל."
+                }
+            }
+        },
+        "credential_source_source_needs_reauth": {
+            "title": "מקור פרטי הגישה עבור {entry_title} סיפק פרטי גישה לא תקינים",
+            "description": "SmartPlus דחה את האסימון שסופק על־ידי מופע Home Assistant המקור. יש להתחבר מחדש ל־Akuvox SmartPlus במופע המקור ולאחר מכן לרענן את פרטי הגישה המשותפים במופע המקבל הזה."
+        }
+    },
+    "device_automation": {
+        "trigger_type": {
+            "door_unlocked": "דלת נפתחה"
+        }
+    },
+    "options": {
+        "step": {
+            "init": {
+                "title": "תצורת אירועי Akuvox SmartPlus",
+                "description": "התאמת הגדרות אירועי הדלת עבור שילוב זה.",
+                "data": {
+                    "country": "המדינה הרשומה בחשבון Akuvox SmartPlus",
+                    "subdomain": "הגדרת תת־דומיין אזורי של API",
+                    "create_share_for": "יצירת קישור צימוד בתוקף ל־10 דקות",
+                    "revoke_pairing_link": "ביטול קישור הצימוד"
+                }
+            }
+        }
+    }
 }

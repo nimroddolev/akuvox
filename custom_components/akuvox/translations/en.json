@@ -108,7 +108,21 @@
         },
         "credential_source_revoked": {
             "title": "Credential sharing revoked for {entry_title}",
-            "description": "The source Home Assistant revoked this receiver. Re-pair the integration to restore access."
+            "fix_flow": {
+                "step": {
+                    "repair": {
+                        "title": "Replace pairing link",
+                        "description": "Paste a new pairing link from the source Home Assistant to restore access.",
+                        "data": {
+                            "pairing_link": "Pairing link"
+                        }
+                    }
+                },
+                "error": {
+                    "cannot_reach_source": "Unable to reach the Home Assistant that created this pairing link. Confirm its external HTTPS URL is reachable from this Home Assistant.",
+                    "invalid_share": "This pairing link is invalid, expired, or has been revoked."
+                }
+            }
         },
         "credential_source_source_needs_reauth": {
             "title": "Credential source supplied invalid credentials for {entry_title}",

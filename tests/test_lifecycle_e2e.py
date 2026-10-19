@@ -23,7 +23,7 @@ from custom_components.akuvox.api import (
     AkuvoxApiClientCommunicationError,
 )
 from custom_components.akuvox import repairs
-from custom_components.akuvox.const import DOMAIN
+from custom_components.akuvox.const import DOMAIN, PANEL_DATA_UPDATED_EVENT
 from custom_components.akuvox.coordinator import AkuvoxDataUpdateCoordinator
 from custom_components.akuvox import panel
 from custom_components.akuvox.device_visibility import filter_disabled_panel_devices
@@ -38,6 +38,7 @@ from custom_components.akuvox.sharing import (
     _digest,
     async_apply_remote_share_link,
     async_create_share,
+    async_renew_share,
     get_external_url,
 )
 
@@ -641,6 +642,9 @@ class TestOneTimePairingLinkE2E(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(second.status, 403)
         self.assertEqual(second.headers["X-Akuvox-Credential-Share"], "revoked")
         self.assertEqual(receiver.status, 200)
+        hass.bus.async_fire.assert_any_call(
+            PANEL_DATA_UPDATED_EVENT, {"entry_id": "entry-id"}
+        )
 
     async def test_concurrent_pairing_requests_redeem_only_once(self) -> None:
         """Only one concurrent request receives a private receiver secret."""
@@ -812,6 +816,94 @@ class TestCredentialShareNamesE2E(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(saved_share["allow_activity"])
         self.assertEqual(saved_share["activity_member_names"], ["Guest", "Liv"])
 
+    async def test_renewed_share_preserves_the_previous_scope_and_permissions(self) -> None:
+        """Renewing an unusable receiver creates a new link without changing access."""
+        shares = {
+            "expired-share": {
+                "entry_id": "entry-id",
+                "receiver_name": "Holiday Home",
+                "expires_at": "2020-01-01T00:00:00+00:00",
+                "activated": False,
+                "revoked": True,
+                "device_ids": ["camera:Lobby", "relay:AA:0"],
+                "allow_create_keys": True,
+                "allow_edit_keys": False,
+                "create_key_relay_ids": ["relay:AA:0"],
+                "edit_key_relay_ids": [],
+                "view_key_relay_ids": ["relay:AA:0"],
+                "activity_member_names": ["Liv"],
+                "call_member_names": ["Guest"],
+                "access_expires_at": "2027-01-01T00:00:00+00:00",
+            }
+        }
+        store = MagicMock()
+        store.async_load = AsyncMock(return_value=shares)
+        store.async_save = AsyncMock()
+        entry = MagicMock(entry_id="entry-id")
+
+        with (
+            patch("custom_components.akuvox.sharing._store", return_value=store),
+            patch(
+                "custom_components.akuvox.sharing.secrets.token_urlsafe",
+                side_effect=("new-share", "new-secret"),
+            ),
+        ):
+            pairing_link = await async_renew_share(
+                MagicMock(), entry, "expired-share", "https://example.com"
+            )
+
+        self.assertIn("id=new-share", pairing_link)
+        self.assertNotIn("expired-share", shares)
+        renewed_share = store.async_save.await_args.args[0]["new-share"]
+        self.assertEqual(renewed_share["receiver_name"], "Holiday Home")
+        self.assertEqual(renewed_share["device_ids"], ["camera:Lobby", "relay:AA:0"])
+        self.assertEqual(renewed_share["create_key_relay_ids"], ["relay:AA:0"])
+        self.assertEqual(renewed_share["edit_key_relay_ids"], [])
+        self.assertEqual(renewed_share["view_key_relay_ids"], ["relay:AA:0"])
+        self.assertEqual(renewed_share["activity_member_names"], ["Liv"])
+        self.assertEqual(renewed_share["call_member_names"], ["Guest"])
+        self.assertEqual(renewed_share["access_expires_at"], "2027-01-01T00:00:00+00:00")
+
+    async def test_renewed_legacy_share_preserves_key_permissions(self) -> None:
+        """Renewal retains the legacy key grants when scoped lists are absent."""
+        shares = {
+            "legacy-share": {
+                "entry_id": "entry-id",
+                "receiver_name": "Legacy Home",
+                "expires_at": "2020-01-01T00:00:00+00:00",
+                "activated": False,
+                "revoked": True,
+                "device_ids": ["camera:Lobby", "relay:AA:0"],
+                "allow_create_keys": True,
+                "allow_edit_keys": False,
+                "allow_view_keys": True,
+                "allow_activity": False,
+                "allow_call_history": False,
+            }
+        }
+        store = MagicMock()
+        store.async_load = AsyncMock(return_value=shares)
+        store.async_save = AsyncMock()
+        entry = MagicMock(entry_id="entry-id")
+        hass = MagicMock()
+        hass.data = {}
+
+        with (
+            patch("custom_components.akuvox.sharing._store", return_value=store),
+            patch(
+                "custom_components.akuvox.sharing.secrets.token_urlsafe",
+                side_effect=("new-share", "new-secret"),
+            ),
+        ):
+            await async_renew_share(hass, entry, "legacy-share", "https://example.com")
+
+        renewed_share = store.async_save.await_args.args[0]["new-share"]
+        self.assertEqual(renewed_share["create_key_relay_ids"], ["relay:AA:0"])
+        self.assertEqual(renewed_share["edit_key_relay_ids"], [])
+        self.assertEqual(renewed_share["view_key_relay_ids"], ["relay:AA:0"])
+        self.assertEqual(renewed_share["activity_member_names"], [])
+        self.assertEqual(renewed_share["call_member_names"], [])
+
 
 class TestAuthenticationRepairE2E(unittest.TestCase):
     """Verify Home Assistant owns the single reauthentication repair."""
@@ -853,7 +945,26 @@ class TestAuthenticationRepairE2E(unittest.TestCase):
             create_issue.call_args.kwargs["translation_key"],
             "credential_source_source_needs_reauth",
         )
+        self.assertFalse(create_issue.call_args.kwargs["is_fixable"])
         hass.bus.async_fire.assert_called_once()
+
+    def test_revoked_credential_share_offers_a_pairing_link_repair(self) -> None:
+        """A revoked receiver exposes Home Assistant's repair action."""
+        hass = MagicMock()
+        hass.data = {}
+        entry = MagicMock(entry_id="entry-id", title="Remote home")
+
+        with patch("custom_components.akuvox.repairs.ir.async_create_issue") as create_issue:
+            repairs.async_update_credential_source_issue(hass, entry, "revoked")
+
+        self.assertEqual(
+            create_issue.call_args.kwargs["translation_key"],
+            "credential_source_revoked",
+        )
+        self.assertTrue(create_issue.call_args.kwargs["is_fixable"])
+        self.assertEqual(
+            create_issue.call_args.kwargs["data"], {"entry_id": "entry-id"}
+        )
 
 
 class TestActivityStorageRepairsE2E(unittest.TestCase):

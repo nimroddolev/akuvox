@@ -1,31 +1,165 @@
 {
-  "config": {
-    "step": {
-      "user": { "menu_options": { "sms_sign_in": "Mit SMS anmelden", "email_password_sign_in": "Mit E-Mail und Passwort anmelden", "shared_credentials": "Anmeldedaten von einer anderen Home-Assistant-Instanz verwenden" } },
-      "sms_sign_in": { "title": "SMS-Bestätigung", "description": "Geben Sie Ihre Mobiltelefonnummer ein, um Ihre Bestätigungs-SMS zu erhalten:", "data": { "country_code": "Land", "phone_number": "Telefonnummer (ohne Ländervorwahl)", "subdomain": "Regionale API-Subdomain manuell festlegen" } },
-      "email_password_sign_in": { "title": "Anmeldung mit E-Mail und Passwort", "description": "Geben Sie die E-Mail-Adresse oder den Benutzernamen und das Passwort Ihres SmartPlus-Kontos ein. Ein Bestätigungscode wird an die E-Mail-Adresse des Kontos gesendet.", "data": { "login_account": "E-Mail-Adresse oder Benutzername", "password": "Passwort" } },
-      "verify_email_code": { "title": "Bestätigung des E-Mail-Codes", "description": "Geben Sie den an Ihre E-Mail-Adresse gesendeten Bestätigungscode ein.", "data": { "email_code": "Bestätigungscode" } },
-      "reauth_email_password": { "title": "Erneute Anmeldung mit E-Mail/Benutzername und Passwort", "description": "Geben Sie Ihre SmartPlus-E-Mail-Adresse oder Ihren Benutzernamen und Ihr Passwort ein, um einen Bestätigungscode zu erhalten.", "data": { "login_account": "E-Mail-Adresse oder Benutzername", "password": "Passwort" } },
-      "reauth_verify_email_code": { "title": "Bestätigung des E-Mail-Codes", "description": "Geben Sie den an Ihre E-Mail-Adresse gesendeten Bestätigungscode ein.", "data": { "email_code": "Bestätigungscode" } },
-      "verify_sms_code": { "title": "SMS-Code-Bestätigung", "description": "Geben Sie den erhaltenen SMS-Code ein.", "data": { "sms_code": "SMS-Code" }, "data_description": { "sms_code": "Der Empfang der SMS kann bis zu 60 Sekunden dauern." } },
-      "reauth_confirm": { "title": "Akuvox SmartPlus erneut anmelden", "description": "Geben Sie den an die bei SmartPlus registrierte Telefonnummer gesendeten SMS-Code ein.", "data": { "sms_code": "SMS-Code" } },
-      "reauth_sms": { "title": "Erneute Anmeldung per SMS", "description": "Fordern Sie einen Bestätigungscode für die bei SmartPlus registrierte Telefonnummer an." },
-      "shared_credentials": { "title": "Anmeldedaten von einer anderen Home-Assistant-Instanz verwenden", "description": "Fügen Sie den 10 Minuten gültigen Kopplungslink ein, der von der Akuvox-Integration auf der Quellinstanz erstellt wurde.", "data": { "pairing_link": "Kopplungslink" } },
-      "share_created": { "title": "Andere Home-Assistant-Instanz koppeln", "description": "Kopieren Sie diesen einmaligen Kopplungslink für {receiver_name}. Er läuft in 10 Minuten ab.", "data": { "pairing_link": "Kopplungslink" } }
+    "config": {
+        "step": {
+            "user": {
+                "menu_options": {
+                    "sms_sign_in": "Mit SMS anmelden",
+                    "email_password_sign_in": "Mit E-Mail und Passwort anmelden",
+                    "shared_credentials": "Anmeldedaten von einer anderen Home-Assistant-Instanz verwenden"
+                }
+            },
+            "sms_sign_in": {
+                "title": "SMS-Bestätigung",
+                "description": "Geben Sie Ihre Mobiltelefonnummer ein, um Ihre Bestätigungs-SMS zu erhalten:",
+                "data": {
+                    "country_code": "Land",
+                    "phone_number": "Telefonnummer (ohne Ländervorwahl)",
+                    "subdomain": "Regionale API-Subdomain manuell festlegen"
+                }
+            },
+            "email_password_sign_in": {
+                "title": "Anmeldung mit E-Mail und Passwort",
+                "description": "Geben Sie die E-Mail-Adresse oder den Benutzernamen und das Passwort Ihres SmartPlus-Kontos ein. Ein Bestätigungscode wird an die E-Mail-Adresse des Kontos gesendet.",
+                "data": {
+                    "login_account": "E-Mail-Adresse oder Benutzername",
+                    "password": "Passwort"
+                }
+            },
+            "verify_email_code": {
+                "title": "Bestätigung des E-Mail-Codes",
+                "description": "Geben Sie den an Ihre E-Mail-Adresse gesendeten Bestätigungscode ein.",
+                "data": {
+                    "email_code": "Bestätigungscode"
+                }
+            },
+            "reauth_email_password": {
+                "title": "Erneute Anmeldung mit E-Mail/Benutzername und Passwort",
+                "description": "Geben Sie Ihre SmartPlus-E-Mail-Adresse oder Ihren Benutzernamen und Ihr Passwort ein, um einen Bestätigungscode zu erhalten.",
+                "data": {
+                    "login_account": "E-Mail-Adresse oder Benutzername",
+                    "password": "Passwort"
+                }
+            },
+            "reauth_verify_email_code": {
+                "title": "Bestätigung des E-Mail-Codes",
+                "description": "Geben Sie den an Ihre E-Mail-Adresse gesendeten Bestätigungscode ein.",
+                "data": {
+                    "email_code": "Bestätigungscode"
+                }
+            },
+            "verify_sms_code": {
+                "title": "SMS-Code-Bestätigung",
+                "description": "Geben Sie den erhaltenen SMS-Code ein.",
+                "data": {
+                    "sms_code": "SMS-Code"
+                },
+                "data_description": {
+                    "sms_code": "Der Empfang der SMS kann bis zu 60 Sekunden dauern."
+                }
+            },
+            "reauth_confirm": {
+                "title": "Akuvox SmartPlus erneut anmelden",
+                "description": "Geben Sie den an die bei SmartPlus registrierte Telefonnummer gesendeten SMS-Code ein.",
+                "data": {
+                    "sms_code": "SMS-Code"
+                }
+            },
+            "reauth_sms": {
+                "title": "Erneute Anmeldung per SMS",
+                "description": "Fordern Sie einen Bestätigungscode für die bei SmartPlus registrierte Telefonnummer an."
+            },
+            "shared_credentials": {
+                "title": "Anmeldedaten von einer anderen Home-Assistant-Instanz verwenden",
+                "description": "Fügen Sie den 10 Minuten gültigen Kopplungslink ein, der von der Akuvox-Integration auf der Quellinstanz erstellt wurde.",
+                "data": {
+                    "pairing_link": "Kopplungslink"
+                }
+            },
+            "share_created": {
+                "title": "Andere Home-Assistant-Instanz koppeln",
+                "description": "Kopieren Sie diesen einmaligen Kopplungslink für {receiver_name}. Er läuft in 10 Minuten ab.",
+                "data": {
+                    "pairing_link": "Kopplungslink"
+                }
+            }
+        },
+        "error": {
+            "cannot_connect": "Ein SmartPlus-Bestätigungscode konnte nicht angefordert werden. Prüfen Sie Ihre Kontodaten und versuchen Sie es später erneut.",
+            "cannot_reach_source": "Die Home-Assistant-Instanz, die diesen Kopplungslink erstellt hat, ist nicht erreichbar. Prüfen Sie, ob ihre externe HTTPS-URL von dieser Home-Assistant-Instanz erreichbar ist.",
+            "invalid_auth": "Der Bestätigungscode war ungültig oder abgelaufen.",
+            "invalid_share": "Dieser Kopplungslink ist ungültig, abgelaufen oder wurde widerrufen.",
+            "external_url_required": "Legen Sie eine gültige externe HTTPS-URL in Home Assistant fest, bevor Sie einen Kopplungslink erstellen."
+        },
+        "abort": {
+            "reauth_missing_account_data": "Das gespeicherte Konto enthält keine Telefonnummer und Ländervorwahl. Konfigurieren Sie die Integration erneut.",
+            "reauth_successful": "Akuvox SmartPlus wurde erfolgreich erneut angemeldet."
+        }
     },
-    "error": { "cannot_connect": "Ein SmartPlus-Bestätigungscode konnte nicht angefordert werden. Prüfen Sie Ihre Kontodaten und versuchen Sie es später erneut.", "cannot_reach_source": "Die Home-Assistant-Instanz, die diesen Kopplungslink erstellt hat, ist nicht erreichbar. Prüfen Sie, ob ihre externe HTTPS-URL von dieser Home-Assistant-Instanz erreichbar ist.", "invalid_auth": "Der Bestätigungscode war ungültig oder abgelaufen.", "invalid_share": "Dieser Kopplungslink ist ungültig, abgelaufen oder wurde widerrufen.", "external_url_required": "Legen Sie eine gültige externe HTTPS-URL in Home Assistant fest, bevor Sie einen Kopplungslink erstellen." },
-    "abort": { "reauth_missing_account_data": "Das gespeicherte Konto enthält keine Telefonnummer und Ländervorwahl. Konfigurieren Sie die Integration erneut.", "reauth_successful": "Akuvox SmartPlus wurde erfolgreich erneut angemeldet." }
-  },
-  "issues": {
-    "reauthentication_required": { "title": "Erneute Anmeldung für {entry_title} erforderlich", "description": "Akuvox SmartPlus akzeptiert die Sitzung dieses Kontos nicht mehr. Öffnen Sie die Akuvox-Integration und schließen Sie die erneute Anmeldung ab, um den Zugriff wiederherzustellen." },
-    "activity_storage_90": { "title": "Aktivitätsspeicher für {entry_title} ist fast voll", "description": "Der lokale Aktivitätsspeicher hat 90 % des konfigurierten Limits überschritten. Erhöhen Sie das Limit, um die automatische Bereinigung zu vermeiden." },
-    "activity_storage_95": { "title": "Aktivitätsspeicher für {entry_title} ist nahezu voll", "description": "Der lokale Aktivitätsspeicher hat 95 % des konfigurierten Limits überschritten. Erhöhen Sie das Limit, um die automatische Bereinigung zu vermeiden." },
-    "activity_storage_99": { "title": "Aktivitätsspeicher für {entry_title} ist beinahe voll", "description": "Der lokale Aktivitätsspeicher hat 99 % des konfigurierten Limits überschritten. Erhöhen Sie das Limit, um die automatische Bereinigung zu vermeiden." },
-    "activity_storage_full": { "title": "Aktivitätsspeicher für {entry_title} ist voll", "description": "Der lokale Aktivitätsspeicher hat sein konfiguriertes Limit erreicht. Die älteste Aktivität wird gelöscht, um Speicherplatz für neue Aktivitäten freizugeben." },
-    "credential_source_unreachable": { "title": "Anmeldedatenquelle für {entry_title} nicht erreichbar", "description": "Diese Instanz kann die Home-Assistant-Instanz nicht erreichen, die ihre Akuvox-Anmeldedaten teilt. Zwischengespeicherte Anmeldedaten werden weiter verwendet, bis SmartPlus sie ablehnt." },
-    "credential_source_revoked": { "title": "Freigabe der Anmeldedaten für {entry_title} widerrufen", "description": "Die Quell-Home-Assistant-Instanz hat diesen Empfänger widerrufen. Koppeln Sie die Integration erneut, um den Zugriff wiederherzustellen." },
-    "credential_source_source_needs_reauth": { "title": "Anmeldedatenquelle für {entry_title} liefert ungültige Anmeldedaten", "description": "SmartPlus hat das von der Quell-Home-Assistant-Instanz bereitgestellte Token abgelehnt. Melden Sie Akuvox SmartPlus auf der Quellinstanz erneut an und aktualisieren Sie dann die geteilten Anmeldedaten auf dieser Empfängerinstanz." }
-  },
-  "device_automation": { "trigger_type": { "door_unlocked": "Tür geöffnet" } },
-  "options": { "step": { "init": { "title": "Akuvox SmartPlus Ereigniskonfiguration", "description": "Passen Sie die Türereigniseinstellungen für diese Integration an.", "data": { "country": "Das in Ihrem Akuvox-SmartPlus-Konto registrierte Land", "subdomain": "Regionale API-Subdomain manuell festlegen", "create_share_for": "10 Minuten gültigen Kopplungslink für diesen Empfänger erstellen", "revoke_pairing_link": "Von dieser Home-Assistant-Instanz erstellten Kopplungslink widerrufen" } } } }
+    "issues": {
+        "reauthentication_required": {
+            "title": "Erneute Anmeldung für {entry_title} erforderlich",
+            "description": "Akuvox SmartPlus akzeptiert die Sitzung dieses Kontos nicht mehr. Öffnen Sie die Akuvox-Integration und schließen Sie die erneute Anmeldung ab, um den Zugriff wiederherzustellen."
+        },
+        "activity_storage_90": {
+            "title": "Aktivitätsspeicher für {entry_title} ist fast voll",
+            "description": "Der lokale Aktivitätsspeicher hat 90 % des konfigurierten Limits überschritten. Erhöhen Sie das Limit, um die automatische Bereinigung zu vermeiden."
+        },
+        "activity_storage_95": {
+            "title": "Aktivitätsspeicher für {entry_title} ist nahezu voll",
+            "description": "Der lokale Aktivitätsspeicher hat 95 % des konfigurierten Limits überschritten. Erhöhen Sie das Limit, um die automatische Bereinigung zu vermeiden."
+        },
+        "activity_storage_99": {
+            "title": "Aktivitätsspeicher für {entry_title} ist beinahe voll",
+            "description": "Der lokale Aktivitätsspeicher hat 99 % des konfigurierten Limits überschritten. Erhöhen Sie das Limit, um die automatische Bereinigung zu vermeiden."
+        },
+        "activity_storage_full": {
+            "title": "Aktivitätsspeicher für {entry_title} ist voll",
+            "description": "Der lokale Aktivitätsspeicher hat sein konfiguriertes Limit erreicht. Die älteste Aktivität wird gelöscht, um Speicherplatz für neue Aktivitäten freizugeben."
+        },
+        "credential_source_unreachable": {
+            "title": "Anmeldedatenquelle für {entry_title} nicht erreichbar",
+            "description": "Diese Instanz kann die Home-Assistant-Instanz nicht erreichen, die ihre Akuvox-Anmeldedaten teilt. Zwischengespeicherte Anmeldedaten werden weiter verwendet, bis SmartPlus sie ablehnt."
+        },
+        "credential_source_revoked": {
+            "title": "Freigabe der Anmeldedaten für {entry_title} widerrufen",
+            "fix_flow": {
+                "step": {
+                    "repair": {
+                        "title": "Kopplungslink ersetzen",
+                        "description": "Fügen Sie einen neuen Kopplungslink von der Quell-Home-Assistant-Instanz ein, um den Zugriff wiederherzustellen.",
+                        "data": {
+                            "pairing_link": "Kopplungslink"
+                        }
+                    }
+                },
+                "error": {
+                    "cannot_reach_source": "Die Home-Assistant-Instanz, die diesen Kopplungslink erstellt hat, ist nicht erreichbar. Stellen Sie sicher, dass ihre externe HTTPS-URL von dieser Home-Assistant-Instanz erreichbar ist.",
+                    "invalid_share": "Dieser Kopplungslink ist ungültig, abgelaufen oder wurde widerrufen."
+                }
+            }
+        },
+        "credential_source_source_needs_reauth": {
+            "title": "Anmeldedatenquelle für {entry_title} liefert ungültige Anmeldedaten",
+            "description": "SmartPlus hat das von der Quell-Home-Assistant-Instanz bereitgestellte Token abgelehnt. Melden Sie Akuvox SmartPlus auf der Quellinstanz erneut an und aktualisieren Sie dann die geteilten Anmeldedaten auf dieser Empfängerinstanz."
+        }
+    },
+    "device_automation": {
+        "trigger_type": {
+            "door_unlocked": "Tür geöffnet"
+        }
+    },
+    "options": {
+        "step": {
+            "init": {
+                "title": "Akuvox SmartPlus Ereigniskonfiguration",
+                "description": "Passen Sie die Türereigniseinstellungen für diese Integration an.",
+                "data": {
+                    "country": "Das in Ihrem Akuvox-SmartPlus-Konto registrierte Land",
+                    "subdomain": "Regionale API-Subdomain manuell festlegen",
+                    "create_share_for": "10 Minuten gültigen Kopplungslink für diesen Empfänger erstellen",
+                    "revoke_pairing_link": "Von dieser Home-Assistant-Instanz erstellten Kopplungslink widerrufen"
+                }
+            }
+        }
+    }
 }
