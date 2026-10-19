@@ -8,15 +8,15 @@ test.describe("Akuvox panel smoke test", () => {
 
   test("an administrator can load every non-destructive panel tab", async ({ page }) => {
     await page.goto(process.env.AKUVOX_HA_URL);
-    await page.getByLabel(/username/i).fill(process.env.AKUVOX_HA_USERNAME);
-    await page.getByLabel(/password/i).fill(process.env.AKUVOX_HA_PASSWORD);
+    await page.getByRole("textbox", { name: "Username" }).fill(process.env.AKUVOX_HA_USERNAME);
+    await page.getByRole("textbox", { name: "Password" }).fill(process.env.AKUVOX_HA_PASSWORD);
     await page.getByRole("button", { name: /log in/i }).click();
+    await page.waitForURL((url) => url.pathname === "/akuvox-smartplus", { timeout: 15_000 });
 
-    await page.goto(new URL("/akuvox-smartplus", process.env.AKUVOX_HA_URL).toString());
-    await expect(page.locator("akuvox-smartplus-panel")).toBeVisible();
+    await expect(page.locator("akuvox-smartplus-panel")).toBeVisible({ timeout: 15_000 });
 
     const panel = page.locator("akuvox-smartplus-panel");
-    for (const tab of ["Devices", "Latest Activity", "Call History", "Temporary Keys", "Automations", "Settings", "Help & Info"]) {
+    for (const tab of ["Devices", "Latest activity", "Call history", "Temporary keys", "Automations", "Settings", "Help & Info"]) {
       await panel.getByRole("button", { name: tab, exact: true }).click();
       await expect(panel).toContainText(tab);
     }
