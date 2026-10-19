@@ -33,7 +33,7 @@ export const showActionsMenu = (host, trigger, event, { id, label, actions }) =>
   menu.dataset.actionMenuId = id;
   menu.setAttribute("role", "menu");
   menu.setAttribute("aria-label", label);
-  menu.style.cssText = `position:fixed;z-index:10001;top:${bounds.bottom + 8}px;left:12px;width:max-content;max-width:calc(100vw - 24px);padding:8px;border:1px solid var(--divider-color,#d1d5db);border-radius:14px;background:var(--card-background-color,#fff);box-shadow:0 14px 32px #0003;`;
+  menu.style.cssText = "position:fixed;z-index:10001;top:12px;left:12px;width:max-content;max-width:calc(100vw - 24px);max-height:calc(100vh - 24px);overflow-y:auto;padding:8px;border:1px solid var(--divider-color,#d1d5db);border-radius:14px;background:var(--card-background-color,#fff);box-shadow:0 14px 32px #0003;";
 
   menu.innerHTML = actions.map((action) => `<button type="button" role="menuitem" data-menu-action="${action.id}" class="${action.danger ? "delete-action" : ""}" ${action.disabled ? "disabled" : ""} ${action.title ? `title="${action.title}"` : ""}>${action.icon}<span>${action.label}</span></button>`).join("");
 
@@ -101,7 +101,15 @@ export const showActionsMenu = (host, trigger, event, { id, label, actions }) =>
   documentRef.body.append(menu);
   localizeElement(host, menu);
 
-  const menuWidth = menu.getBoundingClientRect().width;
+  const menuBounds = menu.getBoundingClientRect();
+  const menuWidth = menuBounds.width;
+  const maxTop = Math.max(12, window.innerHeight - menuBounds.height - 12);
+  const belowTop = bounds.bottom + 8;
+  const aboveTop = bounds.top - menuBounds.height - 8;
+  const menuTop = belowTop <= maxTop || aboveTop < 12
+    ? Math.min(belowTop, maxTop)
+    : aboveTop;
+  menu.style.top = `${Math.max(12, menuTop)}px`;
   menu.style.left = `${Math.max(12, Math.min(bounds.right - menuWidth, window.innerWidth - menuWidth - 12))}px`;
 };
 

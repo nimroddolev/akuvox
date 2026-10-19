@@ -57,7 +57,9 @@ export const bindMultiSelectFilters = (host, scope, filters, onChange) => {
   host._multiFilterOutsideAbort = outsideAbort;
   host.shadowRoot.ownerDocument.addEventListener("pointerdown", (event) => {
     if (!host._openFilterMenu) return;
-    if (event.composedPath().some((node) => node?.dataset?.filterMenu)) return;
+    if (event.composedPath().some((node) =>
+      node?.dataset?.filterMenu || node?.dataset?.clearMobileFilters !== undefined
+    )) return;
     host._openFilterMenu = "";
     onChange();
   }, { capture: true, signal: outsideAbort.signal });
