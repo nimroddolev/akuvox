@@ -10,7 +10,7 @@ import {
   buildDoorNotificationAutomation,
   requestDoorNotificationAutomation,
   showDoorNotificationCreated,
-} from "./settings-view.js?v=20261016-notification-preview-expanded";
+} from "./settings-view.js?v=20261019-share-status-detail";
 
 const captureTypesForOpened = ["Face Unlock", "Unlock on SmartPlus"];
 const temporaryKeyCaptureType = "Temp Key Unlock";

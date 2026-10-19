@@ -20,7 +20,7 @@ from homeassistant.helpers import storage
 from homeassistant.helpers.network import NoURLAvailableError, get_url
 from homeassistant.helpers.storage import Store
 
-from .const import DOMAIN, LOGGER, account_storage_key
+from .const import DOMAIN, LOGGER, PANEL_DATA_UPDATED_EVENT, account_storage_key
 from .credentials import (
     async_get_credentials,
     async_get_remote_share_secret,
@@ -197,6 +197,14 @@ def _permission_relay_ids(share: dict[str, Any], key: str, legacy_flag: str) -> 
     return [item for item in share.get("device_ids", []) if isinstance(item, str) and item.startswith("relay:")]
 
 
+def _permission_member_names(share: dict[str, Any], key: str, legacy_flag: str) -> list[str] | None:
+    """Return selected members, preserving legacy allow-all shares."""
+    configured = share.get(key)
+    if isinstance(configured, list):
+        return [item for item in configured if isinstance(item, str)]
+    return None if share.get(legacy_flag, True) else []
+
+
 def _share_access_has_expired(share: dict[str, Any]) -> bool:
     """Return whether an optional receiver-access expiry has elapsed.
 
@@ -334,6 +342,58 @@ async def async_revoke_share(hass: HomeAssistant, share_id: str) -> bool:
     return True
 
 
+async def async_renew_share(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    share_id: str,
+    external_url: str,
+) -> str:
+    """Replace a revoked or expired pairing link with the same share settings."""
+    store = _store(hass)
+    shares = await store.async_load() or {}
+    share = shares.get(share_id)
+    if not isinstance(share, dict) or share.get("entry_id") != entry.entry_id:
+        raise ValueError("Paired Home Assistant was not found")
+
+    try:
+        pairing_expired = (
+            not share.get("activated")
+            and datetime.fromisoformat(str(share.get("expires_at", ""))).astimezone(
+                timezone.utc
+            )
+            <= datetime.now(timezone.utc)
+        )
+    except (TypeError, ValueError):
+        pairing_expired = not share.get("activated")
+    if not share.get("revoked") and not pairing_expired:
+        raise ValueError("Only revoked or expired pairing links can be renewed")
+
+    # Creating a link normally rejects a duplicate receiver name. Remove the
+    # unusable record first, and restore it if creating the replacement fails.
+    del shares[share_id]
+    await store.async_save(shares)
+    try:
+        return await async_create_share(
+            hass,
+            entry,
+            external_url,
+            str(share.get("receiver_name", "Unnamed receiver")),
+            list(share.get("device_ids", [])),
+            bool(share.get("allow_create_keys", True)),
+            bool(share.get("allow_edit_keys", True)),
+            share.get("access_expires_at"),
+            _permission_relay_ids(share, "create_key_relay_ids", "allow_create_keys"),
+            _permission_relay_ids(share, "edit_key_relay_ids", "allow_edit_keys"),
+            _permission_relay_ids(share, "view_key_relay_ids", "allow_view_keys"),
+            _permission_member_names(share, "activity_member_names", "allow_activity"),
+            _permission_member_names(share, "call_member_names", "allow_call_history"),
+        )
+    except Exception:
+        shares[share_id] = share
+        await store.async_save(shares)
+        raise
+
+
 async def async_delete_share(hass: HomeAssistant, share_id: str) -> bool:
     """Permanently remove a revoked pairing record."""
     shares = await _store(hass).async_load() or {}
@@ -431,7 +491,7 @@ async def async_fetch_shared_snapshot(
         if response.status == 304:
             return None, response.headers.get("ETag", etag)
         if response.status == 410:
-            raise PermissionError("The pairing link has expired. Generate a new link from the host Home Assistant.")
+            raise PermissionError("The pairing link has expired.")
         if (
             response.status == 403
             and response.headers.get(_CREDENTIAL_SHARE_RESPONSE_HEADER)
@@ -625,6 +685,9 @@ class CredentialShareView(HomeAssistantView):
         share["activated"] = True
         share["last_sync"] = datetime.now(timezone.utc).isoformat()
         await _store(self.hass).async_save(shares)
+        self.hass.bus.async_fire(
+            PANEL_DATA_UPDATED_EVENT, {"entry_id": share["entry_id"]}
+        )
         if request.headers.get("If-None-Match") == revision:
             return web.Response(status=304, headers={"ETag": revision, "Cache-Control": "no-store"})
         connection = {key: entry.data.get(key, "") for key in ("host", "subdomain", "country_code", "phone_number")}

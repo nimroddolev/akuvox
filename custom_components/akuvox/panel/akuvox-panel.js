@@ -8,7 +8,7 @@ import { PANEL_TAG, TAB_HASHES, TAB_HASH_BY_ID, TABS } from "./utils/constants.j
 import { closeOnBackdrop, escapeHtml } from "./utils/dom.js";
 import { copyText } from "./utils/clipboard.js";
 import { settingsRenderSignature } from "./utils/settings-signature.js";
-import { getPanelStyles } from "./styles/index.js?v=20261018-automation-mobile-layout";
+import { getPanelStyles } from "./styles/index.js?v=20261019-renew-pairing-link";
 import { showNotice, confirmModal, callWsWithBlocker } from "./components/dialogs.js?v=20261013-danger-confirmation";
 import { installCameraRelayActions } from "./components/camera-actions.js?v=20261015-flexible-camera-action-widths";
 import { closeKeyActionsMenu } from "./components/key-menu.js";
@@ -27,7 +27,7 @@ import {
   deleteSelectedKeys,
 } from "./views/keys-view.js?v=20261014-persist-filters";
 import { renderAutomationsView, bindAutomationsEvents } from "./views/automations-view.js?v=20261016-notification-preview-expanded";
-import { renderSettingsView, bindSettingsEvents, updateActivityStorageProgress, updateRemoteShareConnectionStatus } from "./views/settings-view.js?v=20261016-notification-preview-expanded";
+import { renderSettingsView, bindSettingsEvents, updateActivityStorageProgress, updatePairedReceiverStatuses, updateRemoteShareConnectionStatus } from "./views/settings-view.js?v=20261019-share-status-detail";
 import { renderHelpView } from "./views/help-view.js";
 
 const ROW_VIEW_MODE_STORAGE_KEY = "akuvox-panel-row-view-mode";
@@ -567,6 +567,7 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
       this._settings = result.settings;
       this._settingsEntryId = entryId;
       updateRemoteShareConnectionStatus(this, this._settings.remote_last_sync);
+      updatePairedReceiverStatuses(this, this._settings.credential_shares);
       // Storage usage changes independently of saved options, so it must not
       // rebuild the Settings form while a native select is open.
       // Receiver sync timestamps are runtime status, not editable settings.

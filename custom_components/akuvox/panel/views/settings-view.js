@@ -983,25 +983,55 @@ export const updateRemoteShareConnectionStatus = (host, lastSync) => {
   if (status) status.outerHTML = remoteShareConnectionSection(host, lastSync);
 };
 
+const pairedReceiverState = (host, share) => {
+  const expiresAt = Date.parse(share.expires_at || "");
+  const pendingExpired = !share.activated && (!Number.isFinite(expiresAt) || expiresAt <= Date.now());
+  const status = pendingExpired ? "Pairing link expired" : share.revoked ? "Revoked" : !share.activated ? "Waiting to pair" : receiverIsConnected(share) ? "Connected" : "Disconnected";
+  const statusClass = status === "Connected"
+    ? "connected"
+    : status === "Waiting to pair"
+      ? "waiting"
+      : status === "Pairing link expired"
+        ? "expired"
+        : status === "Revoked"
+          ? "revoked"
+          : "disconnected";
+  const detail = pendingExpired || status === "Revoked"
+    ? ""
+    : status === "Waiting to pair"
+      ? `${t(host, "Pairing link expires in")} <span data-pairing-expiry="${expiresAt}">${formatPairingTimeRemaining(expiresAt - Date.now())}</span>`
+      : share.last_sync ? relativeContactTime(host, share.last_sync) : t(host, "Waiting for the first connection");
+  return { detail, pendingExpired, status, statusClass };
+};
+
+/** Refresh each source-side receiver badge without rebuilding the Settings form. */
+export const updatePairedReceiverStatuses = (host, shares = []) => {
+  shares.forEach((share) => {
+    const row = [...(host.shadowRoot?.querySelectorAll("[data-credential-share-row]") || [])]
+      .find((item) => item.dataset.credentialShareRow === String(share.share_id || ""));
+    if (!row) return;
+    const { detail, status, statusClass } = pairedReceiverState(host, share);
+    row.classList.remove("connected", "disconnected", "expired", "revoked", "waiting");
+    row.classList.add(statusClass);
+    const badge = row.querySelector("[data-credential-share-badge]");
+    if (badge) badge.textContent = t(host, status);
+    const detailElement = row.querySelector("[data-credential-share-detail]");
+    if (detailElement) detailElement.innerHTML = detail;
+  });
+};
+
 const pairedReceiversSection = (host, shares = []) => {
   if (!shares.length) return "";
   return `<div class="credential-share-receivers settings-subsection">
     <p class="settings-list-label">Connected nodes</p>
     ${shares.map((share) => {
-      const expiresAt = Date.parse(share.expires_at || "");
-      const pendingExpired = !share.activated && (!Number.isFinite(expiresAt) || expiresAt <= Date.now());
-      const status = pendingExpired ? "Pairing link expired" : share.revoked ? "Revoked" : !share.activated ? "Waiting to pair" : receiverIsConnected(share) ? "Connected" : "Disconnected";
-      const statusClass = status === "Connected" ? "connected" : status === "Waiting to pair" ? "waiting" : "disconnected";
-      const detail = pendingExpired
-        ? ""
-        : status === "Waiting to pair"
-          ? `${t(host, "Pairing link expires in")} <span data-pairing-expiry="${expiresAt}">${formatPairingTimeRemaining(expiresAt - Date.now())}</span>`
-          : share.last_sync ? relativeContactTime(host, share.last_sync) : t(host, "Waiting for the first connection");
-      return `<div class="credential-share-receiver-row ${statusClass}">
-        <span class="credential-share-status"><span class="remote-node-indicator" aria-hidden="true"></span><span><strong>${escapeHtml(share.receiver_name)}</strong><small><em>${escapeHtml(t(host, status))}</em>${detail ? `<span class="credential-share-separator" aria-hidden="true">·</span><span>${detail}</span>` : ""}</small></span></span>
-        <span class="credential-share-actions"><button class="action credential-share-view-button" type="button" data-view-credential-share="${escapeHtml(share.share_id)}" aria-label="View paired Home Assistant" title="View paired Home Assistant">${icons.eye}</button>${share.revoked
-          ? `<button class="danger key-menu-button" type="button" data-delete-credential-share="${escapeHtml(share.share_id)}" aria-label="Delete paired Home Assistant" title="Delete paired Home Assistant">${icons.trash}</button>`
-          : `<button class="action" type="button" data-revoke-credential-share="${escapeHtml(share.share_id)}">Revoke</button>`}</span>
+      const { detail, pendingExpired, status, statusClass } = pairedReceiverState(host, share);
+      return `<div class="credential-share-receiver-row ${statusClass}" data-credential-share-row="${escapeHtml(share.share_id)}">
+        <span class="credential-share-receiver-icon" aria-hidden="true">${icons.homeAssistant}</span>
+        <span class="credential-share-status"><span class="credential-share-copy"><span class="credential-share-title"><strong>${escapeHtml(share.receiver_name)}</strong><em data-credential-share-badge>${escapeHtml(t(host, status))}</em></span>${detail ? `<small data-credential-share-detail>${detail}</small>` : ""}</span></span>
+        <span class="credential-share-actions"><button class="credential-share-view-button" type="button" data-view-credential-share="${escapeHtml(share.share_id)}" aria-label="View paired Home Assistant" title="View paired Home Assistant"><span>View</span></button>${share.revoked || pendingExpired
+          ? `<button class="credential-share-renew-button" type="button" data-renew-credential-share="${escapeHtml(share.share_id)}">${t(host, "Renew")}</button><button class="credential-share-delete-button" type="button" data-delete-credential-share="${escapeHtml(share.share_id)}" aria-label="Delete paired Home Assistant" title="Delete paired Home Assistant">${icons.trash}</button>`
+          : `<button class="credential-share-revoke-button" type="button" data-revoke-credential-share="${escapeHtml(share.share_id)}">Revoke</button>`}</span>
       </div>`;
     }).join("")}
   </div>`;
@@ -1445,10 +1475,10 @@ export const renderSettingsView = (host) => {
           ${remoteShareConnectionSection(settings.remote_last_sync)}
         </fieldset>` : `
         <fieldset class="settings-section remote-instances-section">
-          <legend>${icons.hub}<span>Share Access With Another Instance</span></legend>
+          <legend><span>Share an account</span></legend>
           <div class="credential-share-intro">
-            <p class="settings-section-description">Securely bridge cameras, relays, activity history, call history, events and temporary keys with other Home Assistant instances.</p>
-            <button class="action settings-inline-action" type="button" data-create-credential-share>${icons.externalLink}<span>Create pairing link</span></button>
+            <p class="settings-section-description">Create a pairing link to securely share your Akuvox SmartPlus account with other Home Assistant instances. Each link can be used by one receiver and can be revoked at any time.</p>
+            <button class="action settings-inline-action" type="button" data-create-credential-share><span>Create pairing link</span></button>
           </div>
           ${pairedReceiversSection(host, settings.credential_shares)}
         </fieldset>`}
@@ -1804,6 +1834,23 @@ export const bindSettingsEvents = (host) => {
         }
       } catch (error) {
         showNotice(host, error?.message || "Could not revoke the paired Home Assistant.", "Revoke failed");
+      }
+    });
+  });
+
+  settingsForm.querySelectorAll("[data-renew-credential-share]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      try {
+        const response = await callWsWithBlocker(host, {
+          type: "akuvox/panel_renew_credential_share",
+          entry_id: host._activeAccount,
+          share_id: button.dataset.renewCredentialShare,
+          source_url: window.location.origin,
+        });
+        await showPairingLinkNotice(host, response.pairing_link);
+        host._requestLoad?.({ forceRender: true });
+      } catch (error) {
+        showNotice(host, error?.message || "Could not renew the pairing link.", "Renew failed");
       }
     });
   });

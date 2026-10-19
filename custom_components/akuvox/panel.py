@@ -63,7 +63,7 @@ from .repairs import (
 from .sharing import (
     SHARED_MODE, SHARED_MODE_REMOTE, async_apply_remote_share_link, async_create_share,
     async_fetch_shared_image, async_list_shares, get_external_url,
-    async_delete_share, async_revoke_share, async_sync_remote_entry,
+    async_delete_share, async_renew_share, async_revoke_share, async_sync_remote_entry,
 )
 
 _PANEL_MODULE = "akuvox-panel.js"
@@ -147,6 +147,7 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
     )
     websocket_api.async_register_command(hass, websocket_panel_apply_remote_share_link)
     websocket_api.async_register_command(hass, websocket_panel_create_credential_share)
+    websocket_api.async_register_command(hass, websocket_panel_renew_credential_share)
     websocket_api.async_register_command(hass, websocket_panel_revoke_credential_share)
     websocket_api.async_register_command(hass, websocket_panel_delete_credential_share)
     websocket_api.async_register_command(hass, websocket_panel_camera_preview)
@@ -963,6 +964,40 @@ async def websocket_panel_create_credential_share(
         )
     except ValueError as error:
         connection.send_error(msg["id"], "duplicate_receiver_name", str(error))
+        return
+    except AttributeError as error:
+        connection.send_error(msg["id"], "external_url_required", str(error))
+        return
+    connection.send_result(msg["id"], {"pairing_link": pairing_link})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "akuvox/panel_renew_credential_share",
+        vol.Required("entry_id"): str,
+        vol.Required("share_id"): str,
+        vol.Optional("source_url", default=""): str,
+    }
+)
+@websocket_api.async_response
+async def websocket_panel_renew_credential_share(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Renew a revoked or expired pairing link with its existing permissions."""
+    if not _require_admin(connection, msg):
+        return
+    entry = _local_share_source_entry(hass, connection, msg)
+    if entry is None:
+        return
+    try:
+        source_url = str(msg["source_url"]).strip()
+        if not source_url.startswith("https://"):
+            source_url = get_external_url(hass)
+        pairing_link = await async_renew_share(hass, entry, msg["share_id"], source_url)
+    except ValueError as error:
+        connection.send_error(msg["id"], "not_renewable", str(error))
         return
     except AttributeError as error:
         connection.send_error(msg["id"], "external_url_required", str(error))
