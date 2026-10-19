@@ -816,7 +816,8 @@ export const mainStyles = `
     margin: 0 0 8px;
     padding: 0;
     color: var(--panel-text);
-    font-size: 17px;
+    font-size: 15px;
+    font-weight: 600;
     letter-spacing: 0;
     text-transform: none;
     background: transparent;
@@ -828,19 +829,21 @@ export const mainStyles = `
   .remote-instances-section .credential-share-status { display: block; min-width: 0; margin: 0; white-space: normal; }
   .remote-instances-section .credential-share-copy { display: grid; min-width: 0; gap: 4px; }
   .remote-instances-section .credential-share-title { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; }
-  .remote-instances-section .credential-share-status strong { color: var(--panel-text); font-size: 17px; font-weight: 700; }
+  .remote-instances-section .credential-share-status strong { flex: 0 1 auto; min-width: 0; max-width: 100%; overflow-wrap: anywhere; color: var(--panel-text); font-size: 17px; font-weight: 700; }
   .remote-instances-section .credential-share-status em { padding: 4px 10px; border-radius: 999px; font-size: 12px; font-style: normal; font-weight: 600; line-height: 1; }
   .remote-instances-section .credential-share-status small { display: block; min-width: 0; color: var(--panel-muted); font-size: 13px; line-height: 1.35; overflow-wrap: anywhere; white-space: normal; }
   .remote-instances-section .credential-share-receiver-row.connected .credential-share-status em { color: #16723b; background: #dcfae6; }
   .remote-instances-section .credential-share-receiver-row.waiting .credential-share-status em { color: #9a6700; background: #fef0c7; }
   .remote-instances-section .credential-share-receiver-row.disconnected .credential-share-status em, .remote-instances-section .credential-share-receiver-row.expired .credential-share-status em, .remote-instances-section .credential-share-receiver-row.revoked .credential-share-status em { color: #b42318; background: #fee4e2; }
   .remote-instances-section .credential-share-actions { display: flex; align-items: center; gap: 10px; margin: 0; }
-  .remote-instances-section .credential-share-actions > button { display: inline-flex; align-items: center; justify-content: center; min-width: 88px; min-height: 42px; padding: 8px 14px; border: 1px solid var(--panel-outline); border-radius: 8px; color: var(--panel-text); background: transparent; font: inherit; font-weight: 600; cursor: pointer; }
+  .remote-instances-section .credential-share-action-buttons { display: flex; align-items: center; gap: 10px; }
+  .remote-instances-section .credential-share-action-buttons > button, .remote-instances-section .credential-share-actions > .credential-share-menu-button { display: inline-flex; align-items: center; justify-content: center; min-width: 88px; min-height: 42px; padding: 8px 14px; border: 1px solid var(--panel-outline); border-radius: 8px; color: var(--panel-text); background: transparent; font: inherit; font-weight: 600; cursor: pointer; }
   .remote-instances-section .credential-share-actions .credential-share-revoke-button, .remote-instances-section .credential-share-actions .credential-share-delete-button { border-color: color-mix(in srgb, #dc2626 48%, var(--panel-outline)); color: #c62828; }
   .remote-instances-section .credential-share-actions .credential-share-renew-button { border-color: var(--aqua); color: #fff; background: var(--aqua); }
   .remote-instances-section .credential-share-actions .credential-share-delete-button { min-width: 42px; padding: 8px; }
   .remote-instances-section .credential-share-actions .credential-share-delete-button svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; }
-  .remote-instances-section .credential-share-actions > button:hover, .remote-instances-section .credential-share-actions > button:focus-visible { background: color-mix(in srgb, var(--aqua) 8%, var(--panel-card)); outline: 2px solid var(--aqua); outline-offset: 2px; }
+  .remote-instances-section .credential-share-actions > .credential-share-menu-button { display: none; width: 42px; min-width: 42px; min-height: 42px; padding: 0; font-size: 24px; line-height: 1; }
+  .remote-instances-section .credential-share-action-buttons > button:hover, .remote-instances-section .credential-share-action-buttons > button:focus-visible, .remote-instances-section .credential-share-actions > .credential-share-menu-button:hover, .remote-instances-section .credential-share-actions > .credential-share-menu-button:focus-visible { background: color-mix(in srgb, var(--aqua) 8%, var(--panel-card)); outline: 2px solid var(--aqua); outline-offset: 2px; }
   .remote-instances-section .credential-share-actions .credential-share-revoke-button:hover, .remote-instances-section .credential-share-actions .credential-share-delete-button:hover { background: color-mix(in srgb, #dc2626 8%, var(--panel-card)); }
   .remote-instances-section .credential-share-actions .credential-share-renew-button:hover, .remote-instances-section .credential-share-actions .credential-share-renew-button:focus-visible { background: color-mix(in srgb, var(--aqua) 82%, #000); }
   :host([dark]) .remote-instances-section .credential-share-receiver-row { background: var(--panel-card); }
@@ -848,7 +851,7 @@ export const mainStyles = `
   :host([dark]) .remote-instances-section .credential-share-receiver-row.connected .credential-share-status em { color: #bbf7d0; background: #143b2b; }
   :host([dark]) .remote-instances-section .credential-share-receiver-row.waiting .credential-share-status em { color: #fde68a; background: #4a3510; }
   :host([dark]) .remote-instances-section .credential-share-receiver-row.disconnected .credential-share-status em, :host([dark]) .remote-instances-section .credential-share-receiver-row.expired .credential-share-status em, :host([dark]) .remote-instances-section .credential-share-receiver-row.revoked .credential-share-status em { color: #fecaca; background: #4a2028; }
-  :host([dark]) .remote-instances-section .credential-share-actions > button { border-color: #526171; color: var(--panel-text); }
+  :host([dark]) .remote-instances-section .credential-share-action-buttons > button, :host([dark]) .remote-instances-section .credential-share-actions > .credential-share-menu-button { border-color: #526171; color: var(--panel-text); }
   :host([dark]) .remote-instances-section .credential-share-actions .credential-share-revoke-button, :host([dark]) .remote-instances-section .credential-share-actions .credential-share-delete-button { border-color: #6b3943; color: #fecaca; }
   :host([dark]) .remote-instances-section .credential-share-actions .credential-share-renew-button { border-color: var(--aqua); color: #071721; background: var(--aqua); }
   .remote-instances-section, .sip-section { position: relative; }
@@ -907,6 +910,16 @@ export const mainStyles = `
     .remote-instances-section .credential-share-receiver-row { grid-template-columns: 44px minmax(0, 1fr); }
     .remote-instances-section .credential-share-receiver-icon { width: 44px; height: 44px; }
     .remote-instances-section .credential-share-actions { grid-column: 2; justify-self: start; }
+  }
+
+  .remote-instances-section { container-type: inline-size; }
+  @container (max-width: 640px) {
+    .remote-instances-section .credential-share-receiver-row { grid-template-columns: 48px minmax(0, 1fr) auto; gap: 12px; padding: 12px; }
+    .remote-instances-section .credential-share-receiver-icon { width: 48px; height: 48px; }
+    .remote-instances-section .credential-share-receiver-icon svg { width: 32px; height: 32px; }
+    .remote-instances-section .credential-share-actions { grid-column: auto; justify-self: end; }
+    .remote-instances-section .credential-share-action-buttons { display: none; }
+    .remote-instances-section .credential-share-actions > .credential-share-menu-button { display: inline-grid; place-items: center; }
   }
 
   .check {

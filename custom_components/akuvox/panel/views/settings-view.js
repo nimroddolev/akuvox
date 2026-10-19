@@ -5,6 +5,7 @@
 import { closeOnBackdrop, escapeHtml } from "../utils/dom.js";
 import { icons } from "../utils/icons.js?v=20260930-notification-bell-v5";
 import { callWsWithBlocker, confirmModal, showNotice, showPairingLinkNotice } from "../components/dialogs.js?v=20261003-i18n-statuses";
+import { showActionsMenu } from "../components/key-menu.js?v=20261019-connected-node-menu";
 import { CAMERA_ORIENTATION_OPTIONS } from "../utils/orientation.js?v=20260830-combined-directional-labels";
 import { formatStorageAmount } from "../utils/formatters.js?v=20261014-shared-display-formatters";
 import { localizeElement, t } from "../utils/i18n.js?v=20261005-pseudo-spanish";
@@ -1026,12 +1027,13 @@ const pairedReceiversSection = (host, shares = []) => {
     <p class="settings-list-label">Connected nodes</p>
     ${shares.map((share) => {
       const { detail, pendingExpired, status, statusClass } = pairedReceiverState(host, share);
+      const renewable = share.revoked || pendingExpired;
       return `<div class="credential-share-receiver-row ${statusClass}" data-credential-share-row="${escapeHtml(share.share_id)}">
         <span class="credential-share-receiver-icon" aria-hidden="true">${icons.homeAssistant}</span>
         <span class="credential-share-status"><span class="credential-share-copy"><span class="credential-share-title"><strong>${escapeHtml(share.receiver_name)}</strong><em data-credential-share-badge>${escapeHtml(t(host, status))}</em></span>${detail ? `<small data-credential-share-detail>${detail}</small>` : ""}</span></span>
-        <span class="credential-share-actions"><button class="credential-share-view-button" type="button" data-view-credential-share="${escapeHtml(share.share_id)}" aria-label="View paired Home Assistant" title="View paired Home Assistant"><span>View</span></button>${share.revoked || pendingExpired
+        <span class="credential-share-actions"><span class="credential-share-action-buttons"><button class="credential-share-view-button" type="button" data-view-credential-share="${escapeHtml(share.share_id)}" aria-label="View paired Home Assistant" title="View paired Home Assistant"><span>View</span></button>${renewable
           ? `<button class="credential-share-renew-button" type="button" data-renew-credential-share="${escapeHtml(share.share_id)}">${t(host, "Renew")}</button><button class="credential-share-delete-button" type="button" data-delete-credential-share="${escapeHtml(share.share_id)}" aria-label="Delete paired Home Assistant" title="Delete paired Home Assistant">${icons.trash}</button>`
-          : `<button class="credential-share-revoke-button" type="button" data-revoke-credential-share="${escapeHtml(share.share_id)}">Revoke</button>`}</span>
+          : `<button class="credential-share-revoke-button" type="button" data-revoke-credential-share="${escapeHtml(share.share_id)}">Revoke</button>`}</span><button class="credential-share-menu-button" type="button" data-credential-share-menu="${escapeHtml(share.share_id)}" aria-label="Connected node actions" aria-haspopup="menu">⋯</button></span>
       </div>`;
     }).join("")}
   </div>`;
@@ -1876,6 +1878,28 @@ export const bindSettingsEvents = (host) => {
       } catch (error) {
         showNotice(host, error?.message || "Could not delete the revoked receiver.", "Delete failed");
       }
+    });
+  });
+
+  settingsForm.querySelectorAll("[data-credential-share-menu]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      const row = button.closest("[data-credential-share-row]");
+      if (!row) return;
+      const menuAction = (selector, id, label, icon, danger = false) => {
+        const actionButton = row.querySelector(selector);
+        return actionButton && { id, label, icon, danger, onSelect: () => actionButton.click() };
+      };
+      const actions = [
+        menuAction("[data-view-credential-share]", "view", "View", icons.eye),
+        menuAction("[data-renew-credential-share]", "renew", "Renew", icons.restart),
+        menuAction("[data-revoke-credential-share]", "revoke", "Revoke", icons.link, true),
+        menuAction("[data-delete-credential-share]", "delete", "Delete", icons.trash, true),
+      ].filter(Boolean);
+      showActionsMenu(host, button, event, {
+        id: `credential-share:${button.dataset.credentialShareMenu}`,
+        label: "Connected node actions",
+        actions,
+      });
     });
   });
 

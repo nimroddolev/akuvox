@@ -16,26 +16,12 @@ export const closeKeyActionsMenu = (host) => {
   host._keyActionsMenuAbort = undefined;
 };
 
-/**
- * Open the context menu for a temporary key row.
- * @param {HTMLElement} host
- * @param {HTMLElement} trigger
- * @param {Event} event
- * @param {object} callbacks
- * @param {(keyId: string) => void} callbacks.onQr
- * @param {(keyId: string) => void} callbacks.onEdit
- * @param {(keyCode: string) => void} callbacks.onDelete
- */
-export const showKeyActionsMenu = (host, trigger, event, { onQr, onEdit, onDelete }) => {
+/** Open a floating context menu using the shared temporary-key menu treatment. */
+export const showActionsMenu = (host, trigger, event, { id, label, actions }) => {
   event.stopPropagation();
-  const keyId = trigger.dataset.keyMenu;
-  const keyCode = trigger.dataset.keyCode;
-  const expired = trigger.dataset.keyExpired === "true";
-  const hasQrCode = trigger.dataset.keyHasQr === "true";
-  const canEdit = trigger.dataset.keyCanEdit !== "false";
-  if (!keyId || !keyCode) return;
+  if (!id || !actions.length) return;
 
-  if (host._keyActionsMenu?.dataset.keyId === keyId) {
+  if (host._keyActionsMenu?.dataset.actionMenuId === id) {
     closeKeyActionsMenu(host);
     return;
   }
@@ -44,16 +30,12 @@ export const showKeyActionsMenu = (host, trigger, event, { onQr, onEdit, onDelet
   const documentRef = host.shadowRoot.ownerDocument;
   const menu = documentRef.createElement("div");
   const bounds = trigger.getBoundingClientRect();
-  menu.dataset.keyId = keyId;
+  menu.dataset.actionMenuId = id;
   menu.setAttribute("role", "menu");
-  menu.setAttribute("aria-label", "Temporary key actions");
+  menu.setAttribute("aria-label", label);
   menu.style.cssText = `position:fixed;z-index:10001;top:${bounds.bottom + 8}px;left:12px;width:max-content;max-width:calc(100vw - 24px);padding:8px;border:1px solid var(--divider-color,#d1d5db);border-radius:14px;background:var(--card-background-color,#fff);box-shadow:0 14px 32px #0003;`;
 
-  menu.innerHTML = `
-    ${!expired && hasQrCode ? `<button type="button" role="menuitem" data-menu-qr>${icons.eye}<span>QR Code</span></button>` : ""}
-    ${!expired ? `<button type="button" role="menuitem" data-menu-edit ${canEdit ? "" : "disabled title=\"Editing requires permission for every relay in this key\""}>${icons.edit}<span>Edit</span></button>` : ""}
-    <button type="button" role="menuitem" data-menu-delete class="delete-action">${icons.trash}<span>Delete</span></button>
-  `;
+  menu.innerHTML = actions.map((action) => `<button type="button" role="menuitem" data-menu-action="${action.id}" class="${action.danger ? "delete-action" : ""}" ${action.disabled ? "disabled" : ""} ${action.title ? `title="${action.title}"` : ""}>${action.icon}<span>${action.label}</span></button>`).join("");
 
   menu.querySelectorAll("button").forEach((button) => {
     button.style.cssText =
@@ -82,19 +64,16 @@ export const showKeyActionsMenu = (host, trigger, event, { onQr, onEdit, onDelet
     icon.style.cssText =
       "width:19px;height:19px;flex:0 0 auto;fill:none;stroke:currentColor;stroke-width:2;";
   });
-  menu.querySelector(".delete-action").style.color = "var(--error-color,#dc2626)";
+  menu.querySelectorAll(".delete-action").forEach((button) => {
+    button.style.color = "var(--error-color,#dc2626)";
+  });
 
-  menu.querySelector("[data-menu-qr]")?.addEventListener("click", () => {
-    closeKeyActionsMenu(host);
-    onQr?.(keyId);
-  });
-  menu.querySelector("[data-menu-edit]")?.addEventListener("click", () => {
-    closeKeyActionsMenu(host);
-    onEdit?.(keyId);
-  });
-  menu.querySelector("[data-menu-delete]")?.addEventListener("click", () => {
-    closeKeyActionsMenu(host);
-    onDelete?.(keyCode);
+  actions.forEach((action) => {
+    menu.querySelector(`[data-menu-action="${action.id}"]`)?.addEventListener("click", () => {
+      if (action.disabled) return;
+      closeKeyActionsMenu(host);
+      action.onSelect?.();
+    });
   });
 
   const abort = new AbortController();
@@ -124,4 +103,21 @@ export const showKeyActionsMenu = (host, trigger, event, { onQr, onEdit, onDelet
 
   const menuWidth = menu.getBoundingClientRect().width;
   menu.style.left = `${Math.max(12, Math.min(bounds.right - menuWidth, window.innerWidth - menuWidth - 12))}px`;
+};
+
+/** Open the context menu for a temporary key row. */
+export const showKeyActionsMenu = (host, trigger, event, { onQr, onEdit, onDelete }) => {
+  const keyId = trigger.dataset.keyMenu;
+  const keyCode = trigger.dataset.keyCode;
+  const expired = trigger.dataset.keyExpired === "true";
+  const hasQrCode = trigger.dataset.keyHasQr === "true";
+  const canEdit = trigger.dataset.keyCanEdit !== "false";
+  if (!keyId || !keyCode) return;
+
+  const actions = [
+    !expired && hasQrCode && { id: "qr", label: "QR Code", icon: icons.eye, onSelect: () => onQr?.(keyId) },
+    !expired && { id: "edit", label: "Edit", icon: icons.edit, disabled: !canEdit, title: canEdit ? "" : "Editing requires permission for every relay in this key", onSelect: () => onEdit?.(keyId) },
+    { id: "delete", label: "Delete", icon: icons.trash, danger: true, onSelect: () => onDelete?.(keyCode) },
+  ].filter(Boolean);
+  showActionsMenu(host, trigger, event, { id: `key:${keyId}`, label: "Temporary key actions", actions });
 };
