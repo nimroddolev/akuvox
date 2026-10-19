@@ -2,9 +2,9 @@
  * Settings view: Event, display, and panel options.
  */
 
-import { closeOnBackdrop, escapeHtml } from "../utils/dom.js";
+import { closeOnBackdrop, escapeHtml, formState, hasFormChanges } from "../utils/dom.js?v=20261019-discard-backdrop-changes";
 import { icons } from "../utils/icons.js?v=20260930-notification-bell-v5";
-import { callWsWithBlocker, confirmModal, showNotice, showPairingLinkNotice } from "../components/dialogs.js?v=20261003-i18n-statuses";
+import { callWsWithBlocker, confirmModal, confirmDiscardChanges, showNotice, showPairingLinkNotice } from "../components/dialogs.js?v=20261019-discard-backdrop-changes-v2";
 import { showActionsMenu } from "../components/key-menu.js?v=20261019-connected-node-menu";
 import { CAMERA_ORIENTATION_OPTIONS } from "../utils/orientation.js?v=20260830-combined-directional-labels";
 import { formatStorageAmount } from "../utils/formatters.js?v=20261014-shared-display-formatters";
@@ -72,11 +72,17 @@ const companionNotificationServices = (services) => services.filter(
   (service) => service.startsWith("notify.mobile_app_")
 );
 
-const previewDeviceTypeForServices = (services) => {
+const notificationPlatforms = (services) => {
   const serviceNames = services.join(" ").toLocaleLowerCase();
-  if (/iphone|ipad|ios|apple/.test(serviceNames)) return "ios";
-  if (/android|pixel|galaxy|samsung/.test(serviceNames)) return "android";
-  return "ios";
+  return {
+    ios: /iphone|ipad|ios|apple/.test(serviceNames),
+    android: /android|pixel|galaxy|samsung/.test(serviceNames),
+  };
+};
+
+const previewDeviceTypeForServices = (services) => {
+  const platforms = notificationPlatforms(services);
+  return platforms.ios || !platforms.android ? "ios" : "android";
 };
 
 const IOS_NOTIFICATION_SOUNDS = [
@@ -256,15 +262,38 @@ const temporaryKeys = (host) => {
     .sort((left, right) => left.name.localeCompare(right.name));
 };
 
-const notificationAction = (service, withImage, relayActions = [], localize = (source, values = {}) => Object.entries(values).reduce((result, [key, value]) => result.replaceAll(`{${key}}`, String(value)), source)) => {
+const companionDeliveryData = ({ iosSound = "", androidChannel = "", priorityAlert = false, ios = true, android = true } = {}) => {
+  const sound = iosSound || (priorityAlert ? "default" : "");
+  return {
+    ...(ios && (sound || priorityAlert) ? { push: {
+      sound: priorityAlert ? { name: sound, critical: 1, volume: 1.0 } : sound,
+    } } : {}),
+    ...(android && priorityAlert ? { ttl: 0, priority: "high", channel: "alarm_stream" }
+      : androidChannel ? { channel: androidChannel } : {}),
+  };
+};
+
+const notificationAction = (service, withImage, relayActions = [], deliveryOptions = {}, localize = (source, values = {}) => Object.entries(values).reduce((result, [key, value]) => result.replaceAll(`{${key}}`, String(value)), source)) => {
+  const platforms = notificationPlatforms([service]);
+  const platformIsUnknown = !platforms.ios && !platforms.android;
+  const mobileData = service.startsWith("notify.mobile_app_")
+    ? companionDeliveryData({
+      iosSound: platforms.ios || platformIsUnknown ? deliveryOptions.iosSound : "",
+      androidChannel: platforms.android || platformIsUnknown ? deliveryOptions.androidChannel : "",
+      priorityAlert: deliveryOptions.priorityAlert && (platforms.ios || platforms.android || platformIsUnknown),
+      ios: platforms.ios || platformIsUnknown,
+      android: platforms.android || platformIsUnknown,
+    })
+    : {};
   return {
     action: service,
     data: {
     title: `{{ trigger.event.data.location }} {% if trigger.event.data.capture_type == 'Call' %}${localize("doorbell")}{% else %}${localize("opened")}{% endif %}`,
     message: `{% if trigger.event.data.capture_type == 'Call' %}${localize("Someone is calling from the {door} door.", { door: "{{ trigger.event.data.location }}" })}{% else %}${localize("The {door} door was opened by {initiator}.", { door: "{{ trigger.event.data.location }}", initiator: "{{ trigger.event.data.initiator | default('Unknown', true) }}" })}{% endif %}`,
-    ...((withImage || relayActions.length) ? { data: {
+    ...((withImage || relayActions.length || Object.keys(mobileData).length) ? { data: {
       ...(withImage ? { image: "{{ trigger.event.data.pic_url }}" } : {}),
       ...(relayActions.length ? { actions: relayActions } : {}),
+      ...mobileData,
     } } : {}),
   },
   };
@@ -346,8 +375,11 @@ const notificationSelection = (existing) => ({
   callerRules: [],
   callerOperator: "is",
   services: [],
-  includeRelayAction: false,
+  includeRelayAction: true,
   includeImage: true,
+  iosSound: "",
+  androidChannel: "",
+  priorityAlert: false,
   requireActionAuthentication: false,
   name: "",
   initialState: undefined,
@@ -375,7 +407,7 @@ const callerConditionSummary = (rules) => {
   return `Triggered if ${excludedClause}.`;
 };
 
-export const buildDoorNotificationAutomation = ({ name, doors, services, includeOpened, includeCalls, callerRules = [], includeRelayAction = false, includeImage = true, requireActionAuthentication = false, relayEntities = [], initialState, localize = defaultLocalize }) => {
+export const buildDoorNotificationAutomation = ({ name, doors, services, includeOpened, includeCalls, callerRules = [], includeRelayAction = false, includeImage = true, iosSound = "", androidChannel = "", priorityAlert = false, requireActionAuthentication = false, relayEntities = [], initialState, localize = defaultLocalize }) => {
   const captureTypes = [
     ...(includeOpened ? ["Face Unlock", "Unlock on SmartPlus", "Temp Key Unlock"] : []),
     ...(includeCalls ? ["Call"] : []),
@@ -385,6 +417,7 @@ export const buildDoorNotificationAutomation = ({ name, doors, services, include
   const selectedRelayEntities = includeRelayAction && includeCalls
     ? doors.flatMap((door) => relaysByDoor.get(door.deviceId) || []) : [];
   const actionServices = companionNotificationServices(services);
+  const deliveryOptions = { iosSound, androidChannel, priorityAlert };
   const relayActions = (relays) => relays.map((relay) => ({
     action: `{{ akuvox_relay_action_${selectedRelayEntities.indexOf(relay)} }}`,
     title: localize("Open {name}", { name: relay.name }),
@@ -397,11 +430,11 @@ export const buildDoorNotificationAutomation = ({ name, doors, services, include
         value_template: "{{ trigger.event.data.pic_url | default('', true) != '' }}",
       }],
       sequence: services.map((service) => notificationAction(
-        service, includeImage, actionServices.includes(service) ? relayActions(relays) : [], localize
+        service, includeImage, actionServices.includes(service) ? relayActions(relays) : [], deliveryOptions, localize
       )),
     }],
     default: services.map((service) => notificationAction(
-      service, false, actionServices.includes(service) ? relayActions(relays) : [], localize
+      service, false, actionServices.includes(service) ? relayActions(relays) : [], deliveryOptions, localize
     )),
   });
   const notification = selectedRelayEntities.length && actionServices.length ? {
@@ -460,7 +493,7 @@ export const buildDoorNotificationAutomation = ({ name, doors, services, include
   };
 };
 
-const requestDoorNotificationStep = (host, { title = "Create Automation", description, headerContent = "", stage, totalStages = 6, progressFromStage = stage - 1, progressToStage = stage, content, backLabel, nextLabel, submit, bind, focusCancel = false }) => new Promise((resolve) => {
+const requestDoorNotificationStep = (host, { title = "Create Automation", description, headerContent = "", stage, totalStages = 6, progressFromStage = stage - 1, progressToStage = stage, content, backLabel, nextLabel, submit, bind, focusCancel = false }, hasWizardChanges = () => false) => new Promise((resolve) => {
   const dialog = host.shadowRoot.ownerDocument.createElement("dialog");
   dialog.className = "door-notification-dialog wizard-dialog";
   dialog.innerHTML = `<button class="door-notification-close wizard-dialog-close" type="button" data-cancel aria-label="Close" title="Close" ${focusCancel ? "autofocus" : ""}>×</button><div class="remote-instance-dialog-header"><h2>${escapeHtml(title)}</h2>
@@ -473,7 +506,13 @@ const requestDoorNotificationStep = (host, { title = "Create Automation", descri
   const form = dialog.querySelector("[data-door-notification-form]");
   const error = dialog.querySelector("[data-door-notification-error]");
   let result = null;
-  dialog.querySelector("[data-cancel]").addEventListener("click", () => dialog.close());
+  let initialFormState = "";
+  const confirmClose = () =>
+    (!hasFormChanges(form, initialFormState) && !hasWizardChanges()) ||
+    confirmModal(host, "Your unsaved changes will be lost.", "Discard changes?", "Discard", { danger: true });
+  dialog.querySelector("[data-cancel]").addEventListener("click", async () => {
+    if (await confirmClose()) dialog.close();
+  });
   dialog.querySelector("[data-back]")?.addEventListener("click", () => {
     result = { direction: "back" };
     dialog.close();
@@ -490,11 +529,18 @@ const requestDoorNotificationStep = (host, { title = "Create Automation", descri
     dialog.remove();
     resolve(result);
   }, { once: true });
+  dialog.addEventListener("cancel", (event) => {
+    event.preventDefault();
+    void confirmClose().then((shouldClose) => {
+      if (shouldClose) dialog.close();
+    });
+  });
   host._modalCount = (host._modalCount || 0) + 1;
-  closeOnBackdrop(dialog);
+  closeOnBackdrop(dialog, confirmClose);
   host.shadowRoot.append(dialog);
   localizeElement(host, dialog);
   bind?.(dialog, form);
+  initialFormState = formState(form);
   dialog.showModal();
   const stepContent = dialog.querySelector(".door-notification-step-content");
   if (stepContent) stepContent.scrollTop = 0;
@@ -513,6 +559,9 @@ export const requestDoorNotificationAutomation = async (host, existing = null) =
   const editing = Boolean(existing);
   const selection = notificationSelection(existing);
   selection.callerRules = withCurrentTemporaryKeyNames(selection.callerRules, keys);
+  const initialSelectionState = JSON.stringify(selection);
+  const hasWizardChanges = () => JSON.stringify(selection) !== initialSelectionState;
+  const requestStep = (options) => requestDoorNotificationStep(host, options, hasWizardChanges);
   const title = editing ? "Edit Automation" : "Create Automation";
   const hasMobileNotificationService = () => companionNotificationServices(selection.services).length > 0;
   const totalStages = () => hasMobileNotificationService() ? 6 : 5;
@@ -524,10 +573,10 @@ export const requestDoorNotificationAutomation = async (host, existing = null) =
   while (step >= 0 && step < 6) {
     let result;
     if (step === 0) {
-      result = await requestDoorNotificationStep(host, {
+      result = await requestStep({
         title, totalStages: totalStages(),
         stage: 1, progressFromStage, progressToStage: selection.doorIds.length ? 1 : 0, description: "Which doors should trigger the automation?", nextLabel: "Next", focusCancel: true,
-        content: `<div class="door-picker-control selection-list-picker-control"><label class="door-picker-search"><span aria-hidden="true">${icons.searchThumbnail}</span><input type="search" data-door-search aria-label="Search doors" placeholder="Search doors" autocomplete="off"></label><div class="door-picker-results selection-list" data-door-picker-results role="listbox" aria-label="Doors"></div></div>`,
+        content: `<div class="door-picker-control selection-list-picker-control"><label class="door-picker-search"><span aria-hidden="true">${icons.searchThumbnail}</span><input type="search" data-door-search aria-label="Search doors" placeholder="Search doors" autocomplete="off"></label><div class="door-picker-results selection-list" data-door-picker-results role="group" aria-label="Doors"></div></div>`,
         bind: (dialog) => {
           const search = dialog.querySelector("[data-door-search]");
           const results = dialog.querySelector("[data-door-picker-results]");
@@ -541,10 +590,10 @@ export const requestDoorNotificationAutomation = async (host, existing = null) =
             const matching = doors.filter((door) => door.name.toLocaleLowerCase().includes(query));
             results.innerHTML = matching.map((door) => {
               const selected = selection.doorIds.includes(door.deviceId);
-              return `<button class="door-picker-option door-selection-list-option${selected ? " selected" : ""}" type="button" role="option" aria-selected="${selected}" data-toggle-door="${escapeHtml(door.deviceId)}"><span class="door-selection-list-icon" aria-hidden="true">${icons.door}</span><span>${escapeHtml(door.name)}</span><span class="notification-service-selection${selected ? " selected" : ""}" aria-hidden="true">✓</span></button>`;
+              return `<label class="door-picker-option door-selection-list-option${selected ? " selected" : ""}" data-toggle-door="${escapeHtml(door.deviceId)}"><span class="door-selection-list-icon" aria-hidden="true">${icons.door}</span><span>${escapeHtml(door.name)}</span><input class="panel-checkbox notification-service-selection" type="checkbox" ${selected ? "checked" : ""}></label>`;
             }).join("") || `<p class="muted">${escapeHtml(t(host, "No matching doors."))}</p>`;
-            results.querySelectorAll("[data-toggle-door]").forEach((button) => button.addEventListener("click", () => {
-              const doorId = button.dataset.toggleDoor;
+            results.querySelectorAll("[data-toggle-door]").forEach((option) => option.addEventListener("click", () => {
+              const doorId = option.dataset.toggleDoor;
               selection.doorIds = selection.doorIds.includes(doorId)
                 ? selection.doorIds.filter((item) => item !== doorId)
                 : [...selection.doorIds, doorId];
@@ -560,10 +609,10 @@ export const requestDoorNotificationAutomation = async (host, existing = null) =
         },
       });
     } else if (step === 1) {
-      result = await requestDoorNotificationStep(host, {
+      result = await requestStep({
         title, totalStages: totalStages(),
         stage: 2, progressFromStage, progressToStage: selection.includeOpened || selection.includeCalls ? 2 : 1, description: "Which events should trigger the automation?", backLabel: "Back", nextLabel: "Next",
-        content: `<section class="event-types-options" role="group" aria-labelledby="event-types-heading"><h3 id="event-types-heading">Event types</h3><label class="door-notification-option"><input type="checkbox" name="opened" ${selection.includeOpened ? "checked" : ""}><span>Door opened / unlocked</span></label><label class="door-notification-option"><input type="checkbox" name="call" ${selection.includeCalls ? "checked" : ""}><span>Doorbell call</span></label></section>`,
+        content: `<section class="event-types-options" role="group" aria-labelledby="event-types-heading"><h3 id="event-types-heading">Event types</h3><label class="door-notification-option"><input class="panel-checkbox" type="checkbox" name="opened" ${selection.includeOpened ? "checked" : ""}><span>Door opened / unlocked</span></label><label class="door-notification-option"><input class="panel-checkbox" type="checkbox" name="call" ${selection.includeCalls ? "checked" : ""}><span>Doorbell call</span></label></section>`,
         bind: (dialog) => {
           const eventTypes = [...dialog.querySelectorAll('[name="opened"], [name="call"]')];
           const nextButton = dialog.querySelector("[data-next]");
@@ -583,7 +632,7 @@ export const requestDoorNotificationAutomation = async (host, existing = null) =
         },
       });
     } else if (step === 2) {
-      result = await requestDoorNotificationStep(host, {
+      result = await requestStep({
         title, totalStages: totalStages(),
         stage: 3, progressFromStage, description: "Who should trigger the automation?", backLabel: "Back", nextLabel: "Next",
         content: members.length || keys.length
@@ -680,11 +729,11 @@ export const requestDoorNotificationAutomation = async (host, existing = null) =
         submit: () => ({ callerRules: selection.callerRules }),
       });
     } else if (step === 3) {
-      result = await requestDoorNotificationStep(host, {
+      result = await requestStep({
         title, totalStages: totalStages(),
         stage: 4, progressFromStage, progressToStage: selection.services.length ? 4 : 3, description: "Which notify services should be run?", backLabel: "Back", nextLabel: "Next",
         content: services.length
-          ? `<div class="door-picker-control notification-service-picker-control"><label class="door-picker-search"><span aria-hidden="true">${icons.searchThumbnail}</span><input type="search" data-service-search aria-label="Search notification services" placeholder="Search notification services" autocomplete="off"></label><div class="door-picker-results notification-service-list" data-service-picker-results role="listbox" aria-label="Notification services"></div></div>`
+          ? `<div class="door-picker-control notification-service-picker-control"><label class="door-picker-search"><span aria-hidden="true">${icons.searchThumbnail}</span><input type="search" data-service-search aria-label="Search notification services" placeholder="Search notification services" autocomplete="off"></label><div class="door-picker-results notification-service-list" data-service-picker-results role="group" aria-label="Notification services"></div></div>`
           : '<p class="muted">No notification services are available.</p>',
         bind: (dialog) => {
           const search = dialog.querySelector("[data-service-search]");
@@ -700,10 +749,10 @@ export const requestDoorNotificationAutomation = async (host, existing = null) =
             const matching = services.filter((service) => service.name.toLocaleLowerCase().includes(query));
             results.innerHTML = matching.map((service) => {
               const selected = selection.services.includes(service.service);
-              return `<button class="door-picker-option notification-service-action-option${selected ? " selected" : ""}" type="button" role="option" aria-selected="${selected}" data-toggle-service="${escapeHtml(service.service)}"><span class="notification-service-action-icon" aria-hidden="true">${icons.automation}</span><span class="notification-service-action-copy"><span>${escapeHtml(t(host, "Send a notification with {name}", { name: service.name }))}</span><small>${escapeHtml(t(host, "Sends a notification message using the {name} service.", { name: service.name }))}</small><em class="notification-service-action-domain">notify</em></span><span class="notification-service-selection${selected ? " selected" : ""}" aria-hidden="true">✓</span></button>`;
+              return `<label class="door-picker-option notification-service-action-option${selected ? " selected" : ""}" data-toggle-service="${escapeHtml(service.service)}"><span class="notification-service-action-icon" aria-hidden="true">${icons.automation}</span><span class="notification-service-action-copy"><span>${escapeHtml(t(host, "Send a notification with {name}", { name: service.name }))}</span><small>${escapeHtml(t(host, "Sends a notification message using the {name} service.", { name: service.name }))}</small><em class="notification-service-action-domain">notify</em></span><input class="panel-checkbox notification-service-selection" type="checkbox" ${selected ? "checked" : ""}></label>`;
             }).join("") || `<p class="muted">${escapeHtml(t(host, "No matching notification services."))}</p>`;
-            results.querySelectorAll("[data-toggle-service]").forEach((button) => button.addEventListener("click", () => {
-              const serviceId = button.dataset.toggleService;
+            results.querySelectorAll("[data-toggle-service]").forEach((option) => option.addEventListener("click", () => {
+              const serviceId = option.dataset.toggleService;
               selection.services = selection.services.includes(serviceId)
                 ? selection.services.filter((item) => item !== serviceId)
                 : [...selection.services, serviceId];
@@ -720,6 +769,7 @@ export const requestDoorNotificationAutomation = async (host, existing = null) =
       });
     } else if (step === 4 && hasMobileNotificationService()) {
       const mobileServices = companionNotificationServices(selection.services);
+      const mobilePlatforms = notificationPlatforms(mobileServices);
       const previewDeviceType = previewDeviceTypeForServices(mobileServices);
       const previewDoor = doors.find((door) => selection.doorIds.includes(door.deviceId));
       const previewDoorName = previewDoor?.name || t(host, "Door");
@@ -727,15 +777,32 @@ export const requestDoorNotificationAutomation = async (host, existing = null) =
         (camera) => selection.doorIds.includes(camera?.device_id) && camera?.preview_url
       );
       const previewRelay = availableRelayEntities.find((relay) => relay.deviceId === previewDoor?.deviceId);
-      const mobileOptions = mobileServices.length ? `<label class="door-notification-option"><input type="checkbox" name="include-image" ${selection.includeImage ? "checked" : ""}><span>Display the captured still as the notification image</span></label>` : "";
-      const notificationPreview = `<section class="notification-preview" aria-label="${escapeHtml(t(host, "Notification preview"))}"><div class="notification-preview-heading"><span>${escapeHtml(t(host, "Notification preview"))}</span></div><div class="notification-preview-controls"><span class="notification-preview-select"><button class="notification-preview-select-button notification-preview-event" type="button" data-notification-preview-event data-value="opened" aria-haspopup="listbox" aria-expanded="false">Door opened <i aria-hidden="true">⌄</i></button><span class="notification-preview-select-menu" data-notification-preview-menu="event" role="listbox" hidden><button type="button" role="option" aria-selected="true" data-notification-preview-option="opened">Door opened</button><button type="button" role="option" aria-selected="false" data-notification-preview-option="call">Doorbell call</button></span></span><span class="notification-preview-select notification-preview-device-select"><button class="notification-preview-select-button notification-preview-device" type="button" data-notification-preview-device data-value="${previewDeviceType}" aria-haspopup="listbox" aria-expanded="false">${previewDeviceType === "ios" ? "iOS" : "Android"} <i aria-hidden="true">⌄</i></button><span class="notification-preview-select-menu" data-notification-preview-menu="device" role="listbox" hidden><button type="button" role="option" aria-selected="${previewDeviceType === "ios"}" data-notification-preview-option="ios">iOS</button><button type="button" role="option" aria-selected="${previewDeviceType === "android"}" data-notification-preview-option="android">Android</button></span></span><button class="notification-preview-send" type="button" data-notification-preview-send><span>Send</span><i class="notification-preview-send-spinner" aria-hidden="true"></i></button></div><article class="notification-preview-card is-${previewDeviceType}" data-notification-preview-card><span class="notification-preview-icon" aria-hidden="true">${icons.bell}</span><div><div class="notification-preview-app">Akuvox SmartPlus <small>${escapeHtml(t(host, "now"))}</small></div><strong data-notification-preview-title></strong><p data-notification-preview-message></p></div>${previewCamera?.preview_url ? `<div class="notification-preview-image is-loading" data-notification-preview-image-area ${selection.includeImage ? "" : "hidden"}><span class="notification-preview-image-spinner" aria-hidden="true"></span><img data-notification-preview-image src="${escapeHtml(previewCamera.preview_url)}" alt=""></div>` : `<span class="notification-preview-image-placeholder" data-notification-preview-image ${selection.includeImage ? "" : "hidden"}>${icons.cameraDoor}</span>`}<button class="notification-preview-action" type="button" data-notification-preview-action disabled hidden></button></article></section>`;
-      result = await requestDoorNotificationStep(host, {
+      const iosSoundOptions = [...new Set([
+        ...IOS_NOTIFICATION_SOUNDS,
+        ...(selection.iosSound && !IOS_NOTIFICATION_SOUNDS.includes(selection.iosSound)
+          ? [selection.iosSound] : []),
+      ])];
+      const priorityLabel = mobilePlatforms.ios && mobilePlatforms.android
+        ? t(host, "Priority alert (critical on iOS, alarm stream on Android)")
+        : mobilePlatforms.ios ? t(host, "Priority alert (critical on iOS)")
+          : t(host, "Priority alert (alarm stream on Android)");
+      const mobileFields = [
+        mobilePlatforms.ios ? `<label class="notification-select-option"><span>${escapeHtml(t(host, "iOS notification sound"))}</span><select name="ios-sound" aria-label="${escapeHtml(t(host, "iOS notification sound"))}">${iosSoundOptions.map((sound) => `<option value="${escapeHtml(sound)}" ${selection.iosSound === sound || (!selection.iosSound && sound === "default") ? "selected" : ""}>${escapeHtml(sound === "default" ? t(host, "Default (Tri-tone)") : sound === "none" ? t(host, "No sound") : sound)}</option>`).join("")}</select></label>` : "",
+        mobilePlatforms.android ? `<label class="notification-select-option"><span class="notification-field-label">${escapeHtml(t(host, "Android notification channel"))}<button class="notification-info-button" type="button" aria-label="${escapeHtml(t(host, "Android channels are created in the Companion App and managed in Android system settings."))}" aria-describedby="android-channel-help"><span aria-hidden="true">i</span></button><span class="notification-info-tooltip" id="android-channel-help" role="tooltip">${escapeHtml(t(host, "Android channels are created in the Companion App and managed in Android system settings."))}</span></span><input data-android-channel name="android-channel" value="${escapeHtml(selection.androidChannel)}" placeholder="${escapeHtml(t(host, "General (default)"))}"></label>` : "",
+      ].filter(Boolean).join("");
+      const mobileOptions = `<section class="notification-delivery-options"><label class="check"><input class="panel-checkbox" type="checkbox" name="include-image" ${selection.includeImage ? "checked" : ""}>${escapeHtml(t(host, "Display the captured still as the notification image"))}</label>${mobileFields ? `<div class="notification-delivery-grid">${mobileFields}</div>` : ""}${mobileFields ? `<label class="check notification-priority-option ${mobilePlatforms.android ? "has-description" : ""}"><input class="panel-checkbox" type="checkbox" name="priority-alert" ${selection.priorityAlert ? "checked" : ""}><span><strong>${escapeHtml(priorityLabel)}</strong>${mobilePlatforms.android ? `<small>${escapeHtml(t(host, "Priority alerts use Android's alarm stream."))}</small>` : ""}</span></label>` : ""}</section>`;
+      const previewDevicePicker = mobilePlatforms.ios && mobilePlatforms.android ? `<span class="notification-preview-select notification-preview-device-select"><button class="notification-preview-select-button notification-preview-device" type="button" data-notification-preview-device data-value="${previewDeviceType}" aria-haspopup="listbox" aria-expanded="false">${previewDeviceType === "ios" ? "iOS" : "Android"} <i aria-hidden="true">⌄</i></button><span class="notification-preview-select-menu" data-notification-preview-menu="device" role="listbox" hidden><button type="button" role="option" aria-selected="${previewDeviceType === "ios"}" data-notification-preview-option="ios">iOS</button><button type="button" role="option" aria-selected="${previewDeviceType === "android"}" data-notification-preview-option="android">Android</button></span></span>` : "";
+      const notificationPreview = `<section class="notification-preview" aria-label="${escapeHtml(t(host, "Notification preview"))}"><div class="notification-preview-heading"><span>${escapeHtml(t(host, "Notification preview"))}</span></div><div class="notification-preview-controls"><span class="notification-preview-select"><button class="notification-preview-select-button notification-preview-event" type="button" data-notification-preview-event data-value="opened" aria-haspopup="listbox" aria-expanded="false">Door opened <i aria-hidden="true">⌄</i></button><span class="notification-preview-select-menu" data-notification-preview-menu="event" role="listbox" hidden><button type="button" role="option" aria-selected="true" data-notification-preview-option="opened">Door opened</button><button type="button" role="option" aria-selected="false" data-notification-preview-option="call">Doorbell call</button></span></span>${previewDevicePicker}<button class="notification-preview-send" type="button" data-notification-preview-send><span>Send</span><i class="notification-preview-send-spinner" aria-hidden="true"></i></button></div><p class="notification-preview-status" data-notification-preview-status aria-live="polite"></p><article class="notification-preview-card is-${previewDeviceType}" data-notification-preview-card data-notification-preview-device-value="${previewDeviceType}"><span class="notification-preview-icon" aria-hidden="true">${icons.bell}</span><div><div class="notification-preview-app">Akuvox SmartPlus <small>${escapeHtml(t(host, "now"))}</small></div><strong data-notification-preview-title></strong><p data-notification-preview-message></p></div>${previewCamera?.preview_url ? `<div class="notification-preview-image is-loading" data-notification-preview-image-area ${selection.includeImage ? "" : "hidden"}><span class="notification-preview-image-spinner" aria-hidden="true"></span><img data-notification-preview-image src="${escapeHtml(previewCamera.preview_url)}" alt=""></div>` : `<span class="notification-preview-image-placeholder" data-notification-preview-image ${selection.includeImage ? "" : "hidden"}>${icons.cameraDoor}</span>`}<button class="notification-preview-action" type="button" data-notification-preview-action disabled hidden></button></article></section>`;
+      result = await requestStep({
         title, totalStages: totalStages(),
         stage: 5, progressFromStage, progressToStage: 5,
         description: "Notification options", backLabel: "Back", nextLabel: "Next",
-        content: `<div class="notification-options">${canOfferRelayAction() ? `<label class="door-notification-option"><input type="checkbox" name="open-called-door" ${selection.includeRelayAction ? "checked" : ""}><span>Include actions to open the called door relay</span></label><label class="door-notification-option"><input type="checkbox" name="require-action-authentication" ${selection.requireActionAuthentication ? "checked" : ""}><span>Require the phone to be unlocked to open a relay</span></label>` : ""}${mobileOptions}${notificationPreview}</div>`,
+        content: `<div class="notification-options">${notificationPreview}${canOfferRelayAction() ? `<section class="notification-relay-options"><label class="check"><input class="panel-checkbox" type="checkbox" name="open-called-door" ${selection.includeRelayAction ? "checked" : ""}>Include actions to open the called door relay</label><label class="check" data-require-action-authentication ${selection.includeRelayAction ? "" : "hidden"}><input class="panel-checkbox" type="checkbox" name="require-action-authentication" ${selection.requireActionAuthentication ? "checked" : ""}>Require the phone to be unlocked to open a relay</label></section>` : ""}${mobileOptions}</div>`,
         bind: (dialog) => {
           const includeImage = dialog.querySelector('[name="include-image"]');
+          const iosSound = dialog.querySelector('[name="ios-sound"]');
+          const androidChannel = dialog.querySelector('[name="android-channel"]');
+          const priorityAlert = dialog.querySelector('[name="priority-alert"]');
           const previewImage = dialog.querySelector('img[data-notification-preview-image]');
           const previewImageArea = dialog.querySelector('[data-notification-preview-image-area]');
           const previewEvent = dialog.querySelector('[data-notification-preview-event]');
@@ -745,21 +812,28 @@ export const requestDoorNotificationAutomation = async (host, existing = null) =
           const previewMessage = dialog.querySelector('[data-notification-preview-message]');
           const previewAction = dialog.querySelector('[data-notification-preview-action]');
           const sendPreview = dialog.querySelector('[data-notification-preview-send]');
+          const previewStatus = dialog.querySelector('[data-notification-preview-status]');
           const includeRelayAction = dialog.querySelector('[name="open-called-door"]');
+          const requireActionAuthentication = dialog.querySelector('[data-require-action-authentication]');
           const setPreviewImageLoading = (loading) => previewImageArea?.classList.toggle("is-loading", loading);
           if (previewImage) {
             previewImage.addEventListener("load", () => setPreviewImageLoading(false));
             previewImage.addEventListener("error", () => setPreviewImageLoading(false));
             if (previewImage.complete) setPreviewImageLoading(false);
           }
+          const updateDeliveryOptions = () => {
+            const isPriority = Boolean(priorityAlert?.checked);
+            if (androidChannel) androidChannel.disabled = isPriority;
+          };
           const updatePreview = () => {
             const showImage = Boolean(includeImage?.checked);
             if (previewImageArea) previewImageArea.hidden = !showImage;
             else if (previewImage) previewImage.hidden = !showImage;
             if (showImage && previewImage && !previewImage.complete) setPreviewImageLoading(true);
             const isDoorbellCall = previewEvent?.dataset.value === "call";
-            previewCard?.classList.toggle("is-ios", previewDevice?.dataset.value === "ios");
-            previewCard?.classList.toggle("is-android", previewDevice?.dataset.value === "android");
+            const previewPlatform = previewDevice?.dataset.value || previewCard?.dataset.notificationPreviewDeviceValue || previewDeviceType;
+            previewCard?.classList.toggle("is-ios", previewPlatform === "ios");
+            previewCard?.classList.toggle("is-android", previewPlatform === "android");
             if (previewTitle) {
               previewTitle.textContent = `${previewDoorName} ${t(host, isDoorbellCall ? "doorbell" : "opened")}`;
             }
@@ -775,7 +849,11 @@ export const requestDoorNotificationAutomation = async (host, existing = null) =
             }
           };
           includeImage?.addEventListener("change", updatePreview);
-          includeRelayAction?.addEventListener("change", updatePreview);
+          includeRelayAction?.addEventListener("change", () => {
+            if (requireActionAuthentication) requireActionAuthentication.hidden = !includeRelayAction.checked;
+            updatePreview();
+          });
+          priorityAlert?.addEventListener("change", updateDeliveryOptions);
           const previewPickers = [...dialog.querySelectorAll(".notification-preview-select")];
           const closePreviewPickers = () => previewPickers.forEach((picker) => {
             picker.querySelector(".notification-preview-select-button")?.setAttribute("aria-expanded", "false");
@@ -793,6 +871,7 @@ export const requestDoorNotificationAutomation = async (host, existing = null) =
             });
             picker.querySelectorAll("[data-notification-preview-option]").forEach((option) => option.addEventListener("click", () => {
               button.dataset.value = option.dataset.notificationPreviewOption;
+              if (button === previewDevice && previewCard) previewCard.dataset.notificationPreviewDeviceValue = option.dataset.notificationPreviewOption;
               button.innerHTML = `${escapeHtml(option.textContent)} <i aria-hidden="true">⌄</i>`;
               picker.querySelectorAll("[data-notification-preview-option]").forEach((item) => item.setAttribute("aria-selected", String(item === option)));
               closePreviewPickers();
@@ -812,31 +891,47 @@ export const requestDoorNotificationAutomation = async (host, existing = null) =
             const messageText = isDoorbellCall
               ? t(host, "Someone is calling from the {door} door.", { door: previewDoorName })
               : t(host, "The {door} door was opened by {initiator}.", { door: previewDoorName, initiator: "Unknown" });
-            const notificationData = { title: titleText, message: messageText };
-            if (includeImage?.checked && previewCamera) {
-              notificationData.data = {
-                ...(previewCamera.entity_id ? { entity_id: previewCamera.entity_id } : {}),
-                ...(previewCamera.preview_url ? { image: previewCamera.preview_url } : {}),
-              };
-            }
-            if (isDoorbellCall && includeRelayAction?.checked && previewRelay) {
-              notificationData.data = {
-                ...(notificationData.data || {}),
-                actions: [{
-                  action: `AKUVOX_TEST_OPEN_RELAY_${previewRelay.entityId}`,
-                  title: t(host, "Open {name}", { name: previewRelay.name }),
-                }],
-              };
-            }
+            const previewNotification = (service) => {
+              const platforms = notificationPlatforms([service]);
+              const platformIsUnknown = !platforms.ios && !platforms.android;
+              const deliveryData = companionDeliveryData({
+                iosSound: platforms.ios || platformIsUnknown ? iosSound?.value || "default" : "",
+                androidChannel: platforms.android || platformIsUnknown ? androidChannel?.value.trim() : "",
+                priorityAlert: Boolean(priorityAlert?.checked),
+                ios: platforms.ios || platformIsUnknown,
+                android: platforms.android || platformIsUnknown,
+              });
+              const notificationData = { title: titleText, message: messageText };
+              if (includeImage?.checked && previewCamera) {
+                notificationData.data = {
+                  ...deliveryData,
+                  ...(previewCamera.entity_id ? { entity_id: previewCamera.entity_id } : {}),
+                  ...(previewCamera.preview_url ? { image: previewCamera.preview_url } : {}),
+                };
+              }
+              if (isDoorbellCall && includeRelayAction?.checked && previewRelay) {
+                notificationData.data = {
+                  ...(notificationData.data || deliveryData),
+                  actions: [{
+                    action: `AKUVOX_TEST_OPEN_RELAY_${previewRelay.entityId}`,
+                    title: t(host, "Open {name}", { name: previewRelay.name }),
+                  }],
+                };
+              }
+              if (Object.keys(deliveryData).length && !notificationData.data) notificationData.data = deliveryData;
+              return notificationData;
+            };
             sendPreview.disabled = true;
             sendPreview.classList.add("is-sending");
+            if (previewStatus) previewStatus.textContent = t(host, "Sending sound preview…");
             try {
-              await Promise.all(selection.services.map((service) => host._hass.callService(
-                "notify", service.replace(/^notify\./, ""), notificationData
+              await Promise.all(mobileServices.map((service) => host._hass.callService(
+                "notify", service.replace(/^notify\./, ""), previewNotification(service)
               )));
               sendPreview.classList.remove("is-sending");
               sendPreview.classList.add("is-sent");
               sendPreview.querySelector("span").textContent = "✓";
+              if (previewStatus) previewStatus.textContent = t(host, "Sound preview sent to the selected mobile device.");
               window.setTimeout(() => {
                 if (!sendPreview.isConnected) return;
                 sendPreview.classList.remove("is-sent");
@@ -851,14 +946,19 @@ export const requestDoorNotificationAutomation = async (host, existing = null) =
                 formError.textContent = error?.message || t(host, "Could not send the test notification.");
                 formError.hidden = false;
               }
+              if (previewStatus) previewStatus.textContent = t(host, "Could not send the sound preview.");
             }
           });
+          updateDeliveryOptions();
           updatePreview();
         },
         submit: (form) => ({
           includeRelayAction: canOfferRelayAction() && form.querySelector('[name="open-called-door"]').checked,
           requireActionAuthentication: canOfferRelayAction() && form.querySelector('[name="require-action-authentication"]').checked,
           includeImage: form.querySelector('[name="include-image"]')?.checked ?? selection.includeImage,
+          iosSound: form.querySelector('[name="ios-sound"]')?.value.trim() || "default",
+          androidChannel: form.querySelector('[name="android-channel"]')?.value.trim() || "",
+          priorityAlert: form.querySelector('[name="priority-alert"]')?.checked || false,
         }),
       });
     } else {
@@ -870,7 +970,7 @@ export const requestDoorNotificationAutomation = async (host, existing = null) =
         includeOpened: selection.includeOpened,
         includeCalls: selection.includeCalls,
       });
-      result = await requestDoorNotificationStep(host, {
+      result = await requestStep({
         title,
         totalStages: totalStages(), stage: totalStages(), progressFromStage, progressToStage: (selection.name || defaultName).trim() ? totalStages() : totalStages() - 1, description: "Enter the automation name.", backLabel: "Back", nextLabel: editing ? "Save automation" : "Create automation",
         content: `<label class="automation-name-field"><span>Automation name</span><input name="automation-name" type="text" value="${escapeHtml(selection.name || defaultName)}" aria-label="Automation name" required></label>`,
@@ -1076,10 +1176,10 @@ const requestShareAccess = (host, viewedShare = null) => new Promise((resolve) =
   const activityMemberNames = new Set(viewedShare?.activity_member_names || (readOnly ? [] : members));
   const callMemberNames = new Set(viewedShare?.call_member_names || (readOnly ? [] : members));
   const checked = (value) => value ? "checked" : "";
-  const readOnlyCheck = (enabled) => `<span class="share-permission-control share-readonly-check${enabled ? " enabled" : ""}">${enabled ? "✓" : ""}</span>`;
+  const readOnlyCheck = (enabled) => `<span class="share-permission-control share-readonly-check panel-checkmark${enabled ? " enabled is-checked" : ""}" aria-label="${enabled ? "Enabled" : "Disabled"}"></span>`;
   const checkbox = (attribute, value, inputValue = "") => readOnly
     ? readOnlyCheck(value)
-    : `<span class="share-permission-control"><input ${attribute} type="checkbox" value="${escapeHtml(inputValue)}" ${checked(value)}></span>`;
+    : `<span class="share-permission-control"><input class="panel-checkbox" ${attribute} type="checkbox" value="${escapeHtml(inputValue)}" ${checked(value)}></span>`;
   const dialog = host.shadowRoot.ownerDocument.createElement("dialog");
   dialog.className = "share-access-dialog wizard-dialog";
   dialog.classList.toggle("theme-dark", Boolean(host._hass?.themes?.darkMode));
@@ -1228,6 +1328,7 @@ const requestShareAccess = (host, viewedShare = null) => new Promise((resolve) =
   neverExpire?.addEventListener("change", updateExpiryState);
   expires?.addEventListener("change", updateExpiryState);
   updateExpiryState();
+  const initialFormState = formState(dialog);
   previousButton?.addEventListener("click", (event) => {
     // Changing stages can resize the dialog before its backdrop handler runs.
     // Keep this button click from being interpreted as an outside click.
@@ -1295,7 +1396,10 @@ const requestShareAccess = (host, viewedShare = null) => new Promise((resolve) =
     resolve(null);
   }, { once: true });
   host._modalCount = (host._modalCount || 0) + 1;
-  closeOnBackdrop(dialog);
+  closeOnBackdrop(
+    dialog,
+    () => readOnly || confirmDiscardChanges(host, dialog, initialFormState)
+  );
   host.shadowRoot.append(dialog); localizeElement(host, dialog); dialog.showModal();
 });
 

@@ -10,7 +10,7 @@ import {
   buildDoorNotificationAutomation,
   requestDoorNotificationAutomation,
   showDoorNotificationCreated,
-} from "./settings-view.js?v=20261019-skip-nonmobile-notification-options";
+} from "./settings-view.js?v=20261019-automation-discard-confirmation";
 
 const captureTypesForOpened = ["Face Unlock", "Unlock on SmartPlus"];
 const temporaryKeyCaptureType = "Temp Key Unlock";
@@ -176,11 +176,16 @@ export const asDoorNotification = (config, doors) => {
       (config.mode !== undefined && config.mode !== "parallel") ||
       (config.max !== undefined && config.max !== 10) || !String(config.alias || "").trim()) return null;
 
-  const representativeNotification = [
+  const mobileNotifications = [
     ...(imageChoice.choose[0]?.sequence || []),
     ...(imageChoice.default || []),
-  ].find((action) => String(action?.action || action?.service || "").startsWith("notify.mobile_app_"));
-  const notificationData = representativeNotification?.data?.data || {};
+  ].filter((action) => String(action?.action || action?.service || "").startsWith("notify.mobile_app_"));
+  const notificationData = mobileNotifications[0]?.data?.data || {};
+  const sound = mobileNotifications.map((action) => action?.data?.data?.push?.sound).find(Boolean);
+  const priorityAlert = Boolean(sound && typeof sound === "object" && sound.critical);
+  const iosSound = typeof sound === "string" ? sound : priorityAlert ? String(sound.name || "") : "";
+  const notificationChannel = mobileNotifications.map((action) => action?.data?.data?.channel).find(Boolean);
+  const androidChannel = notificationChannel === "alarm_stream" ? "" : String(notificationChannel || "");
   requireActionAuthentication = Boolean(notificationData.actions?.some(
     (action) => action?.authenticationRequired === true
   ));
@@ -199,6 +204,9 @@ export const asDoorNotification = (config, doors) => {
     ...(includeRelayAction ? { includeRelayAction } : {}),
     ...(requireActionAuthentication ? { requireActionAuthentication } : {}),
     ...(!includeImage ? { includeImage } : {}),
+    ...(iosSound ? { iosSound } : {}),
+    ...(androidChannel ? { androidChannel } : {}),
+    ...(priorityAlert ? { priorityAlert } : {}),
     initialState: isDisabled(config.initial_state) ? false : undefined,
   };
 };

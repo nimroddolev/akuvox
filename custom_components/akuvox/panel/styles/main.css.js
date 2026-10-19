@@ -620,12 +620,11 @@ export const mainStyles = `
   .door-notification-dialog legend { margin-left: 10px; padding: 0 4px; font-weight: 700; }
   .door-notification-option { display: flex; box-sizing: border-box; width: 100%; align-items: center; gap: 10px; padding: 10px 12px; font-weight: 500; cursor: pointer; }
   .door-notification-option + .door-notification-option { border-top: 1px solid var(--panel-outline); }
-  .door-notification-option input { flex: 0 0 auto; width: 22px; height: 22px; margin: 0; accent-color: var(--aqua); }
+  .door-notification-option input { flex: 0 0 auto; }
   .event-types-options { box-sizing: border-box; align-self: center; display: grid; width: 100%; max-width: 560px; gap: 24px; padding: 30px 34px; border: 1px solid var(--panel-outline); border-radius: 16px; text-align: start; background: color-mix(in srgb, var(--panel-card) 94%, var(--panel-surface)); }
   .event-types-options h3 { margin: 0 0 4px; font-size: 20px; line-height: 1.25; }
   .event-types-options .door-notification-option { padding: 0; font-size: 17px; }
   .event-types-options .door-notification-option + .door-notification-option { border-top: 0; }
-  .event-types-options .door-notification-option input { width: 26px; height: 26px; }
   .door-notification-dialog .modal-actions { flex: 0 0 auto; justify-content: center; margin: 4px 0 0; }
   .door-notification-dialog a.modal-action { display: inline-flex; align-items: center; text-decoration: none; }
   /* More specific than the responsive wizard rule below: completion needs no full-height canvas. */
@@ -687,12 +686,13 @@ export const mainStyles = `
   .notification-service-list::-webkit-scrollbar-thumb, .selection-list::-webkit-scrollbar-thumb { min-height: 28px; border: 3px solid transparent; border-radius: 999px; background: var(--panel-muted); background-clip: padding-box; }
   .door-notification-step-content:has(.notification-service-picker-control) .door-picker-search, .door-notification-step-content:has(.selection-list-picker-control) .door-picker-search { z-index: 1; padding-bottom: 6px; background: var(--panel-card); }
   .notification-service-action-option { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; align-items: center; gap: 12px; min-height: 78px; padding: 12px; scroll-snap-align: start; }
-  .door-selection-list-option { display: grid; grid-template-columns: 34px minmax(0, 1fr) 22px; align-items: center; gap: 12px; min-height: 52px; padding: 10px 12px; scroll-snap-align: start; }
+  .door-selection-list-option { display: grid; grid-template-columns: 34px minmax(0, 1fr) 20px; align-items: center; gap: 12px; min-height: 52px; padding: 10px 12px; scroll-snap-align: start; }
   .door-selection-list-option.selected { border: 1px solid var(--aqua); border-radius: 8px; background: color-mix(in srgb, var(--aqua) 8%, transparent); }
   .door-selection-list-icon { display: grid; width: 32px; height: 32px; place-items: center; border-radius: 7px; color: var(--panel-muted); background: color-mix(in srgb, var(--panel-muted) 13%, transparent); }
   .door-selection-list-icon svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 2; }
-  .notification-service-selection { display: grid; width: 22px; height: 22px; place-items: center; border: 1px solid var(--panel-outline); border-radius: 5px; color: transparent; background: color-mix(in srgb, var(--panel-muted) 12%, transparent); font-size: 16px; font-weight: 800; line-height: 1; opacity: .55; }
-  .notification-service-selection.selected { border-color: var(--aqua); color: var(--panel-card); background: var(--aqua); opacity: 1; }
+  .panel-checkmark { display: inline-grid; box-sizing: border-box; width: 20px; height: 20px; min-width: 20px; min-height: 20px; place-items: center; border: 1px solid var(--panel-outline); border-radius: 2px; color: transparent; background: var(--panel-card); line-height: 1; }
+  .panel-checkmark.is-checked { border-color: var(--aqua); color: #fff; background: var(--aqua); }
+  .panel-checkmark.is-checked::after { content: "✓"; font-size: 16px; font-weight: 800; }
   .notification-service-action-icon { display: grid; width: 28px; height: 28px; place-items: center; color: var(--panel-muted); }
   .notification-service-action-icon svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
   .notification-service-action-copy { display: grid; min-width: 0; gap: 4px; font-weight: 500; overflow-wrap: anywhere; }
@@ -705,16 +705,33 @@ export const mainStyles = `
   .notification-service-list .door-picker-option, .selection-list .door-picker-option { box-sizing: border-box; width: 100%; border: 1px solid var(--panel-outline); border-radius: 10px; background: var(--panel-card); }
   .notification-service-list .door-picker-option:hover, .notification-service-list .door-picker-option:focus-visible, .selection-list .door-picker-option:hover, .selection-list .door-picker-option:focus-visible { background: color-mix(in srgb, var(--aqua) 14%, var(--panel-card)); }
   .notification-options { align-self: center; display: grid; width: min(100%, 420px); gap: 8px; }
-  .notification-options > .door-notification-option { padding: 6px 0; }
-  .notification-select-option { display: grid; gap: 7px; font-size: 14px; font-weight: 500; text-align: start; }
+  .notification-relay-options, .notification-delivery-options { display: grid; gap: 14px; padding: 16px; border: 1px solid var(--panel-outline); border-radius: 12px; background: color-mix(in srgb, var(--panel-card) 94%, var(--panel-surface)); }
+  .notification-relay-options .check, .notification-delivery-options .check { display: flex; align-items: center; gap: 7px; color: var(--panel-text); font-weight: 500; text-align: start; }
+  .notification-relay-options .check + .check { padding-top: 14px; border-top: 1px solid var(--panel-outline); }
+  .notification-relay-options .check input, .notification-delivery-options .check input { margin-right: 0; }
+  .notification-delivery-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .notification-select-option { display: grid; grid-template-columns: minmax(0, 1fr) minmax(150px, 190px); align-items: center; gap: 12px; font-size: 14px; font-weight: 500; text-align: start; }
   .notification-select-option select, .notification-select-option > input { box-sizing: border-box; width: 100%; min-height: 42px; padding: 9px 12px; border: 1px solid var(--panel-outline); border-radius: 10px; color: var(--panel-text); background: var(--panel-card); font: inherit; }
   .notification-select-option select { appearance: auto; }
+  .notification-field-label { position: relative; display: inline-flex; align-items: center; gap: 6px; }
+  .notification-info-button { display: inline-grid; width: 17px; height: 17px; padding: 0; border: 1px solid var(--panel-muted); border-radius: 50%; place-items: center; color: var(--panel-muted); background: transparent; font: inherit; font-size: 11px; font-weight: 700; line-height: 1; }
+  .notification-info-button:hover, .notification-info-button:focus-visible { color: var(--aqua); border-color: var(--aqua); }
+  .notification-info-tooltip { position: absolute; z-index: 1; top: calc(100% + 7px); left: 0; width: 220px; padding: 8px 10px; border: 1px solid var(--panel-outline); border-radius: 8px; color: var(--panel-text); background: var(--panel-surface); box-shadow: 0 6px 16px color-mix(in srgb, #000 28%, transparent); font-size: 12px; font-weight: 400; line-height: 1.35; opacity: 0; pointer-events: none; transform: translateY(-3px); transition: opacity .15s ease, transform .15s ease; }
+  .notification-field-label:has(.notification-info-button:hover) .notification-info-tooltip, .notification-field-label:focus-within .notification-info-tooltip { opacity: 1; transform: translateY(0); }
+  .notification-select-option small, .notification-priority-option small { color: var(--panel-muted); font-size: 12px; font-weight: 400; line-height: 1.35; }
+  .notification-select-option input:disabled { cursor: not-allowed; opacity: .58; }
+  .notification-priority-option { align-items: center !important; padding-top: 12px; border-top: 1px solid var(--panel-outline); }
+  .notification-priority-option.has-description { align-items: flex-start !important; }
+  .notification-priority-option.has-description > input { align-self: flex-start; margin-top: 2px !important; }
+  .notification-priority-option > span { display: grid; gap: 3px; }
+  .notification-priority-option strong { font-size: 14px; }
   .notification-select-input { position: relative; display: block; }
   .notification-select-input input { box-sizing: border-box; width: 100%; min-height: 40px; padding-right: 40px; }
   .notification-select-input i { position: absolute; top: 50%; right: 13px; display: grid; width: 18px; height: 18px; place-items: center; color: var(--panel-muted); pointer-events: none; transform: translateY(-50%); }
   .notification-select-input svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; }
   .notification-preview { display: grid; gap: 9px; padding-top: 6px; }
   .notification-preview-heading { color: var(--panel-muted); font-size: 13px; font-weight: 700; letter-spacing: .03em; text-align: center; text-transform: uppercase; }
+  .notification-preview-status { min-height: 17px; margin: 0; color: var(--panel-muted); font-size: 12px; line-height: 1.35; text-align: center; }
   .notification-preview-controls { display: flex; align-items: center; justify-content: center; gap: 6px; }
   .notification-preview-select { position: relative; }
   .notification-preview-select-button { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 30px; width: 150px; padding: 3px 8px; border: 1px solid var(--panel-outline); border-radius: 7px; color: var(--panel-text); background: var(--panel-card); font: inherit; font-size: 12px; font-weight: 600; letter-spacing: 0; text-align: left; text-transform: none; }
@@ -904,6 +921,7 @@ export const mainStyles = `
     .remote-instances-section .credential-share-receiver-icon { width: 48px; height: 48px; }
     .remote-instances-section .credential-share-receiver-icon svg { width: 32px; height: 32px; }
     .notification-preview-controls { flex-wrap: wrap; }
+    .notification-select-option { grid-template-columns: minmax(0, 1fr) minmax(140px, 180px); }
   }
 
   @media (max-width: 500px) {
@@ -927,7 +945,17 @@ export const mainStyles = `
     font-weight: 400;
   }
 
-  .check input {
+  .panel-checkbox {
+    box-sizing: border-box;
+    width: 20px;
+    height: 20px;
+    min-width: 20px;
+    min-height: 20px;
+    margin: 0;
+    accent-color: var(--aqua, #03a9f4);
+  }
+
+  .check input:not(.panel-checkbox) {
     width: auto;
     margin-right: 7px;
   }
@@ -1149,15 +1177,10 @@ export const mainStyles = `
   .share-access-table .share-select-all-row td:first-child { color: #075d88; }
   .share-select-all-label { display: inline-flex; align-items: center; gap: 8px; vertical-align: middle; line-height: 1; }
   .share-select-all-label svg { width: 20px; height: 20px; color: var(--aqua, #03a9f4); fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-  .share-access-table .share-readonly-check { display: flex; min-height: 18px; align-items: center; justify-content: center; color: transparent; font-size: 18px; font-weight: 800; line-height: 1; }
-  .share-access-table .share-readonly-check.enabled { color: #16803c; }
-  .share-access-dialog .share-readonly-check { display: inline-flex; min-width: 18px; min-height: 18px; align-items: center; justify-content: center; color: transparent; font-size: 18px; font-weight: 800; line-height: 1; }
-  .share-access-dialog .share-readonly-check.enabled { color: #16803c; }
+  .share-access-table .share-readonly-check, .share-access-dialog .share-readonly-check { margin: 0; }
   .share-access-table .share-permission-control { display: inline-grid; width: 20px; height: 20px; place-items: center; vertical-align: middle; }
   .share-access-table td > .share-permission-control { display: grid; margin: 0 auto; }
   .share-access-table .share-permission-control input[type="checkbox"] { box-sizing: border-box; width: 20px; height: 20px; min-width: 20px; min-height: 20px; margin: 0; accent-color: var(--aqua, #03a9f4); }
-  .share-access-table .share-permission-control.share-readonly-check { color: transparent; font-size: 18px; font-weight: 800; line-height: 1; }
-  .share-access-table .share-permission-control.share-readonly-check.enabled { color: #16803c; }
   .share-access-table th:first-child, .share-access-table td:first-child { text-align: left; }
   .share-access-table thead tr:last-child th:first-child { text-align: center; }
   .share-device-access-table thead tr:first-child th:nth-child(2),

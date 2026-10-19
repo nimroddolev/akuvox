@@ -2,7 +2,7 @@
  * Generic modal dialog helpers: notice, confirmation, and async WS blocker overlay.
  */
 
-import { closeOnBackdrop } from "../utils/dom.js";
+import { closeOnBackdrop, hasFormChanges } from "../utils/dom.js?v=20261019-discard-backdrop-changes";
 import { icons } from "../utils/icons.js";
 import { t } from "../utils/i18n.js?v=20261004-rtsp-copy-dialog";
 
@@ -198,6 +198,23 @@ export const confirmModal = (host, message, title, actionLabel, options = {}) =>
     cancelButton.focus();
   });
 };
+
+/**
+ * Ask before closing a changed form from its backdrop.
+ * @param {HTMLElement} host
+ * @param {Element} container
+ * @param {string} initialState
+ * @returns {boolean|Promise<boolean>}
+ */
+export const confirmDiscardChanges = (host, container, initialState) =>
+  !hasFormChanges(container, initialState) ||
+  confirmModal(
+    host,
+    "Your unsaved changes will be lost.",
+    "Discard changes?",
+    "Discard",
+    { danger: true }
+  );
 
 /**
  * Call a Home Assistant WebSocket command while displaying a blocking page spinner overlay.

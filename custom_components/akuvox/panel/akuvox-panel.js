@@ -8,7 +8,7 @@ import { PANEL_TAG, TAB_HASHES, TAB_HASH_BY_ID, TABS } from "./utils/constants.j
 import { closeOnBackdrop, escapeHtml } from "./utils/dom.js";
 import { copyText } from "./utils/clipboard.js";
 import { settingsRenderSignature } from "./utils/settings-signature.js";
-import { getPanelStyles } from "./styles/index.js?v=20261019-connected-node-actions-menu-fix";
+import { getPanelStyles } from "./styles/index.js?v=20261019-automation-discard-confirmation";
 import { showNotice, confirmModal, callWsWithBlocker } from "./components/dialogs.js?v=20261013-danger-confirmation";
 import { installCameraRelayActions } from "./components/camera-actions.js?v=20261015-flexible-camera-action-widths";
 import { closeKeyActionsMenu } from "./components/key-menu.js";
@@ -25,9 +25,9 @@ import {
   renderKeysView,
   bindKeysEvents,
   deleteSelectedKeys,
-} from "./views/keys-view.js?v=20261019-narrow-key-tiles";
-import { renderAutomationsView, bindAutomationsEvents } from "./views/automations-view.js?v=20261016-notification-preview-expanded";
-import { renderSettingsView, bindSettingsEvents, updateActivityStorageProgress, updatePairedReceiverStatuses, updateRemoteShareConnectionStatus } from "./views/settings-view.js?v=20261019-skip-nonmobile-notification-options";
+} from "./views/keys-view.js?v=20261019-unified-checkboxes";
+import { renderAutomationsView, bindAutomationsEvents } from "./views/automations-view.js?v=20261019-automation-discard-confirmation";
+import { renderSettingsView, bindSettingsEvents, updateActivityStorageProgress, updatePairedReceiverStatuses, updateRemoteShareConnectionStatus } from "./views/settings-view.js?v=20261019-automation-discard-confirmation";
 import { renderHelpView } from "./views/help-view.js";
 
 const ROW_VIEW_MODE_STORAGE_KEY = "akuvox-panel-row-view-mode";

@@ -85,7 +85,10 @@ export default {
   "Open {name}": "פתיחת {name}",
   "Play notification sound preview": "ניגון תצוגה מקדימה של צליל ההתראה",
   "Priority alert (critical on iOS, alarm stream on Android)": "התראת עדיפות (קריטית ב־iOS, ערוץ אזעקה ב־Android)",
+  "Priority alert (critical on iOS)": "התראת עדיפות (קריטית ב־iOS)",
+  "Priority alert (alarm stream on Android)": "התראת עדיפות (ערוץ אזעקה ב־Android)",
   "Priority alerts use Android's alarm stream.": "התראות עדיפות משתמשות בערוץ האזעקה של Android.",
+  "Android channels are created in the Companion App and managed in Android system settings.": "ערוצי Android נוצרים באפליקציית Companion ומנוהלים בהגדרות המערכת של Android.",
   "Require the phone to be unlocked to open a relay": "דרישה שהטלפון יהיה לא נעול כדי לפתוח ממסר",
   "Select at least one door.": "יש לבחור לפחות דלת אחת.",
   "Select at least one event type.": "יש לבחור לפחות סוג אירוע אחד.",
@@ -98,6 +101,8 @@ export default {
   "{name} door event": "אירוע דלת ב־{name}",
   "{name} was called or opened.": "בוצעה קריאה או פתיחה של {name}.",
   "{name} was opened.": "{name} נפתחה.",
+  "Discard changes?": "לבטל שינויים?",
+  "Your unsaved changes will be lost.": "השינויים שלא נשמרו יאבדו.",
   "now": "עכשיו"
   ,"doorbell": "פעמון דלת",
   "opened": "נפתחה"

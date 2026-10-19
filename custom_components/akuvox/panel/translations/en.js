@@ -442,7 +442,10 @@ export default {
   "Open {name}": "Open {name}",
   "Play notification sound preview": "Play notification sound preview",
   "Priority alert (critical on iOS, alarm stream on Android)": "Priority alert (critical on iOS, alarm stream on Android)",
+  "Priority alert (critical on iOS)": "Priority alert (critical on iOS)",
+  "Priority alert (alarm stream on Android)": "Priority alert (alarm stream on Android)",
   "Priority alerts use Android's alarm stream.": "Priority alerts use Android's alarm stream.",
+  "Android channels are created in the Companion App and managed in Android system settings.": "Android channels are created in the Companion App and managed in Android system settings.",
   "Require the phone to be unlocked to open a relay": "Require the phone to be unlocked to open a relay",
   "Select at least one door.": "Select at least one door.",
   "Select at least one event type.": "Select at least one event type.",
@@ -455,6 +458,8 @@ export default {
   "{name} door event": "{name} door event",
   "{name} was called or opened.": "{name} was called or opened.",
   "{name} was opened.": "{name} was opened.",
+  "Discard changes?": "Discard changes?",
+  "Your unsaved changes will be lost.": "Your unsaved changes will be lost.",
   "now": "now"
   ,"doorbell": "doorbell",
   "opened": "opened"

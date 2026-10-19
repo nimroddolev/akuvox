@@ -161,6 +161,55 @@ test("preserves editable notification options", () => {
   });
 });
 
+test("builds and restores platform-specific notification delivery options", () => {
+  const config = buildDoorNotificationAutomation({
+    name: "Priority front door alert",
+    doors: [{ deviceId: "door-1", name: "Front door" }],
+    services: ["notify.mobile_app_iphone", "notify.mobile_app_pixel", "notify.email"],
+    includeOpened: true,
+    includeCalls: false,
+    iosSound: "US-EN-Alexa-Front-Door-Opened.wav",
+    androidChannel: "front_door",
+  });
+  const notifications = config.actions[0].choose[0].sequence;
+
+  assert.deepEqual(notifications[0].data.data, {
+    image: "{{ trigger.event.data.pic_url }}",
+    push: { sound: "US-EN-Alexa-Front-Door-Opened.wav" },
+  });
+  assert.deepEqual(notifications[1].data.data, {
+    image: "{{ trigger.event.data.pic_url }}",
+    channel: "front_door",
+  });
+  assert.equal(notifications[2].data.data.image, "{{ trigger.event.data.pic_url }}");
+  assert.equal(notifications[2].data.data.channel, undefined);
+  assert.deepEqual(asDoorNotification(config, doors), {
+    name: "Priority front door alert",
+    doorIds: ["door-1"],
+    includeOpened: true,
+    includeCalls: false,
+    callerRules: [],
+    callerOperator: "is",
+    services: ["notify.mobile_app_iphone", "notify.mobile_app_pixel", "notify.email"],
+    iosSound: "US-EN-Alexa-Front-Door-Opened.wav",
+    androidChannel: "front_door",
+    initialState: undefined,
+  });
+
+  const priorityConfig = buildDoorNotificationAutomation({
+    name: "Priority front door alert",
+    doors: [{ deviceId: "door-1", name: "Front door" }],
+    services: ["notify.mobile_app_phone"],
+    includeOpened: true,
+    includeCalls: false,
+    priorityAlert: true,
+  });
+  const priorityData = priorityConfig.actions[0].choose[0].sequence[0].data.data;
+  assert.deepEqual(priorityData.push.sound, { name: "default", critical: 1, volume: 1.0 });
+  assert.equal(priorityData.channel, "alarm_stream");
+  assert.equal(asDoorNotification(priorityConfig, doors)?.priorityAlert, true);
+});
+
 test("does not list automations with behavior the wizard cannot preserve", () => {
   const config = automation();
   config.conditions.push({ condition: "state", entity_id: "input_boolean.awake", state: "on" });

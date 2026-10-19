@@ -19,8 +19,10 @@ export const escapeHtml = (value) =>
 /**
  * Configure dialog to close when user clicks on the backdrop area.
  * @param {HTMLDialogElement} dialog
+ * @param {() => boolean|Promise<boolean>} [canClose]
  */
-export const closeOnBackdrop = (dialog) => {
+export const closeOnBackdrop = (dialog, canClose = () => true) => {
+  let checkingClose = false;
   requestAnimationFrame(() => {
     dialog.addEventListener("click", (event) => {
       const bounds = dialog.getBoundingClientRect();
@@ -30,11 +32,44 @@ export const closeOnBackdrop = (dialog) => {
         event.clientY < bounds.top ||
         event.clientY > bounds.bottom
       ) {
-        dialog.close();
+        if (checkingClose) return;
+        checkingClose = true;
+        Promise.resolve()
+          .then(canClose)
+          .then((shouldClose) => {
+            if (shouldClose) dialog.close();
+          })
+          .finally(() => {
+            checkingClose = false;
+          });
       }
     });
   });
 };
+
+/**
+ * Capture the current state of a form-like container.
+ * @param {Element} container
+ * @returns {string}
+ */
+export const formState = (container) =>
+  [...container.querySelectorAll("input, select, textarea")]
+    .map((field, index) => {
+      const value = field instanceof HTMLInputElement &&
+        (field.type === "checkbox" || field.type === "radio")
+        ? field.checked
+        : field.value;
+      return `${index}:${field.type}:${value}`;
+    })
+    .join("|");
+
+/**
+ * Return whether a form-like container differs from a previously captured state.
+ * @param {Element} container
+ * @param {string} initialState
+ * @returns {boolean}
+ */
+export const hasFormChanges = (container, initialState) => formState(container) !== initialState;
 
 /**
  * Deep query selector penetrating Shadow DOM boundaries.

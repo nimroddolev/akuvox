@@ -92,7 +92,10 @@ export default {
   "Open {name}": "{name} öffnen",
   "Play notification sound preview": "Benachrichtigungston-Vorschau abspielen",
   "Priority alert (critical on iOS, alarm stream on Android)": "Prioritätswarnung (kritisch unter iOS, Alarmkanal unter Android)",
+  "Priority alert (critical on iOS)": "Prioritätswarnung (kritisch unter iOS)",
+  "Priority alert (alarm stream on Android)": "Prioritätswarnung (Android-Alarmkanal)",
   "Priority alerts use Android's alarm stream.": "Prioritätswarnungen verwenden den Android-Alarmkanal.",
+  "Android channels are created in the Companion App and managed in Android system settings.": "Android-Kanäle werden in der Companion App erstellt und in den Android-Systemeinstellungen verwaltet.",
   "Require the phone to be unlocked to open a relay": "Zum Öffnen eines Relais muss das Telefon entsperrt sein",
   "Select at least one door.": "Wählen Sie mindestens eine Tür aus.",
   "Select at least one event type.": "Wählen Sie mindestens einen Ereignistyp aus.",
@@ -105,6 +108,8 @@ export default {
   "{name} door event": "Türereignis bei {name}",
   "{name} was called or opened.": "{name} wurde angerufen oder geöffnet.",
   "{name} was opened.": "{name} wurde geöffnet.",
+  "Discard changes?": "Änderungen verwerfen?",
+  "Your unsaved changes will be lost.": "Ihre nicht gespeicherten Änderungen gehen verloren.",
   "now": "jetzt"
   ,"doorbell": "Türklingel",
   "opened": "geöffnet"
