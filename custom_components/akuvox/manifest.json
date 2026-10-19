@@ -11,6 +11,8 @@
     "ffmpeg",
     "frontend",
     "generic",
+    "http",
+    "logger",
     "panel_custom",
     "sensor"
   ],
