@@ -1,4 +1,4 @@
-homeassistant==2026.2.3
+homeassistant==2026.10.1
 ha-ffmpeg==3.2.2
 PyTurboJPEG==2.5.0
 ruff==0.17.1
