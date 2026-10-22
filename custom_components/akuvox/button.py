@@ -106,8 +106,6 @@ class AkuvoxDoorRelayEntity(ButtonEntity, AkuvoxEntity):
 
     async def async_press(self) -> None:
         """Trigger the door relay without blocking Home Assistant's event loop."""
-        # The client refreshes its session token without recreating entities,
-        # so read the current session at press time.
         client_data = getattr(self._client, "_data", None)
         await self._client.async_make_opendoor_request(
             name=self._name,
