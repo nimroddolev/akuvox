@@ -9,7 +9,7 @@ markdown-preview-github-styles.lightTheme
 
 Bring your Akuvox SmartPlus account into Home Assistant to view door cameras, unlock relays, review activity, and build automations around door events.
 
-<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/integration-overview-dark.jpeg"><img src="docs/images/integration-overview-light.jpeg" alt="Illustrated overview of camera access, activity, temporary keys, automations, and account sharing" style="width: 100%"></picture></p>
+<p align="center"><img src="https://raw.githubusercontent.com/nimroddolev/akuvox/main/docs/images/integration-overview-light.jpeg" alt="Illustrated overview of camera access, activity, temporary keys, automations, and account sharing" style="width: 100%"></p>
 
 > This is an unofficial community integration that uses SmartPlus's private cloud API. Akuvox or SmartPlus may change that API or its authentication without notice.
 
@@ -72,32 +72,32 @@ Only Home Assistant administrators can open the panel and use its sensitive cont
 
 View live streams and still previews, open RTSP links, and unlock relays from the **Devices** tab. Copied RTSP URLs can contain camera credentials, so treat them like a password and share them only through a trusted channel.
 
-<p><a href="docs/images/devices-preview-light.jpeg"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/devices-preview.jpeg"><img src="docs/images/devices-preview-light.jpeg" alt="Devices tab with a front-door camera preview and relay controls" width="100%" style="max-width: 1350px"></picture></a></p>
+<p><a href="https://raw.githubusercontent.com/nimroddolev/akuvox/main/docs/images/devices-preview-light.jpeg"><img src="https://raw.githubusercontent.com/nimroddolev/akuvox/main/docs/images/devices-preview-light.jpeg" alt="Devices tab with a front-door camera preview and relay controls" width="100%" style="max-width: 1350px"></a></p>
 
 ### Latest Activity
 
 Browse and filter recent door activity and its available images from the **Latest Activity** tab.
 
-<p><a href="docs/images/latest-activity-preview-light.jpeg"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/latest-activity-preview.jpeg"><img src="docs/images/latest-activity-preview-light.jpeg" alt="Latest Activity tab with filters and a chronological door-event list" width="100%" style="max-width: 1350px"></picture></a></p>
+<p><a href="https://raw.githubusercontent.com/nimroddolev/akuvox/main/docs/images/latest-activity-preview-light.jpeg"><img src="https://raw.githubusercontent.com/nimroddolev/akuvox/main/docs/images/latest-activity-preview-light.jpeg" alt="Latest Activity tab with filters and a chronological door-event list" width="100%" style="max-width: 1350px"></a></p>
 
 ### Call History
 
 Review recent SmartPlus calls and their available images from the **Call History** tab.
 
-<p><a href="docs/images/call-history-preview-light.jpeg"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/call-history-preview.jpeg"><img src="docs/images/call-history-preview-light.jpeg" alt="Call History tab with caller callee status and duration columns" width="100%" style="max-width: 1350px"></picture></a></p>
+<p><a href="https://raw.githubusercontent.com/nimroddolev/akuvox/main/docs/images/call-history-preview-light.jpeg"><img src="https://raw.githubusercontent.com/nimroddolev/akuvox/main/docs/images/call-history-preview-light.jpeg" alt="Call History tab with caller callee status and duration columns" width="100%" style="max-width: 1350px"></a></p>
 
 ### Temporary keys
 
 Create, edit, delete, copy, and retrieve QR codes for temporary access from **Akuvox SmartPlus → Temporary Keys**.
 
-<p><a href="docs/images/temporary-keys-preview-light.jpeg"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/temporary-keys-preview.jpeg"><img src="docs/images/temporary-keys-preview-light.jpeg" alt="Temporary Keys tab with generic, masked access codes" width="100%" style="max-width: 1350px"></picture></a></p>
+<p><a href="https://raw.githubusercontent.com/nimroddolev/akuvox/main/docs/images/temporary-keys-preview-light.jpeg"><img src="https://raw.githubusercontent.com/nimroddolev/akuvox/main/docs/images/temporary-keys-preview-light.jpeg" alt="Temporary Keys tab with generic, masked access codes" width="100%" style="max-width: 1350px"></a></p>
 
 When creating new temporary keys, you can enter the key name and validity period, choose permitted doors, then collect optional identifiers.
 
 <p>
-  <a href="docs/images/temporary-key-create-step-1-light.jpeg"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/temporary-key-create-step-1.jpeg"><img src="docs/images/temporary-key-create-step-1-light.jpeg" width="33%" style="max-width: 450px" alt="Create Temporary Key: enter name and validity period"></picture></a>
-  <a href="docs/images/temporary-key-create-step-2-light.jpeg"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/temporary-key-create-step-2.jpeg"><img src="docs/images/temporary-key-create-step-2-light.jpeg" width="33%" style="max-width: 450px" alt="Create Temporary Key: choose permitted generic doors"></picture></a>
-  <a href="docs/images/temporary-key-create-step-3-light.jpeg"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/temporary-key-create-step-3.jpeg"><img src="docs/images/temporary-key-create-step-3-light.jpeg" width="33%" style="max-width: 450px" alt="Create Temporary Key: enter optional identifiers"></picture></a>
+  <a href="https://raw.githubusercontent.com/nimroddolev/akuvox/main/docs/images/temporary-key-create-step-1-light.jpeg"><img src="https://raw.githubusercontent.com/nimroddolev/akuvox/main/docs/images/temporary-key-create-step-1-light.jpeg" width="33%" style="max-width: 450px" alt="Create Temporary Key: enter name and validity period"></a>
+  <a href="https://raw.githubusercontent.com/nimroddolev/akuvox/main/docs/images/temporary-key-create-step-2-light.jpeg"><img src="https://raw.githubusercontent.com/nimroddolev/akuvox/main/docs/images/temporary-key-create-step-2-light.jpeg" width="33%" style="max-width: 450px" alt="Create Temporary Key: choose permitted generic doors"></a>
+  <a href="https://raw.githubusercontent.com/nimroddolev/akuvox/main/docs/images/temporary-key-create-step-3-light.jpeg"><img src="https://raw.githubusercontent.com/nimroddolev/akuvox/main/docs/images/temporary-key-create-step-3-light.jpeg" width="33%" style="max-width: 450px" alt="Create Temporary Key: enter optional identifiers"></a>
 </p>
 
 ### Automations
@@ -106,16 +106,16 @@ When creating new temporary keys, you can enter the key name and validity period
 
 Use **Akuvox SmartPlus → Automations** to easily build automations triggered by specific doors, event types & family members, that fire off notification events that take advantage of door/person names, live camera images, etc.
 
-<p><a href="docs/images/automations-preview-light.jpeg"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/automations-preview.jpeg"><img src="docs/images/automations-preview-light.jpeg" alt="Automations tab with a no-code front-door notification workflow" width="100%" style="max-width: 1350px"></picture></a></p>
+<p><a href="https://raw.githubusercontent.com/nimroddolev/akuvox/main/docs/images/automations-preview-light.jpeg"><img src="https://raw.githubusercontent.com/nimroddolev/akuvox/main/docs/images/automations-preview-light.jpeg" alt="Automations tab with a no-code front-door notification workflow" width="100%" style="max-width: 1350px"></a></p>
 
 
 <p>
-  <a href="docs/images/automations-wizard-step-1-light.jpeg"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/automations-wizard-step-1.jpeg"><img src="docs/images/automations-wizard-step-1-light.jpeg" width="33%" style="max-width: 450px" alt="Create Automation — choose doors"></picture></a>
-  <a href="docs/images/automations-wizard-step-2-light.jpeg"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/automations-wizard-step-2.jpeg"><img src="docs/images/automations-wizard-step-2-light.jpeg" width="33%" style="max-width: 450px" alt="Create Automation — choose events"></picture></a>
-  <a href="docs/images/automations-wizard-step-3-light.jpeg"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/automations-wizard-step-3.jpeg"><img src="docs/images/automations-wizard-step-3-light.jpeg" width="33%" style="max-width: 450px" alt="Create Automation — choose people or keys"></picture></a>
-  <a href="docs/images/automations-wizard-step-4-light.jpeg"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/automations-wizard-step-4.jpeg"><img src="docs/images/automations-wizard-step-4-light.jpeg" width="33%" style="max-width: 450px" alt="Create Automation — choose notification services"></picture></a>
-  <a href="docs/images/automations-wizard-step-5-light.jpeg"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/automations-wizard-step-5.jpeg"><img src="docs/images/automations-wizard-step-5-light.jpeg" width="33%" style="max-width: 450px" alt="Create Automation — notification options"></picture></a>
-  <a href="docs/images/automations-wizard-step-6-light.jpeg"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/automations-wizard-step-6.jpeg"><img src="docs/images/automations-wizard-step-6-light.jpeg" width="33%" style="max-width: 450px" alt="Create Automation — name the automation"></picture></a>
+  <a href="https://raw.githubusercontent.com/nimroddolev/akuvox/main/docs/images/automations-wizard-step-1-light.jpeg"><img src="https://raw.githubusercontent.com/nimroddolev/akuvox/main/docs/images/automations-wizard-step-1-light.jpeg" width="33%" style="max-width: 450px" alt="Create Automation — choose doors"></a>
+  <a href="https://raw.githubusercontent.com/nimroddolev/akuvox/main/docs/images/automations-wizard-step-2-light.jpeg"><img src="https://raw.githubusercontent.com/nimroddolev/akuvox/main/docs/images/automations-wizard-step-2-light.jpeg" width="33%" style="max-width: 450px" alt="Create Automation — choose events"></a>
+  <a href="https://raw.githubusercontent.com/nimroddolev/akuvox/main/docs/images/automations-wizard-step-3-light.jpeg"><img src="https://raw.githubusercontent.com/nimroddolev/akuvox/main/docs/images/automations-wizard-step-3-light.jpeg" width="33%" style="max-width: 450px" alt="Create Automation — choose people or keys"></a>
+  <a href="https://raw.githubusercontent.com/nimroddolev/akuvox/main/docs/images/automations-wizard-step-4-light.jpeg"><img src="https://raw.githubusercontent.com/nimroddolev/akuvox/main/docs/images/automations-wizard-step-4-light.jpeg" width="33%" style="max-width: 450px" alt="Create Automation — choose notification services"></a>
+  <a href="https://raw.githubusercontent.com/nimroddolev/akuvox/main/docs/images/automations-wizard-step-5-light.jpeg"><img src="https://raw.githubusercontent.com/nimroddolev/akuvox/main/docs/images/automations-wizard-step-5-light.jpeg" width="33%" style="max-width: 450px" alt="Create Automation — notification options"></a>
+  <a href="https://raw.githubusercontent.com/nimroddolev/akuvox/main/docs/images/automations-wizard-step-6-light.jpeg"><img src="https://raw.githubusercontent.com/nimroddolev/akuvox/main/docs/images/automations-wizard-step-6-light.jpeg" width="33%" style="max-width: 450px" alt="Create Automation — name the automation"></a>
 </p>
 
 #### Automations via UI/YAML
@@ -157,14 +157,14 @@ Use **Akuvox SmartPlus → Settings** to configure event-image timing, local his
 
 Share a restricted, revocable view of a SmartPlus account with another Home Assistant instance without giving it your SmartPlus username, password, or session tokens. The source instance remains in control: it chooses exactly what the receiver can use and can revoke that access at any time.
 
-<p><a href="./docs/images/share-account-nodes-preview-light.jpeg"><picture><source media="(prefers-color-scheme: dark)" srcset="./docs/images/share-account-nodes-preview.jpeg"><img src="./docs/images/share-account-nodes-preview-light.jpeg" alt="Share an account settings showing connected, disconnected, waiting, expired, and revoked receivers" style="max-width: 700px"></picture></a></p>
+<p><a href="https://raw.githubusercontent.com/nimroddolev/akuvox/main/docs/images/share-account-nodes-preview-light.jpeg"><img src="https://raw.githubusercontent.com/nimroddolev/akuvox/main/docs/images/share-account-nodes-preview-light.jpeg" alt="Share an account settings showing connected, disconnected, waiting, expired, and revoked receivers" style="max-width: 700px"></a></p>
 
 #### Create and transfer a pairing link
 
 1. On the source instance, open **Akuvox SmartPlus → Settings → Create pairing link** and give the receiving Home Assistant instance a recognizable name.
 2. Choose whether the link should remain valid indefinitely or expire at a specific date and time. The pairing link itself is single-use and expires after 10 minutes, even if the granted access is configured to last longer.
 
-<p><a href="./docs/images/share-account-wizard-step-1-light.jpeg"><picture><source media="(prefers-color-scheme: dark)" srcset="./docs/images/share-account-wizard-step-1.jpeg"><img src="./docs/images/share-account-wizard-step-1-light.jpeg" alt="Create pairing link: name the remote instance and set its validity" style="max-width: 600px"></picture></a></p>
+<p><a href="https://raw.githubusercontent.com/nimroddolev/akuvox/main/docs/images/share-account-wizard-step-1-light.jpeg"><img src="https://raw.githubusercontent.com/nimroddolev/akuvox/main/docs/images/share-account-wizard-step-1-light.jpeg" alt="Create pairing link: name the remote instance and set its validity" style="max-width: 600px"></a></p>
 
 Transfer the link through a secure channel. Treat it like a password: anyone who uses it before it expires receives the selected access.
 
@@ -172,11 +172,11 @@ Transfer the link through a secure channel. Treat it like a password: anyone who
 
 Select the individual cameras and relays the receiving instance may use. For temporary keys, grant view, creation, and editing permissions independently. Access is limited to the choices made here; unselected devices and permissions remain unavailable to the receiver.
 
-<p><a href="./docs/images/share-account-wizard-step-2-light.jpeg"><picture><source media="(prefers-color-scheme: dark)" srcset="./docs/images/share-account-wizard-step-2.jpeg"><img src="./docs/images/share-account-wizard-step-2-light.jpeg" alt="Create pairing link: select device and temporary key permissions" style="max-width: 600px"></picture></a></p>
+<p><a href="https://raw.githubusercontent.com/nimroddolev/akuvox/main/docs/images/share-account-wizard-step-2-light.jpeg"><img src="https://raw.githubusercontent.com/nimroddolev/akuvox/main/docs/images/share-account-wizard-step-2-light.jpeg" alt="Create pairing link: select device and temporary key permissions" style="max-width: 600px"></a></p>
 
 Choose which family members appear in the receiver's **Latest Activity** and **Call History** views. This applies only to shared history and does not change the source account's own data.
 
-<p><a href="./docs/images/share-account-wizard-step-3-light.jpeg"><picture><source media="(prefers-color-scheme: dark)" srcset="./docs/images/share-account-wizard-step-3.jpeg"><img src="./docs/images/share-account-wizard-step-3-light.jpeg" alt="Create pairing link: select family member activity and call history access" style="max-width: 600px"></picture></a></p>
+<p><a href="https://raw.githubusercontent.com/nimroddolev/akuvox/main/docs/images/share-account-wizard-step-3-light.jpeg"><img src="https://raw.githubusercontent.com/nimroddolev/akuvox/main/docs/images/share-account-wizard-step-3-light.jpeg" alt="Create pairing link: select family member activity and call history access" style="max-width: 600px"></a></p>
 
 #### Connect and manage the receiving instance
 
