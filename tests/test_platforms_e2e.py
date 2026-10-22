@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import unittest
+from types import SimpleNamespace
 from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 from custom_components.akuvox import button, camera, sensor
@@ -136,6 +137,24 @@ class TestPlatformSetupE2E(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(relay_entity.unique_id, "entry-id:Lobby, 1")
         self.assertTrue(key_entity.is_key_active())
         client.async_make_opendoor_request.assert_awaited_once()
+
+    async def test_relay_press_used_the_refreshed_session_token(self) -> None:
+        """A relay press sent the token the client holds after a refresh."""
+        client = _EntityClient()
+        client._data = SimpleNamespace(host="api.example", token="setup-token")
+        relay_entity = button.AkuvoxDoorRelayEntity(
+            client, _Entry(), "Lobby", "1", "mac=AABBCC&relay=1"
+        )
+        client._data.token = "refreshed-token"
+
+        await relay_entity.async_press()
+
+        client.async_make_opendoor_request.assert_awaited_once_with(
+            name="Lobby, 1",
+            host="api.example",
+            token="refreshed-token",
+            data="mac=AABBCC&relay=1",
+        )
 
     def test_camera_preserved_the_configured_udp_transport(self) -> None:
         """Camera entities retained their RTSP transport configuration."""
