@@ -396,9 +396,18 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         password = str(user_input.get("password", ""))
         if not login_account or not password:
             return self.async_show_form(step_id=step_id, data_schema=schema, errors={"base": "invalid_auth"})
+        # Try the account's regional gateway first, from HA's country (US -> ucloud)
+        subdomain = helpers.get_subdomain_from_country_code(
+            str(COUNTRY_PHONE.get(self.hass.config.country, "")))
         try:
-            response = await self.akuvox_api_client.async_begin_email_sign_in(login_account, password)
-            temporary_token = str((response or {}).get("two_factor_auth_temp_token", ""))
+            response = await self.akuvox_api_client.async_begin_email_sign_in(
+                login_account, password, subdomain)
+            payload = (response or {}).get("datas", response or {})
+            temporary_token = str(payload.get("two_factor_auth_temp_token", ""))
+            if not temporary_token and payload.get("token"):
+                # This account signs in without an email OTP
+                return await self._async_finish_direct_password_sign_in(
+                    login_account, step_id=step_id, schema=schema, reauth=reauth)
             if not temporary_token:
                 LOGGER.warning("SmartPlus password login returned no email OTP challenge")
                 code_sent = False
@@ -413,10 +422,34 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             code_sent = False
         if not code_sent:
             return self.async_show_form(step_id=step_id, data_schema=schema, errors={"base": "cannot_connect"})
-        self.data.update({"login_method": "email_password", "login_account": login_account})
+        self._store_email_login(login_account)
         return await (
             self.async_step_reauth_verify_email_code() if reauth else self.async_step_verify_email_code()
         )
+
+    def _store_email_login(self, login_account: str) -> None:
+        """Keep the login name and the gateway that accepted it, never the password."""
+        self.data.update({
+            "login_method": "email_password",
+            "login_account": login_account,
+            "subdomain": self.akuvox_api_client.get_subdomain(),
+        })
+
+    async def _async_finish_direct_password_sign_in(self, login_account, *, step_id, schema, reauth):
+        """Create or reauthenticate the entry when SmartPlus required no email OTP."""
+        try:
+            signed_in = await self.akuvox_api_client.async_finish_password_sign_in(start_polling=False)
+        except Exception as error:
+            LOGGER.warning("SmartPlus password sign-in failed: %s", error)
+            signed_in = False
+        if not signed_in:
+            return self.async_show_form(step_id=step_id, data_schema=schema, errors={"base": "cannot_connect"})
+        self._store_email_login(login_account)
+        if reauth:
+            return await self._async_finish_reauthentication()
+        self.data.update(self.akuvox_api_client.get_devices_json())
+        self.data.update(self.akuvox_api_client.get_credentials())
+        return self.async_create_entry(title=self.akuvox_api_client.get_title(), data=self.data)
 
     async def async_step_verify_email_code(self, user_input=None):
         """Verify the emailed OTP and create the entry."""

@@ -882,7 +882,7 @@ class AkuvoxApiClient:
         return False
 
     async def async_begin_email_sign_in(
-        self, login_account: str, password: str
+        self, login_account: str, password: str, subdomain: str | None = None
     ) -> dict | None:
         """Validate an email address or username and password for OTP sign-in.
 
@@ -890,39 +890,82 @@ class AkuvoxApiClient:
         then sends a double MD5 digest of the password. The original password
         remains only in the config-flow memory and is never written to an
         entry or credential store.
+
+        Accounts live on a regional gateway (e.g. ``ucloud`` for the US), so
+        the account's region is tried before ``ecloud``. Some accounts also
+        need the digits in the login name shifted, as phone numbers are, so
+        that form is tried when the letters-only form is rejected. The
+        gateway that accepted the login is kept in ``self._data.subdomain``.
         """
         self.init_api_with_data(hass=self.hass, subdomain="ecloud")
-        obfuscated_login_account = self._caesar_shift_login_value(login_account)
         password_digest = self._double_md5_password(password)
-        params = urlencode(
-            {"user": obfuscated_login_account, "passwd": password_digest, "id_code": "(null)"}
+        login_names = [self._caesar_shift_login_value(login_account)]
+        if any(character.isdigit() for character in login_account):
+            login_names.append(self._caesar_shift_login_value(login_account, shift_digits=True))
+        gateways = dict.fromkeys(
+            gateway for gateway in (subdomain, "ecloud") if gateway and gateway != "Default"
         )
-        response = await self._async_api_wrapper(
-            method="get",
-            url=(
-                f"https://{REST_SERVER_ADDR.replace('subdomain', 'ecloud')}"
-                f":{REST_SERVER_PORT}/{API_EMAIL_PASSWORD_LOGIN}?{params}"
-            ),
-            headers={
-                "Accept": "*/*",
-                "X-AUTH-TOKEN": "",
-                "api-version": "7.33",
-                "User-Agent": EMAIL_LOGIN_USER_AGENT,
-                "Accept-Language": "en-AU;q=1, he-AU;q=0.9, ru-RU;q=0.8",
-            },
-            data=None,
-        )
-        if not isinstance(response, dict):
-            return None
-        self._data.parse_sms_login_response(response)
-        return response
+        for gateway in gateways:
+            for login_name in login_names:
+                params = urlencode(
+                    {"user": login_name, "passwd": password_digest, "id_code": "(null)"}
+                )
+                try:
+                    response = await self._async_api_wrapper(
+                        method="get",
+                        url=(
+                            f"https://{REST_SERVER_ADDR.replace('subdomain', gateway)}"
+                            f":{REST_SERVER_PORT}/{API_EMAIL_PASSWORD_LOGIN}?{params}"
+                        ),
+                        headers={
+                            "Accept": "*/*",
+                            "X-AUTH-TOKEN": "",
+                            "api-version": "7.33",
+                            "User-Agent": EMAIL_LOGIN_USER_AGENT,
+                            "Accept-Language": "en-AU;q=1, he-AU;q=0.9, ru-RU;q=0.8",
+                        },
+                        data=None,
+                    )
+                except AkuvoxApiClientRateLimitError:
+                    raise
+                except AkuvoxApiClientError as error:
+                    LOGGER.debug("SmartPlus password login failed on %s: %s", gateway, error)
+                    continue
+                payload = response.get("datas", response) if isinstance(response, dict) else None
+                if isinstance(payload, dict) and (
+                    payload.get("token") or payload.get("two_factor_auth_temp_token")
+                ):
+                    self._data.subdomain = gateway
+                    self._data.parse_sms_login_response(response)
+                    return response
+                LOGGER.debug("SmartPlus password login was not accepted on %s", gateway)
+        return None
+
+    async def async_finish_password_sign_in(self, start_polling: bool = True) -> bool:
+        """Finish a password sign-in that returned a session token without an email OTP."""
+        if self._data is None or not self._data.token or not self._data.auth_token:
+            return False
+        return await self._async_load_signed_in_account(start_polling)
+
+    async def _async_load_signed_in_account(self, start_polling: bool) -> bool:
+        """Load devices, keys and family members after a successful email sign-in."""
+        if not self._data.rtsp_server:
+            return await self.async_retrieve_user_data(start_polling=start_polling)
+        device_data_loaded = await self.async_retrieve_device_data()
+        await self.async_retrieve_temp_keys_data()
+        await self.async_retrieve_family_members()
+        if device_data_loaded and start_polling:
+            await self.async_start_polling_personal_door_log()
+        return device_data_loaded
 
     @staticmethod
-    def _caesar_shift_login_value(value: str) -> str:
+    def _caesar_shift_login_value(value: str, shift_digits: bool = False) -> str:
         """Apply SmartPlus's three-character obfuscation to the complete login value."""
         shifted: list[str] = []
         for character in value:
-            if "a" <= character <= "z":
+            if shift_digits and "0" <= character <= "9":
+                shifted.append(str((int(character) + 3) % 10))
+            elif "a" <= character <= "z":
                 shifted.append(chr((ord(character) - ord("a") + 3) % 26 + ord("a")))
             elif "A" <= character <= "Z":
                 shifted.append(chr((ord(character) - ord("A") + 3) % 26 + ord("A")))
@@ -968,9 +1011,11 @@ class AkuvoxApiClient:
         self, login_account: str, verification_code: str, start_polling: bool = True
     ) -> bool:
         """Complete email/username sign-in with the emailed OTP."""
+        # Verify on the gateway that accepted the password
+        gateway = (self._data.subdomain if self._data else "") or "ecloud"
         response = await self._async_api_wrapper(
             method="post",
-            url=(f"https://{REST_SERVER_ADDR.replace('subdomain', 'ecloud')}"
+            url=(f"https://{REST_SERVER_ADDR.replace('subdomain', gateway)}"
                  f":{REST_SERVER_PORT}/{API_VERIFY_TWO_FACTOR_AUTHENTICATION_CODE}"),
             headers={
                 "Accept": "*/*",
@@ -987,14 +1032,7 @@ class AkuvoxApiClient:
         self._data.parse_sms_login_response(response)
         if not self._data.token or not self._data.auth_token:
             return False
-        if not self._data.rtsp_server:
-            return await self.async_retrieve_user_data(start_polling=start_polling)
-        device_data_loaded = await self.async_retrieve_device_data()
-        await self.async_retrieve_temp_keys_data()
-        await self.async_retrieve_family_members()
-        if device_data_loaded and start_polling:
-            await self.async_start_polling_personal_door_log()
-        return device_data_loaded
+        return await self._async_load_signed_in_account(start_polling)
 
     async def async_validate_sms_code(self, phone_number: str, country_code: str, sms_code: str) -> dict | None:
         """Validate the SMS code received by the user."""
@@ -2559,6 +2597,10 @@ class AkuvoxApiClient:
     def get_title(self) -> str:
         """Title of Akuvox account."""
         return self._data.project_name
+
+    def get_subdomain(self) -> str:
+        """Regional SmartPlus gateway the account signed in on."""
+        return self._data.subdomain if self._data else ""
 
     def get_devices_json(self) -> dict:
         """Device data dictionary."""
