@@ -70,6 +70,17 @@ def _subdomain_select_options(*, include_default: bool) -> list[dict[str, str]]:
     return options
 
 
+def _email_login_schema(data: dict) -> vol.Schema:
+    """Use the same account and regional override fields for setup and reauth."""
+    return vol.Schema({
+        vol.Required("login_account", default=data.get("login_account", "")): str,
+        vol.Required("password"): str,
+        vol.Optional("subdomain", default=data.get("subdomain", "Default")): selector.SelectSelector(
+            selector.SelectSelectorConfig(options=_subdomain_select_options(include_default=True))
+        ),
+    })
+
+
 class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
     """Config flow for Akuvox."""
 
@@ -174,6 +185,11 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             self.data = {
                 "login_method": "email_password",
                 "login_account": str(entry_data.get("login_account", "")),
+                "subdomain": str(
+                    self._reauth_entry.options.get("subdomain", entry_data.get("subdomain", "Default"))
+                    if self._reauth_entry.options.get("override", False)
+                    else entry_data.get("subdomain", "Default")
+                ),
             }
             self.akuvox_api_client = AkuvoxApiClient(
                 session=async_get_clientsession(self.hass), hass=self.hass, entry=None
@@ -258,12 +274,7 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_reauth_email_password(self, user_input=None):
         """Request an email OTP to reauthenticate an email-login entry."""
-        schema = vol.Schema(
-            {
-                vol.Required("login_account", default=self.data.get("login_account", "")): str,
-                vol.Required("password"): str,
-            }
-        )
+        schema = _email_login_schema(self.data)
         if user_input is None:
             return self.async_show_form(step_id="reauth_email_password", data_schema=schema)
         return await self._async_begin_email_password_sign_in(
@@ -307,6 +318,10 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                 "door_keys_data": devices["door_keys_data"],
             }
         )
+        if options.get("override", False):
+            # A validated new gateway must not be masked by the old override on reload.
+            for key in ("host", "subdomain"):
+                options[key] = data.get(key, "")
         async_clear_authentication_failure(self.hass, self._reauth_entry)
         return self.async_update_reload_and_abort(
             self._reauth_entry,
@@ -383,7 +398,7 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             self.akuvox_api_client = AkuvoxApiClient(
                 session=async_get_clientsession(self.hass), hass=self.hass, entry=None
             )
-        schema = vol.Schema({vol.Required("login_account"): str, vol.Required("password"): str})
+        schema = _email_login_schema(self.data)
         if user_input is None:
             return self.async_show_form(step_id="email_password_sign_in", data_schema=schema)
         return await self._async_begin_email_password_sign_in(
@@ -396,9 +411,11 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         password = str(user_input.get("password", ""))
         if not login_account or not password:
             return self.async_show_form(step_id=step_id, data_schema=schema, errors={"base": "invalid_auth"})
-        # Try the account's regional gateway first, from HA's country (US -> ucloud)
-        subdomain = helpers.get_subdomain_from_country_code(
-            str(COUNTRY_PHONE.get(self.hass.config.country, "")))
+        subdomain = str(user_input.get("subdomain", self.data.get("subdomain", "Default")))
+        if subdomain not in SUBDOMAINS_LIST:
+            return self.async_show_form(step_id=step_id, data_schema=schema, errors={"base": "invalid_auth"})
+        if subdomain == "Default":
+            subdomain = helpers.get_subdomain_from_country(self.hass.config.country)
         try:
             response = await self.akuvox_api_client.async_begin_email_sign_in(
                 login_account, password, subdomain)

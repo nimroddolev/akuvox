@@ -54,6 +54,7 @@ from .const import (
     EMAIL_LOGIN_USER_AGENT,
     API_SERVERS_LIST,
     API_REFRESH_TOKEN,
+    SUBDOMAINS_LIST,
     TOKEN_REFRESH_INTERVAL,
     TOKEN_REFRESHED_AT,
     TOKEN_UPDATE_TYPE,
@@ -897,13 +898,15 @@ class AkuvoxApiClient:
         that form is tried when the letters-only form is rejected. The
         gateway that accepted the login is kept in ``self._data.subdomain``.
         """
-        self.init_api_with_data(hass=self.hass, subdomain="ecloud")
+        # A retry can use a different account; never retain the previous session.
+        self._data = AkuvoxData(entry=None, hass=self.hass, subdomain="ecloud")
         password_digest = self._double_md5_password(password)
         login_names = [self._caesar_shift_login_value(login_account)]
         if any(character.isdigit() for character in login_account):
             login_names.append(self._caesar_shift_login_value(login_account, shift_digits=True))
         gateways = dict.fromkeys(
-            gateway for gateway in (subdomain, "ecloud") if gateway and gateway != "Default"
+            gateway for gateway in (subdomain, "ecloud")
+            if gateway in SUBDOMAINS_LIST and gateway != "Default"
         )
         for gateway in gateways:
             for login_name in login_names:

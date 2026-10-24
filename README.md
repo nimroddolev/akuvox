@@ -47,7 +47,7 @@ For a manual installation, copy `custom_components/akuvox` into `<your Home Assi
 
 2. Choose the sign-in method that fits how you use SmartPlus:
 
-    - **Email/username and password** - Enter your account's email and password to receive the emailed verification code to sign in securely.
+    - **Email/username and password** - Enter your account's email and password, then complete email verification if requested. The regional server is selected automatically; use the regional API server selector if your account belongs to a different region.
     - **SMS** - Select your country & phone number to receive an SMS code to sign in securely.
     - **Credentials from another Home Assistant** - Use a pairing link from another Home Assistant instance running the integration (see [Share an account](#share-an-account)).
 

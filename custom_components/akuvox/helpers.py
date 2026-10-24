@@ -9,6 +9,10 @@ from .const import (
 class AkuvoxHelpers:
     """Class with helper functions."""
 
+    def get_subdomain_from_country(self, country: str | None) -> str:
+        """Resolve an ISO country directly, without ambiguous shared phone codes."""
+        return LOCATIONS_DICT.get(str(country or "").upper(), {}).get("subdomain", "ecloud")
+
     def get_subdomain_from_country_code(self, country_code):
         """User's subdomain."""
         location_dict = self.get_location_dict(country_code)
