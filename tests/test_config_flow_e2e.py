@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import unittest
+from urllib.parse import parse_qs, urlsplit
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from custom_components.akuvox.config_flow import (
@@ -13,6 +14,8 @@ from custom_components.akuvox.config_flow import (
 )
 from custom_components.akuvox.api import AkuvoxApiClient
 from custom_components.akuvox.data import AkuvoxData
+
+from test_session_refresh_e2e import _Hass as _ClientHass, _Response, _Session, _success
 
 
 class _Config:
@@ -25,6 +28,18 @@ class _Hass:
     """Supplies the config object read by flow schema generation."""
 
     config = _Config()
+
+
+class _USConfig:
+    """Supplies a United States Home Assistant installation."""
+
+    country = "US"
+
+
+class _USHass:
+    """Supplies a US country setting to the email sign-in flow."""
+
+    config = _USConfig()
 
 
 class TestConfigFlowE2E(unittest.TestCase):
@@ -73,6 +88,9 @@ class TestConfigFlowE2E(unittest.TestCase):
         )
         self.assertEqual(
             AkuvoxApiClient._caesar_shift_login_value("Zz9-@#"), "Cc9-@#"
+        )
+        self.assertEqual(
+            AkuvoxApiClient._caesar_shift_login_value("Zz9-@#", shift_digits=True), "Cc2-@#"
         )
         first_digest = hashlib.md5(b"test-password").hexdigest()
         self.assertEqual(
@@ -168,6 +186,9 @@ class _EmailClient(_ReauthClient):
         )
         self.async_send_email_otp = AsyncMock(return_value=True)
         self.async_email_otp_sign_in = AsyncMock(return_value=True)
+        self.async_finish_password_sign_in = AsyncMock(return_value=True)
+        self.get_subdomain = MagicMock(return_value="ecloud")
+        self.get_title = MagicMock(return_value="Home")
 
 
 class TestReauthFlowE2E(unittest.IsolatedAsyncioTestCase):
@@ -222,14 +243,65 @@ class TestEmailPasswordFlowE2E(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(result, {"type": "form"})
         flow.akuvox_api_client.async_begin_email_sign_in.assert_awaited_once_with(
-            "person@example.com", "not-stored"
+            "person@example.com", "not-stored", "ecloud"
         )
         flow.akuvox_api_client.async_send_email_otp.assert_awaited_once_with(
             "person@example.com", "temporary-token"
         )
         self.assertEqual(
-            flow.data, {"login_method": "email_password", "login_account": "person@example.com"}
+            flow.data,
+            {
+                "login_method": "email_password",
+                "login_account": "person@example.com",
+                "subdomain": "ecloud",
+            },
         )
+
+    async def test_password_request_uses_the_regional_gateway(self) -> None:
+        """A US installation asks SmartPlus's US gateway first and keeps it."""
+        flow = AkuvoxFlowHandler()
+        flow.hass = _USHass()
+        flow.akuvox_api_client = _EmailClient()
+        flow.akuvox_api_client.get_subdomain.return_value = "ucloud"
+        flow.async_show_form = MagicMock(return_value={"type": "form"})
+
+        await flow.async_step_email_password_sign_in(
+            {"login_account": "person@example.com", "password": "not-stored"}
+        )
+
+        flow.akuvox_api_client.async_begin_email_sign_in.assert_awaited_once_with(
+            "person@example.com", "not-stored", "ucloud"
+        )
+        self.assertEqual(flow.data["subdomain"], "ucloud")
+
+    async def test_password_login_without_otp_creates_an_entry(self) -> None:
+        """An account that returns a session token directly needs no email OTP."""
+        flow = AkuvoxFlowHandler()
+        flow.hass = _USHass()
+        flow.akuvox_api_client = _EmailClient()
+        flow.akuvox_api_client.async_begin_email_sign_in.return_value = {
+            "token": "session", "refresh_token": "refresh"
+        }
+        flow.akuvox_api_client.get_subdomain.return_value = "ucloud"
+        flow.akuvox_api_client.get_devices_json = MagicMock(return_value={"host": "api.example"})
+        flow.akuvox_api_client.get_credentials = MagicMock(
+            return_value={"auth_token": "auth", "token": "token"}
+        )
+        flow.async_create_entry = MagicMock(return_value={"type": "create_entry"})
+
+        result = await flow.async_step_email_password_sign_in(
+            {"login_account": "person@example.com", "password": "not-stored"}
+        )
+
+        self.assertEqual(result, {"type": "create_entry"})
+        flow.akuvox_api_client.async_send_email_otp.assert_not_awaited()
+        flow.akuvox_api_client.async_finish_password_sign_in.assert_awaited_once_with(
+            start_polling=False
+        )
+        data = flow.async_create_entry.call_args.kwargs["data"]
+        self.assertEqual(data["subdomain"], "ucloud")
+        self.assertEqual(data["login_method"], "email_password")
+        self.assertNotIn("password", data)
 
     async def test_verified_email_otp_creates_an_entry(self) -> None:
         """A valid email OTP saves only the resulting SmartPlus tokens."""
@@ -251,3 +323,74 @@ class TestEmailPasswordFlowE2E(unittest.IsolatedAsyncioTestCase):
             "person@example.com", "123456", start_polling=False
         )
         self.assertNotIn("password", flow.data)
+
+
+def _rejected() -> _Response:
+    """Build a SmartPlus login rejection."""
+    return _Response(200, {"err_code": "1", "message": "rejected"})
+
+
+class TestEmailPasswordApiE2E(unittest.IsolatedAsyncioTestCase):
+    """Verify which SmartPlus gateways and login names the password login uses."""
+
+    def _client(self, responses: list[_Response]) -> AkuvoxApiClient:
+        self.session = _Session(responses)
+        hass = _ClientHass()
+        hass.config = _USConfig()
+        return AkuvoxApiClient(self.session, hass, None)
+
+    def _users(self) -> list[str]:
+        return [parse_qs(urlsplit(request["url"]).query)["user"][0] for request in self.session.requests]
+
+    def _gateways(self) -> list[str]:
+        return [urlsplit(request["url"]).hostname for request in self.session.requests]
+
+    async def test_regional_gateway_is_tried_first(self) -> None:
+        """An accepted regional login makes no ecloud request."""
+        client = self._client([_success({"two_factor_auth_temp_token": "temporary-token"})])
+
+        response = await client.async_begin_email_sign_in("person@example.com", "pw", "ucloud")
+
+        self.assertEqual(response, {"two_factor_auth_temp_token": "temporary-token"})
+        self.assertEqual(self._gateways(), ["gate.ucloud.akuvox.com"])
+        self.assertEqual(client.get_subdomain(), "ucloud")
+
+    async def test_ecloud_is_the_fallback_gateway(self) -> None:
+        """A login the regional gateway rejects is retried on ecloud."""
+        client = self._client([_rejected(), _success({"token": "session"})])
+
+        response = await client.async_begin_email_sign_in("person@example.com", "pw", "ucloud")
+
+        self.assertEqual(response, {"token": "session"})
+        self.assertEqual(self._gateways(), ["gate.ucloud.akuvox.com", "gate.ecloud.akuvox.com"])
+        self.assertEqual(client.get_subdomain(), "ecloud")
+
+    async def test_login_name_with_shifted_digits_is_tried(self) -> None:
+        """A login name with digits is retried with the digits shifted as well."""
+        client = self._client([_rejected(), _success({"token": "session"})])
+
+        await client.async_begin_email_sign_in("person7@example.com", "pw", "ucloud")
+
+        self.assertEqual(self._users(), ["shuvrq7@hadpsoh.frp", "shuvrq0@hadpsoh.frp"])
+        self.assertEqual(self._gateways(), ["gate.ucloud.akuvox.com"] * 2)
+
+    async def test_rejected_everywhere_returns_none(self) -> None:
+        """Every gateway rejecting the login reports no response."""
+        client = self._client([_rejected()])
+
+        self.assertIsNone(await client.async_begin_email_sign_in("person@example.com", "pw", "Default"))
+        self.assertEqual(self._gateways(), ["gate.ecloud.akuvox.com"])
+
+    async def test_email_otp_is_verified_on_the_accepting_gateway(self) -> None:
+        """The OTP goes to the same gateway that accepted the password."""
+        client = self._client([
+            _success({"two_factor_auth_temp_token": "temporary-token"}),
+            _success({"token": "session", "refresh_token": "refresh"}),
+        ])
+        client._async_load_signed_in_account = AsyncMock(return_value=True)
+
+        await client.async_begin_email_sign_in("person@example.com", "pw", "ucloud")
+        self.assertTrue(await client.async_email_otp_sign_in("person@example.com", "123456"))
+
+        self.assertEqual(self._gateways()[1], "gate.ucloud.akuvox.com")
+        self.assertEqual(client.get_credentials(), {"auth_token": "refresh", "token": "session"})

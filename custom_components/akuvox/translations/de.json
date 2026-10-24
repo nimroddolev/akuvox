@@ -19,10 +19,11 @@
             },
             "email_password_sign_in": {
                 "title": "Anmeldung mit E-Mail und Passwort",
-                "description": "Geben Sie die E-Mail-Adresse oder den Benutzernamen und das Passwort Ihres SmartPlus-Kontos ein. Ein Bestätigungscode wird an die E-Mail-Adresse des Kontos gesendet.",
+                "description": "Geben Sie Ihre SmartPlus-E-Mail-Adresse oder Ihren Benutzernamen und Ihr Passwort ein. Falls erforderlich, wird ein Bestätigungscode per E-Mail gesendet. Wählen Sie einen regionalen Server nur, wenn die automatische Anmeldung Ihr Konto nicht findet.",
                 "data": {
                     "login_account": "E-Mail-Adresse oder Benutzername",
-                    "password": "Passwort"
+                    "password": "Passwort",
+                    "subdomain": "Regionaler API-Server"
                 }
             },
             "verify_email_code": {
@@ -34,10 +35,11 @@
             },
             "reauth_email_password": {
                 "title": "Erneute Anmeldung mit E-Mail/Benutzername und Passwort",
-                "description": "Geben Sie Ihre SmartPlus-E-Mail-Adresse oder Ihren Benutzernamen und Ihr Passwort ein, um einen Bestätigungscode zu erhalten.",
+                "description": "Geben Sie Ihre SmartPlus-E-Mail-Adresse oder Ihren Benutzernamen und Ihr Passwort ein. Falls erforderlich, wird ein Bestätigungscode per E-Mail gesendet. Wählen Sie einen regionalen Server nur, wenn die automatische Anmeldung Ihr Konto nicht findet.",
                 "data": {
                     "login_account": "E-Mail-Adresse oder Benutzername",
-                    "password": "Passwort"
+                    "password": "Passwort",
+                    "subdomain": "Regionaler API-Server"
                 }
             },
             "reauth_verify_email_code": {

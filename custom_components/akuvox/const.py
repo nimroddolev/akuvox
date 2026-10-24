@@ -44,7 +44,7 @@ LOCATIONS_DICT = {
         "country": "Australia",
         "phone_number": "61",
         "flag": "🇦🇺",
-        "subdomain": "scloud"
+        "subdomain": "aucloud"
     },
     "GT": {
         "country": "Guatemala",
@@ -95,7 +95,7 @@ LOCATIONS_DICT = {
         "flag": "🇨🇦",
         "subdomain": "ucloud"
     },
-    "CH": {
+    "CL": {
         "country": "Chile",
         "phone_number": "56",
         "flag": "🇨🇱",
@@ -273,7 +273,7 @@ LOCATIONS_DICT = {
         "country": "New Zealand",
         "phone_number": "64",
         "flag": "🇳🇿",
-        "subdomain": "scloud"
+        "subdomain": "aucloud"
     },
     "OM": {
         "country": "Oman",
