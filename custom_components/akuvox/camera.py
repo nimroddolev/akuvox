@@ -3,10 +3,6 @@
 from collections.abc import Callable, Awaitable
 from contextvars import ContextVar
 import asyncio
-import contextlib
-import re
-import sys
-import time
 
 from haffmpeg.tools import IMAGE_JPEG, ImageFrame
 from homeassistant.components.ffmpeg import get_ffmpeg_manager
@@ -20,30 +16,13 @@ from homeassistant.components.camera.const import StreamType
 from homeassistant.components.generic.camera import GenericCamera
 
 from .const import DOMAIN, LOGGER, NAME, VERSION, account_storage_key
+from .camera_snapshot import CameraSnapshotCache
+from .camera_stream import called_from_homekit as _called_from_homekit, stream_name, managed_restream_url
 
 # Set while HA's own stream worker asks for the source, which needs the plain
 # RTSP URL rather than the go2rtc ffmpeg form.
+_GO2RTC_TIMEOUT = 3
 _DIRECT_SOURCE: ContextVar[bool] = ContextVar("akuvox_direct_source", default=False)
-# go2rtc's RTSP restream, reachable from inside HA only
-GO2RTC_RTSP = "rtsp://127.0.0.1:18554"
-# Reuse a snapshot for this long; HomeKit asks about every 10 s per viewer
-SNAPSHOT_MAX_AGE = 5
-# How long the very first snapshot request waits for a frame
-SNAPSHOT_FIRST_WAIT = 8
-
-
-def _called_from_homekit() -> bool:
-    """Whether HomeKit Bridge is asking for the source.
-
-    HomeKit runs plain ffmpeg on the URL, which can't open the go2rtc
-    "ffmpeg:...#input=rtsp/udp" form, so it gets go2rtc's RTSP restream.
-    """
-    frame = sys._getframe(1)  # pylint: disable=protected-access
-    while frame is not None:
-        if frame.f_globals.get("__name__", "").startswith("homeassistant.components.homekit"):
-            return True
-        frame = frame.f_back
-    return False
 
 
 async def async_setup_entry(hass: HomeAssistant,
@@ -128,9 +107,11 @@ class AkuvoxCameraEntity(GenericCamera):
         self._rtsp_url = rtsp_url
         self._attr_unique_id = identity
         self._attr_name = name
-        self._snapshot: bytes | None = None
-        self._snapshot_time: float = 0
-        self._snapshot_task: asyncio.Task | None = None
+        self._snapshot_cache = CameraSnapshotCache(hass, self._async_capture_snapshot, name)
+        self._go2rtc_lock = asyncio.Lock()
+        self._go2rtc_clients: list = []
+        self._go2rtc_stopped = False
+
 
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, identity)},
@@ -155,39 +136,36 @@ class AkuvoxCameraEntity(GenericCamera):
         return False
 
     async def async_added_to_hass(self) -> None:
-        """Grab a first snapshot so HomeKit has a picture straight away."""
+        """Warm the snapshot cache after Home Assistant registers the camera."""
         await super().async_added_to_hass()
-        self._start_snapshot_refresh()
+        self._snapshot_cache.start()
+
+    async def async_will_remove_from_hass(self) -> None:
+        """Cancel captures and remove this camera's private go2rtc aliases."""
+        self._go2rtc_stopped = True
+        await self._snapshot_cache.stop()
+        async with self._go2rtc_lock:
+            for client in self._go2rtc_clients:
+                try:
+                    async with asyncio.timeout(8):
+                        response = await client._client.request(
+                            "DELETE", "/api/streams", params={"src": self._go2rtc_stream_name}
+                        )
+                        response.release()
+                except Exception as error:
+                    LOGGER.debug("Unable to remove Akuvox go2rtc stream: %s", error)
+            self._go2rtc_clients.clear()
+        await super().async_will_remove_from_hass()
 
     async def async_camera_image(
         self, width: int | None = None, height: int | None = None
     ) -> bytes | None:
-        """Return a recent JPEG without making the caller wait.
-
-        A fresh grab through the cloud relay can take longer than HomeKit
-        waits (it then shows "No Response"), so answer with the latest frame
-        at once and fetch a newer one in the background.
-        """
-        if self._snapshot and time.monotonic() - self._snapshot_time < SNAPSHOT_MAX_AGE:
-            return self._snapshot
-        task = self._start_snapshot_refresh()
-        if self._snapshot:
-            return self._snapshot
-        # Nothing cached yet: wait a little for the first grab
-        with contextlib.suppress(Exception):
-            await asyncio.wait_for(asyncio.shield(task), SNAPSHOT_FIRST_WAIT)
-        return self._snapshot
-
-    def _start_snapshot_refresh(self) -> asyncio.Task:
-        """Start a background snapshot grab unless one is already running."""
-        if self._snapshot_task is None or self._snapshot_task.done():
-            self._snapshot_task = self.hass.async_create_background_task(
-                self._async_refresh_snapshot(), f"akuvox snapshot {self._name}")
-        return self._snapshot_task
+        """Return a bounded-age full-resolution snapshot for any camera caller."""
+        return await self._snapshot_cache.get()
 
     def _go2rtc_client(self):
         """REST client of HA's built-in go2rtc, if go2rtc serves this camera."""
-        provider = getattr(self, "webrtc_provider", None)
+        provider = getattr(self, "webrtc_provider", None) or getattr(self, "_webrtc_provider", None)
         client = getattr(provider, "_rest_client", None)  # pylint: disable=protected-access
         if client is not None and hasattr(client, "streams") and hasattr(client, "get_jpeg_snapshot"):
             return client
@@ -196,7 +174,7 @@ class AkuvoxCameraEntity(GenericCamera):
     @property
     def _go2rtc_stream_name(self) -> str:
         """A URL-safe go2rtc stream name for HomeKit and snapshots."""
-        return "akuvox_hk_" + re.sub(r"[^A-Za-z0-9]", "_", self._name)
+        return stream_name(self.unique_id)
 
     async def _async_ensure_go2rtc_stream(self, client) -> str | None:
         """Register a video-only go2rtc stream (once) and return its name.
@@ -204,35 +182,33 @@ class AkuvoxCameraEntity(GenericCamera):
         Video only: the cloud relay rejects the extra audio producer HA's own
         go2rtc registration adds. HomeKit gets audio disabled anyway.
         """
-        if not self._rtsp_url:
+        if not self._rtsp_url or self._go2rtc_stopped:
             return None
-        name = self._go2rtc_stream_name
-        source = f"ffmpeg:{self._rtsp_url}#input=rtsp/udp"
-        streams = await client.streams.list()
-        stream = streams.get(name)
-        if stream is None or not any(source == producer.url for producer in stream.producers):
-            await client.streams.add(name, [source])
-        return name
+        async with self._go2rtc_lock:
+            if self._go2rtc_stopped:
+                return None
+            name = self._go2rtc_stream_name
+            source = f"ffmpeg:{self._rtsp_url}#input=rtsp/udp"
+            streams = await client.streams.list()
+            stream = streams.get(name)
+            if not any(existing is client for existing in self._go2rtc_clients):
+                self._go2rtc_clients.append(client)
+            if stream is None or not any(source == producer.url for producer in stream.producers):
+                await client.streams.add(name, [source])
+            return name
 
-    async def _async_refresh_snapshot(self) -> None:
-        """Grab one frame, through go2rtc when available so HomeKit's live view shares its connection."""
-        started = time.monotonic()
-        image = None
+    async def _async_capture_snapshot(self) -> bytes | None:
+        """Prefer the provider's snapshot endpoint, with a direct UDP fallback."""
         if client := self._go2rtc_client():
             try:
-                if name := await self._async_ensure_go2rtc_stream(client):
-                    image = await client.get_jpeg_snapshot(name, None, None)
-            except Exception as error:  # pylint: disable=broad-except
+                # Reserve time for direct capture if an unavailable provider stalls.
+                async with asyncio.timeout(_GO2RTC_TIMEOUT):
+                    if name := await self._async_ensure_go2rtc_stream(client):
+                        if image := await client.get_jpeg_snapshot(name, None, None):
+                            return image
+            except Exception as error:
                 LOGGER.debug("Akuvox snapshot via go2rtc failed for %s: %s", self._name, error)
-        if not image:
-            image = await self._async_direct_snapshot()
-        if image:
-            self._snapshot = image
-            self._snapshot_time = time.monotonic()
-            LOGGER.debug("Akuvox snapshot for %s took %.1fs", self._name, time.monotonic() - started)
-        else:
-            LOGGER.debug("Akuvox snapshot: no frame for %s after %.1fs",
-                         self._name, time.monotonic() - started)
+        return await self._async_direct_snapshot()
 
     async def _async_direct_snapshot(self) -> bytes | None:
         """Capture a JPEG directly from Akuvox's RTSP endpoint.
@@ -254,15 +230,19 @@ class AkuvoxCameraEntity(GenericCamera):
 
     async def _async_homekit_source(self, source: str) -> str:
         """Point HomeKit at go2rtc's restream so it shares one working connection."""
+        provider = getattr(self, "webrtc_provider", None) or getattr(self, "_webrtc_provider", None)
+        # An external server's RTSP port and credentials cannot be inferred from its API URL.
+        restream = managed_restream_url(provider, self._go2rtc_stream_name)
         client = self._go2rtc_client()
-        if client is None:
+        if client is None or restream is None:
             return source
         try:
-            name = await self._async_ensure_go2rtc_stream(client)
+            async with asyncio.timeout(_GO2RTC_TIMEOUT):
+                name = await self._async_ensure_go2rtc_stream(client)
         except Exception as error:  # pylint: disable=broad-except
             LOGGER.warning("Akuvox: couldn't register stream with go2rtc, HomeKit uses the relay directly: %s", error)
             return source
-        return f"{GO2RTC_RTSP}/{name}" if name else source
+        return restream if name else source
 
     async def async_create_stream(self):
         """Create the HA stream worker from the plain RTSP source."""
