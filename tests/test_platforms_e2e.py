@@ -1,6 +1,7 @@
 """End-to-end platform setup and poller tests for the integration."""
 from __future__ import annotations
 
+import asyncio
 import unittest
 from types import SimpleNamespace
 from unittest.mock import ANY, AsyncMock, MagicMock, patch
@@ -25,6 +26,11 @@ class _Hass:
 
     def __init__(self) -> None:
         self.data = {DOMAIN: {"entry-id": type("Coordinator", (), {"client": object()})()}}
+        self.config = SimpleNamespace(components=set())
+
+    def async_create_background_task(self, target, name) -> asyncio.Task:
+        """Run snapshot refreshes as ordinary tasks."""
+        return asyncio.ensure_future(target)
 
 
 class _Entry:
@@ -193,3 +199,111 @@ class TestPlatformSetupE2E(unittest.IsolatedAsyncioTestCase):
             output_format=ANY,
             timeout=8,
         )
+
+
+class _Producer:
+    """A go2rtc stream producer."""
+
+    def __init__(self, url: str) -> None:
+        self.url = url
+
+
+class _Go2rtcStreams:
+    """Records go2rtc stream registrations."""
+
+    def __init__(self) -> None:
+        self.registered: dict[str, list[str]] = {}
+        self.add = AsyncMock(side_effect=self._add)
+
+    async def _add(self, name: str, sources: list[str]) -> None:
+        self.registered[name] = sources
+
+    async def list(self) -> dict:
+        return {
+            name: SimpleNamespace(producers=[_Producer(url) for url in sources])
+            for name, sources in self.registered.items()
+        }
+
+
+class _Go2rtcClient:
+    """Stands in for Home Assistant's go2rtc REST client."""
+
+    def __init__(self) -> None:
+        self.streams = _Go2rtcStreams()
+        self.get_jpeg_snapshot = AsyncMock(return_value=b"go2rtc-jpeg")
+
+
+class TestCameraHomeKitE2E(unittest.IsolatedAsyncioTestCase):
+    """Verify HomeKit Bridge and snapshot requests use go2rtc's restream."""
+
+    def _camera(self, go2rtc: _Go2rtcClient | None = None) -> camera.AkuvoxCameraEntity:
+        hass = _Hass()
+        hass.config.components.add("go2rtc")
+        entity = camera.AkuvoxCameraEntity(hass, "Lobby door", "rtsp://example/lobby")
+        entity._webrtc_provider = (
+            SimpleNamespace(_rest_client=go2rtc) if go2rtc is not None else None
+        )
+        return entity
+
+    async def test_homekit_got_a_video_only_go2rtc_restream(self) -> None:
+        """HomeKit's ffmpeg received a plain RTSP URL that go2rtc serves."""
+        go2rtc = _Go2rtcClient()
+        entity = self._camera(go2rtc)
+
+        with patch("custom_components.akuvox.camera._called_from_homekit", return_value=True):
+            first = await entity.stream_source()
+            second = await entity.stream_source()
+
+        self.assertEqual(first, "rtsp://127.0.0.1:18554/akuvox_hk_Lobby_door")
+        self.assertEqual(second, first)
+        self.assertEqual(
+            go2rtc.streams.registered,
+            {"akuvox_hk_Lobby_door": ["ffmpeg:rtsp://example/lobby#input=rtsp/udp"]},
+        )
+        go2rtc.streams.add.assert_awaited_once()
+
+    async def test_other_go2rtc_callers_kept_the_ffmpeg_source(self) -> None:
+        """Requests outside HomeKit still got go2rtc's ffmpeg source form."""
+        entity = self._camera(_Go2rtcClient())
+
+        with patch("custom_components.akuvox.camera._called_from_homekit", return_value=False):
+            self.assertEqual(
+                await entity.stream_source(), "ffmpeg:rtsp://example/lobby#input=rtsp/udp"
+            )
+
+    async def test_homekit_fell_back_to_the_relay_without_go2rtc_client(self) -> None:
+        """Without a go2rtc client HomeKit got the plain relay URL its ffmpeg can open."""
+        entity = self._camera()
+
+        with patch("custom_components.akuvox.camera._called_from_homekit", return_value=True):
+            self.assertEqual(await entity.stream_source(), "rtsp://example/lobby")
+
+    def test_homekit_callers_were_recognised_by_module(self) -> None:
+        """Only callers inside the HomeKit integration counted as HomeKit."""
+        namespace = {"__name__": "homeassistant.components.homekit.type_cameras"}
+        exec("def ask(check):\n    return check()", namespace)  # noqa: S102
+
+        self.assertTrue(namespace["ask"](camera._called_from_homekit))
+        self.assertFalse(camera._called_from_homekit())
+
+    async def test_snapshot_came_from_go2rtc_and_was_reused(self) -> None:
+        """Snapshots used the go2rtc stream and were cached briefly."""
+        go2rtc = _Go2rtcClient()
+        entity = self._camera(go2rtc)
+
+        self.assertEqual(await entity.async_camera_image(), b"go2rtc-jpeg")
+        self.assertEqual(await entity.async_camera_image(), b"go2rtc-jpeg")
+
+        go2rtc.get_jpeg_snapshot.assert_awaited_once_with("akuvox_hk_Lobby_door", None, None)
+
+    async def test_stale_snapshot_was_returned_while_refreshing(self) -> None:
+        """An old frame answered at once while a newer one was fetched."""
+        go2rtc = _Go2rtcClient()
+        entity = self._camera(go2rtc)
+        entity._snapshot = b"old-jpeg"
+        entity._snapshot_time = 0
+
+        self.assertEqual(await entity.async_camera_image(), b"old-jpeg")
+        await entity._snapshot_task
+
+        self.assertEqual(entity._snapshot, b"go2rtc-jpeg")
