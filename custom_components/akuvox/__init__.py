@@ -81,7 +81,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         remote_sync = async_register_remote_synchronizer(hass, entry, coordinator.client)
         entry.async_on_unload(remote_sync.async_stop)
     refresh_task = hass.async_create_task(_async_refresh_cloud_data(hass, entry))
-    entry.async_on_unload(refresh_task.cancel)
+
+    @callback
+    def cancel_refresh() -> None:
+        """Cancel the cloud refresh without returning Task.cancel's boolean."""
+        # HA treats a truthy unload callback result as a coroutine to schedule.
+        refresh_task.cancel()
+
+    entry.async_on_unload(cancel_refresh)
     # Reauthentication reloads an entry while Home Assistant is already
     # running. Deferring platform forwarding through ``async_at_started`` in
     # that case leaves the old camera, relay, and event entities unloaded
