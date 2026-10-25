@@ -20,5 +20,5 @@
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/nimroddolev/akuvox/issues",
   "requirements": ["python-bidi>=0.6.0", "reportlab>=4.0.0"],
-  "version": "v1.0.0-beta1"
+  "version": "v1.0.0-beta2"
 }

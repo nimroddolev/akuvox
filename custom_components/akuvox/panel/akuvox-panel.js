@@ -10,7 +10,7 @@ import { copyText } from "./utils/clipboard.js";
 import { settingsRenderSignature } from "./utils/settings-signature.js";
 import { getPanelStyles } from "./styles/index.js?v=20261019-automation-discard-confirmation";
 import { showNotice, confirmModal, callWsWithBlocker } from "./components/dialogs.js?v=20261013-danger-confirmation";
-import { installCameraRelayActions } from "./components/camera-actions.js?v=20261015-flexible-camera-action-widths";
+import { installCameraRelayActions } from "./components/camera-actions.js?v=20261020-centered-camera-loading";
 import { closeKeyActionsMenu } from "./components/key-menu.js";
 import { isRtlLanguage, localizeElement } from "./utils/i18n.js?v=20261004-relay-confirmation";
 
@@ -763,7 +763,12 @@ class AkuvoxSmartPlusPanel extends HTMLElement {
       new CustomEvent("hass-more-info", { detail: { entityId }, bubbles: true, composed: true })
     );
 
-    installCameraRelayActions(this, relays, orientation);
+    const preview = [...this.shadowRoot.querySelectorAll("img[data-camera-key]")]
+      .find((image) => image.dataset.cameraKey === cameraName);
+    const aspectRatio = preview?.naturalWidth && preview.naturalHeight
+      ? preview.naturalWidth / preview.naturalHeight
+      : 4 / 3;
+    installCameraRelayActions(this, relays, orientation, aspectRatio);
   }
 
   async _relay(mac, relayId) {
