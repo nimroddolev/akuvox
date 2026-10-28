@@ -653,8 +653,10 @@ class AkuvoxApiClient:
     async def async_refresh_token(self, failed_token: str) -> bool:
         """Refresh a SmartPlus session token and persist the replacement.
 
-        SmartPlus uses ``auth_token`` as the credential for this private endpoint
-        and returns a new short-lived ``token``.  Only one request may refresh at
+        SMS sign-ins send their ``auth_token``. Email sign-ins only receive a
+        ``refresh_token`` (stored in the same field) and must send it under
+        that name; SmartPlus otherwise answers ``refreshToken error`` and
+        rotates the refresh token on success.  Only one request may refresh at
         a time so concurrent API calls cannot overwrite a newer session.
         """
         if self._entry is not None and is_remote_entry(self._entry):
@@ -680,12 +682,15 @@ class AkuvoxApiClient:
                 "user-agent": SMARTPLUS_REFRESH_USER_AGENT,
                 "accept-language": "en-AU;q=1, he-AU;q=0.9, ru-RU;q=0.8",
             }
+            credential_key = (
+                "refresh_token" if self._uses_refresh_token_login() else "auth_token"
+            )
             try:
                 response = await self._async_api_wrapper(
                     method="post",
                     url=url,
                     headers=headers,
-                    data=json.dumps({"auth_token": self._data.auth_token}),
+                    data=json.dumps({credential_key: self._data.auth_token}),
                     allow_token_refresh=False,
                 )
                 if not isinstance(response, dict) or not response.get("token"):
@@ -694,8 +699,8 @@ class AkuvoxApiClient:
                     )
 
                 self._data.token = str(response["token"])
-                if response.get("auth_token"):
-                    self._data.auth_token = str(response["auth_token"])
+                if response.get(credential_key):
+                    self._data.auth_token = str(response[credential_key])
                 await self._async_persist_refreshed_credentials()
             except Exception as error:
                 LOGGER.debug(
@@ -705,6 +710,10 @@ class AkuvoxApiClient:
                 raise
             LOGGER.debug("SmartPlus token refresh finished: succeeded")
             return True
+
+    def _uses_refresh_token_login(self) -> bool:
+        """Return whether the entry signed in by email, which refreshes with ``refresh_token``."""
+        return self._entry is not None and self._entry.data.get("login_method") == "email_password"
 
     async def _async_persist_refreshed_credentials(self) -> None:
         """Persist refreshed credentials to the active config entry."""
@@ -814,11 +823,14 @@ class AkuvoxApiClient:
             return
         try:
             await self.async_refresh_token(self._data.token)
-        except AkuvoxApiClientAuthenticationError:
+        except AkuvoxApiClientAuthenticationError as error:
             # SmartPlus can reject a proactive renewal while the current token
             # still works. Leave the session active; a normal request will
             # start reauthentication only if it cannot be recovered.
-            LOGGER.warning("Scheduled SmartPlus token refresh was rejected; keeping the current session active")
+            LOGGER.warning(
+                "Scheduled SmartPlus token refresh was rejected (%s); keeping the current session active",
+                error,
+            )
         except AkuvoxApiClientError as error:
             LOGGER.warning("Scheduled SmartPlus token refresh failed: %s", error)
 
