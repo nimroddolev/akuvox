@@ -1,0 +1,117 @@
+# Akuvox SmartPlus -> Apple Home (iPhone, iPad, Mac, Apple TV)
+#
+# A Home Assistant package: copy it to /config/packages/akuvox_apple_home.yaml
+# and add this to configuration.yaml if you don't use packages yet:
+#
+#   homeassistant:
+#     packages: !include_dir_named packages
+#
+# Replace before use:
+#   camera.front_door              your Akuvox camera entity
+#   button.front_door_relay        your Akuvox relay (unlock) button entity
+#
+# Ring detection needs the ha-sip add-on with `sensors: enabled: true` (see
+# docs/apple-home.md). ha-sip then keeps sensor.ha_sip_account_1 at "true"
+# while the panel is calling its SIP line.
+#
+# After every edit to this file, reload YAML (Developer tools -> YAML ->
+# "Template entities", "Input booleans", "Automations", "HomeKit") or restart
+# Home Assistant.
+
+template:
+  # Doorbell sensor. HomeKit shows the doorbell notification (with the camera)
+  # whenever this turns on.
+  - triggers:
+      # ha-sip add-on (answer_mode "listen") as soon as the panel rings its
+      # SIP line. Use ha-sip's call sensor, not its webhook: the add-on calls
+      # webhooks through the Supervisor proxy, which arrives without a client
+      # IP, so a local_only webhook silently ignores it.
+      - trigger: state
+        id: ring
+        entity_id: sensor.ha_sip_account_1
+        to: "true"
+      # Fallback: SmartPlus door log entries of type Call. Many buildings
+      # only log unlocks, so don't rely on this alone.
+      - trigger: event
+        id: door_log
+        event_type: akuvox_door_update
+    binary_sensor:
+      - name: Front Door Doorbell
+        unique_id: akuvox_front_door_doorbell
+        state: >
+          {% if trigger.id == 'ring' %}
+            true
+          {% else %}
+            {{ (trigger.event.data.capture_type | default('')) | string | lower == 'call' }}
+          {% endif %}
+        attributes:
+          caller: >
+            {{ trigger.to_state.attributes.parsed_remote_uri | default('')
+               if trigger.id == 'ring' else (trigger.event.data.initiator | default('')) }}
+        auto_off: "00:00:20"
+
+  # The relay as a lock, so Apple Home shows a lock tile (a button would show
+  # up as an on/off switch). Unlocking presses the relay; the lock reads
+  # "unlocked" for 5 s, like the door strike, then locks again.
+  - lock:
+      - name: Front Door
+        unique_id: akuvox_front_door_lock
+        state: >
+          {{ 'unlocked' if is_state('input_boolean.akuvox_front_door_unlocked', 'on') else 'locked' }}
+        unlock:
+          - action: button.press
+            target:
+              entity_id: button.front_door_relay
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.akuvox_front_door_unlocked
+        lock:
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.akuvox_front_door_unlocked
+
+input_boolean:
+  akuvox_front_door_unlocked:
+    name: Front Door unlocked
+    icon: mdi:lock-open-variant
+
+automation:
+  - id: akuvox_front_door_relock
+    alias: Front Door re-lock
+    mode: restart
+    triggers:
+      - trigger: state
+        entity_id: input_boolean.akuvox_front_door_unlocked
+        to: "on"
+        for: "00:00:05"
+    actions:
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.akuvox_front_door_unlocked
+
+homekit:
+  # The camera on its own bridge in accessory mode, as HomeKit recommends.
+  # Pair it in the Home app with the code from HA's notifications.
+  - name: Akuvox Camera
+    port: 21071
+    mode: accessory
+    filter:
+      include_entities:
+        - camera.front_door
+    entity_config:
+      camera.front_door:
+        name: Front Door
+        linked_doorbell_sensor: binary_sensor.front_door_doorbell
+        # The SmartPlus cloud stream's audio can't be relayed to HomeKit
+        support_audio: false
+
+  # The unlock control. Put it in the same Home room as the camera so it
+  # appears on the doorbell notification. Apple TV can unlock HomeKit locks.
+  - name: Akuvox Controls
+    port: 21072
+    filter:
+      include_entities:
+        - lock.front_door
+    entity_config:
+      lock.front_door:
+        name: Front Door

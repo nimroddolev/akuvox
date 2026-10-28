@@ -64,6 +64,7 @@ Your SmartPlus account becomes a Home Assistant hub with camera and relay device
 | [Call History](#call-history) | Review recent SmartPlus calls and their available images. |
 | [Automations](#automations) | Create and manage door-notification automations without YAML. |
 | [Temporary Keys](#temporary-keys) | Manage your temporary keys and view their usage. |
+| [Apple Home](#apple-home) | Camera, unlock and doorbell notifications through HomeKit. |
 | [Settings](#settings) | Configure events, local storage, cameras image options, account sharing and SIP account details. |
 
 Only Home Assistant administrators can open the panel and use its sensitive controls.
@@ -148,6 +149,10 @@ actions:
       message: "{{ trigger.event.data.initiator | default('Visitor', true) }} rang the bell."
 mode: single
 ```
+
+### Apple Home
+
+With Home Assistant's HomeKit Bridge, the door camera, a lock tile that unlocks the door, and doorbell notifications can appear on iPhone, iPad, Mac and Apple TV. Doorbell alerts in real time need the [ha-sip](https://github.com/arnonym/ha-plugins/tree/main/ha-sip) add-on listening on a SmartPlus SIP line, because many buildings' door logs don't record calls. See [docs/apple-home.md](docs/apple-home.md) for the setup, a ready-made package and troubleshooting.
 
 ## Settings
 
