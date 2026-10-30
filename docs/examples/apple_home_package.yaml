@@ -9,6 +9,9 @@
 # Replace before use:
 #   camera.front_door              your Akuvox camera entity
 #   button.front_door_relay        your Akuvox relay (unlock) button entity
+#   REPLACE_WITH_DOOR_DEVICE_ID    the HA device ID for that same Akuvox door
+# Find the device ID in Developer tools -> Template:
+#   {{ device_id("button.front_door_relay") }}
 #
 # Ring detection needs the ha-sip add-on with `sensors: enabled: true` (see
 # docs/apple-home.md). ha-sip then keeps sensor.ha_sip_account_1 at "true"
@@ -19,8 +22,8 @@
 # Home Assistant.
 
 template:
-  # Doorbell sensor. HomeKit shows the doorbell notification (with the camera)
-  # whenever this turns on.
+  # A separate timestamped event for every ring, even when calls are close
+  # together. HomeKit can link an event entity directly.
   - triggers:
       # ha-sip add-on (answer_mode "listen") as soon as the panel rings its
       # SIP line. Use ha-sip's call sensor, not its webhook: the add-on calls
@@ -35,20 +38,18 @@ template:
       - trigger: event
         id: door_log
         event_type: akuvox_door_update
-    binary_sensor:
+        event_data:
+          device_id: REPLACE_WITH_DOOR_DEVICE_ID
+          capture_type: Call
+    event:
       - name: Front Door Doorbell
         unique_id: akuvox_front_door_doorbell
-        state: >
-          {% if trigger.id == 'ring' %}
-            true
-          {% else %}
-            {{ (trigger.event.data.capture_type | default('')) | string | lower == 'call' }}
-          {% endif %}
+        event_types: "{{ ['ring'] }}"
+        event_type: ring
         attributes:
           caller: >
             {{ trigger.to_state.attributes.parsed_remote_uri | default('')
                if trigger.id == 'ring' else (trigger.event.data.initiator | default('')) }}
-        auto_off: "00:00:20"
 
   # The relay as a lock, so Apple Home shows a lock tile (a button would show
   # up as an on/off switch). Unlocking presses the relay; the lock reads
@@ -74,12 +75,16 @@ input_boolean:
   akuvox_front_door_unlocked:
     name: Front Door unlocked
     icon: mdi:lock-open-variant
+    # This is a temporary indication, not physical lock feedback.
+    initial: false
 
 automation:
   - id: akuvox_front_door_relock
     alias: Front Door re-lock
     mode: restart
     triggers:
+      - trigger: homeassistant
+        event: start
       - trigger: state
         entity_id: input_boolean.akuvox_front_door_unlocked
         to: "on"
@@ -101,7 +106,7 @@ homekit:
     entity_config:
       camera.front_door:
         name: Front Door
-        linked_doorbell_sensor: binary_sensor.front_door_doorbell
+        linked_doorbell_sensor: event.front_door_doorbell
         # The SmartPlus cloud stream's audio can't be relayed to HomeKit
         support_audio: false
 

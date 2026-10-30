@@ -12,7 +12,7 @@ Two-way audio with the visitor stays in the SmartPlus app. HomeKit can't relay t
 
 ## 1. Camera and lock
 
-1. Copy [`examples/apple_home_package.yaml`](examples/apple_home_package.yaml) to `/config/packages/`. Replace the camera and relay entity IDs, as described at the top of the file.
+1. Copy [`examples/apple_home_package.yaml`](examples/apple_home_package.yaml) to `/config/packages/`. Replace the camera and relay entity IDs, as described at the top of the file. Also replace `REPLACE_WITH_DOOR_DEVICE_ID` with the Home Assistant device ID for that same door: in **Developer tools → Template**, evaluate `{{ device_id("button.front_door_relay") }}` using your relay entity ID. The fallback accepts only `Call` events from this device, so another door or account cannot ring this camera through the door log.
 2. If `configuration.yaml` doesn't load packages yet, add this:
 
    ```yaml
@@ -26,7 +26,7 @@ Two-way audio with the visitor stays in the SmartPlus app. HomeKit can't relay t
 
 Why it's built this way:
 
-- **The relay is a lock, not the raw button.** HomeKit Bridge shows a `button` entity as an on/off switch. The template lock presses the relay and reports "unlocked" for 5 seconds. Apple Home then treats it like any door lock: iPhone and iPad ask for Face ID before unlocking from a locked screen, and Apple TV can unlock it.
+- **The relay is a lock, not the raw button.** HomeKit Bridge shows a `button` entity as an on/off switch. The template lock presses the relay and reports "unlocked" for 5 seconds. This is a temporary indication, not measured lock feedback; its helper resets to off when Home Assistant starts. Apple Home then treats it like any door lock: iPhone and iPad ask for Face ID before unlocking from a locked screen, and Apple TV can unlock it.
 - **The camera has its own bridge in accessory mode.** This is what HomeKit recommends for cameras, and it's required for the doorbell notification.
 - **`support_audio: false` is set.** The SmartPlus cloud stream's audio can't be relayed to HomeKit.
 
@@ -72,7 +72,7 @@ Use the sensor, not ha-sip's webhook. The add-on calls webhooks through the Supe
 
 ### Test without a visitor
 
-In **Developer tools → States**, pick `sensor.ha_sip_account_1`, set the state to `true` and choose **Set state**. The doorbell sensor turns on for 20 seconds, and every Apple device in the home shows the doorbell notification. Afterwards set it back to `false` the same way; the doorbell only fires when the sensor changes to `true`.
+In **Developer tools → States**, pick `sensor.ha_sip_account_1`, set the state to `true` and choose **Set state**. The `event.front_door_doorbell` entity receives a new timestamp and Apple Home can show the doorbell notification. Set the SIP sensor back to `false`, then to `true` again to test a second ring immediately. Each ring produces a separate event, with no 20-second suppression window. Notifications depend on each Apple device’s settings.
 
 On a real ring, ha-sip's log shows `Incoming call from ...` followed by `Sensor update sensor.ha_sip_account_1: 200`.
 
@@ -80,8 +80,8 @@ On a real ring, ha-sip's log shows `Incoming call from ...` followed by `Sensor 
 
 | Symptom | Cause and fix |
 | --- | --- |
-| ha-sip logs the incoming call and `Webhook response 200`, but the doorbell stays off | You're using ha-sip's webhook. Home Assistant answers 200 even when it ignores a webhook, and it ignores proxied add-on requests to `local_only` webhooks. Enable ha-sip's `sensors` option and trigger on `sensor.ha_sip_account_1`, as in the example package. |
-| `sensor.ha_sip_account_1` turns `true`, but the doorbell stays off | Reload **Template entities** (Developer tools → YAML) or restart after every edit to the package. |
+| ha-sip logs the incoming call and `Webhook response 200`, but no doorbell event appears | You're using ha-sip's webhook. Home Assistant answers 200 even when it ignores a webhook, and it ignores proxied add-on requests to `local_only` webhooks. Enable ha-sip's `sensors` option and trigger on `sensor.ha_sip_account_1`, as in the example package. |
+| `sensor.ha_sip_account_1` turns `true`, but no doorbell event appears | Check that `event.front_door_doorbell` exists. Reload **Template entities** (Developer tools → YAML) or restart after every edit to the package. |
 | ha-sip registers but never logs an incoming call | Check the SmartPlus Call Settings above: Call Type **SmartPlus** and Contact Preference **Group Call**. Also check that the SIP details belong to the account that the panel calls. |
 | The lobby panel gives an immediate busy signal | Call Type is set to "Phone", but the building has no landline service. Switch back to **SmartPlus**. |
 | Apple Home live view stops after about 5 seconds, or the camera tile shows "No Response" | You need a version of this integration that gives HomeKit a go2rtc restream and cached snapshots. |
