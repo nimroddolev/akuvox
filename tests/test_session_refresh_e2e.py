@@ -94,8 +94,9 @@ def _success(payload: dict) -> _Response:
 class TestSmartPlusSessionRefreshE2E(unittest.IsolatedAsyncioTestCase):
     """Verify the SmartPlus session lifecycle through the public client path."""
 
-    def _client(self, responses: list[_Response]) -> AkuvoxApiClient:
+    def _client(self, responses: list[_Response], login_method: str = "") -> AkuvoxApiClient:
         self.entry = _Entry()
+        self.entry.data["login_method"] = login_method
         self.session = _Session(responses)
         return AkuvoxApiClient(self.session, _Hass(), self.entry)
 
@@ -275,9 +276,9 @@ class TestSmartPlusSessionRefreshE2E(unittest.IsolatedAsyncioTestCase):
     async def test_email_login_refreshed_with_and_rotated_refresh_token(self, store_credentials) -> None:
         """An email sign-in refreshes with ``refresh_token`` and keeps the rotated one."""
         client = self._client(
-            [_success({"token": "email-token", "refresh_token": "rotated-refresh"})]
+            [_success({"token": "email-token", "refresh_token": "rotated-refresh"})],
+            login_method="email_password",
         )
-        self.entry.data["login_method"] = "email_password"
 
         await client._async_proactive_token_refresh(None)
 

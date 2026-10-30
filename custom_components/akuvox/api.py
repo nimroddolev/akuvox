@@ -175,6 +175,7 @@ class AkuvoxApiClient:
         self._session = session
         self.hass = hass
         self._entry = entry
+        self._login_method = entry.data.get("login_method", "") if entry is not None else ""
         self._data: AkuvoxData | None = None
         self._polling_task: asyncio.Task[None] | None = None
         self._polling_task_stop_event: asyncio.Event | None = None
@@ -713,7 +714,7 @@ class AkuvoxApiClient:
 
     def _uses_refresh_token_login(self) -> bool:
         """Return whether the entry signed in by email, which refreshes with ``refresh_token``."""
-        return self._entry is not None and self._entry.data.get("login_method") == "email_password"
+        return self._login_method == "email_password"
 
     async def _async_persist_refreshed_credentials(self) -> None:
         """Persist refreshed credentials to the active config entry."""
@@ -882,6 +883,7 @@ class AkuvoxApiClient:
 
         login_data = await self.async_validate_sms_code(phone_number, country_code, sms_code)
         if login_data is not None:
+            self._login_method = "sms"
             self._data.parse_sms_login_response(login_data)
             if not self._data.rtsp_server:
                 return await self.async_retrieve_user_data(start_polling=start_polling)
@@ -912,6 +914,7 @@ class AkuvoxApiClient:
         """
         # A retry can use a different account; never retain the previous session.
         self._data = AkuvoxData(entry=None, hass=self.hass, subdomain="ecloud")
+        self._login_method = ""
         password_digest = self._double_md5_password(password)
         login_names = [self._caesar_shift_login_value(login_account)]
         if any(character.isdigit() for character in login_account):
@@ -951,6 +954,8 @@ class AkuvoxApiClient:
                     payload.get("token") or payload.get("two_factor_auth_temp_token")
                 ):
                     self._data.subdomain = gateway
+                    # Setup and reauthentication have no config entry yet.
+                    self._login_method = "email_password"
                     self._data.parse_sms_login_response(response)
                     return response
                 LOGGER.debug("SmartPlus password login was not accepted on %s", gateway)
@@ -1044,6 +1049,7 @@ class AkuvoxApiClient:
         )
         if not isinstance(response, dict):
             return False
+        self._login_method = "email_password"
         self._data.parse_sms_login_response(response)
         if not self._data.token or not self._data.auth_token:
             return False
