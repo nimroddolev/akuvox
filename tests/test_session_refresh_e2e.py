@@ -6,6 +6,7 @@ the tests never require a real SmartPlus account or expose credentials.
 """
 from __future__ import annotations
 
+import json
 import unittest
 from unittest.mock import ANY, AsyncMock, patch
 
@@ -93,8 +94,9 @@ def _success(payload: dict) -> _Response:
 class TestSmartPlusSessionRefreshE2E(unittest.IsolatedAsyncioTestCase):
     """Verify the SmartPlus session lifecycle through the public client path."""
 
-    def _client(self, responses: list[_Response]) -> AkuvoxApiClient:
+    def _client(self, responses: list[_Response], login_method: str = "") -> AkuvoxApiClient:
         self.entry = _Entry()
+        self.entry.data["login_method"] = login_method
         self.session = _Session(responses)
         return AkuvoxApiClient(self.session, _Hass(), self.entry)
 
@@ -269,3 +271,38 @@ class TestSmartPlusSessionRefreshE2E(unittest.IsolatedAsyncioTestCase):
         report_failure.assert_not_called()
         self.assertFalse(self.entry.reauth_started)
         self.assertEqual(len(self.session.requests), 1)
+
+    @patch("custom_components.akuvox.api.async_store_credentials", new_callable=AsyncMock)
+    async def test_email_login_refreshed_with_and_rotated_refresh_token(self, store_credentials) -> None:
+        """An email sign-in refreshes with ``refresh_token`` and keeps the rotated one."""
+        client = self._client(
+            [_success({"token": "email-token", "refresh_token": "rotated-refresh"})],
+            login_method="email_password",
+        )
+
+        await client._async_proactive_token_refresh(None)
+
+        self.assertEqual(
+            json.loads(self.session.requests[0]["data"]),
+            {"refresh_token": "refresh-credential"},
+        )
+        store_credentials.assert_awaited_once_with(
+            ANY, "entry-id", "rotated-refresh", "email-token"
+        )
+
+    @patch("custom_components.akuvox.api.async_store_credentials", new_callable=AsyncMock)
+    async def test_sms_login_refreshed_with_auth_token(self, store_credentials) -> None:
+        """An SMS sign-in keeps refreshing with its ``auth_token``."""
+        client = self._client(
+            [_success({"token": "sms-token", "refresh_token": "unused-refresh"})]
+        )
+
+        await client._async_proactive_token_refresh(None)
+
+        self.assertEqual(
+            json.loads(self.session.requests[0]["data"]),
+            {"auth_token": "refresh-credential"},
+        )
+        store_credentials.assert_awaited_once_with(
+            ANY, "entry-id", "refresh-credential", "sms-token"
+        )
