@@ -1,6 +1,7 @@
 """End-to-end platform setup and poller tests for the integration."""
 from __future__ import annotations
 
+import asyncio
 import unittest
 from types import SimpleNamespace
 from unittest.mock import ANY, AsyncMock, MagicMock, patch
@@ -25,6 +26,11 @@ class _Hass:
 
     def __init__(self) -> None:
         self.data = {DOMAIN: {"entry-id": type("Coordinator", (), {"client": object()})()}}
+        self.config = SimpleNamespace(components=set())
+
+    def async_create_background_task(self, target, name) -> asyncio.Task:
+        """Run snapshot refreshes as ordinary tasks."""
+        return asyncio.ensure_future(target)
 
 
 class _Entry:
