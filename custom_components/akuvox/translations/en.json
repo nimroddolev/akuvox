@@ -19,23 +19,35 @@
             },
             "email_password_sign_in": {
                 "title": "Email and password sign-in",
-                "description": "Enter the email address or username and password for your SmartPlus account. A verification code will be sent to the account's email address.",
-                "data": {"login_account": "Email address or username", "password": "Password"}
+                "description": "Enter your SmartPlus email address or username and password. If required, a verification code will be sent to your email. Select a regional server only if automatic sign-in does not find your account.",
+                "data": {
+                    "login_account": "Email address or username",
+                    "password": "Password",
+                    "subdomain": "Regional API server"
+                }
             },
             "verify_email_code": {
                 "title": "Email code verification",
                 "description": "Enter the verification code sent to your email address.",
-                "data": {"email_code": "Verification code"}
+                "data": {
+                    "email_code": "Verification code"
+                }
             },
             "reauth_email_password": {
                 "title": "Re-authenticate with email/username and password",
-                "description": "Enter your SmartPlus email address or username and password to receive a verification code.",
-                "data": {"login_account": "Email address or username", "password": "Password"}
+                "description": "Enter your SmartPlus email address or username and password. If required, a verification code will be sent to your email. Select a regional server only if automatic sign-in does not find your account.",
+                "data": {
+                    "login_account": "Email address or username",
+                    "password": "Password",
+                    "subdomain": "Regional API server"
+                }
             },
             "reauth_verify_email_code": {
                 "title": "Email code verification",
                 "description": "Enter the verification code sent to your email address.",
-                "data": {"email_code": "Verification code"}
+                "data": {
+                    "email_code": "Verification code"
+                }
             },
             "verify_sms_code": {
                 "title": "SMS Code Verification",
@@ -61,12 +73,16 @@
             "shared_credentials": {
                 "title": "Use credentials from another Home Assistant",
                 "description": "Paste the 10-minute pairing link created by the Akuvox integration on the source Home Assistant.",
-                "data": {"pairing_link": "Pairing link"}
+                "data": {
+                    "pairing_link": "Pairing link"
+                }
             },
             "share_created": {
                 "title": "Pair another Home Assistant",
                 "description": "Copy this one-time pairing link for {receiver_name}. It expires in 10 minutes.",
-                "data": {"pairing_link": "Pairing link"}
+                "data": {
+                    "pairing_link": "Pairing link"
+                }
             }
         },
         "error": {
@@ -141,8 +157,8 @@
                 "description": "Adjust the door event settings for this integration.",
                 "data": {
                     "country": "The country registered in your Akuvox SmartPlus account",
-                    "subdomain": "Manually set the regional API subdomain"
-                    ,"create_share_for": "Create a 10-minute pairing link for this receiver",
+                    "subdomain": "Manually set the regional API subdomain",
+                    "create_share_for": "Create a 10-minute pairing link for this receiver",
                     "revoke_pairing_link": "Revoke a pairing link created by this Home Assistant"
                 }
             }

@@ -19,10 +19,11 @@
             },
             "email_password_sign_in": {
                 "title": "Inicio de sesión con correo electrónico y contraseña",
-                "description": "Introduce la dirección de correo electrónico o el nombre de usuario y la contraseña de tu cuenta de SmartPlus. Se enviará un código de verificación a la dirección de correo electrónico de la cuenta.",
+                "description": "Introduce tu correo electrónico o nombre de usuario y contraseña de SmartPlus. Si es necesario, recibirás un código por correo. Selecciona un servidor regional solo si el inicio automático no encuentra tu cuenta.",
                 "data": {
                     "login_account": "Dirección de correo electrónico o nombre de usuario",
-                    "password": "Contraseña"
+                    "password": "Contraseña",
+                    "subdomain": "Servidor API regional"
                 }
             },
             "verify_email_code": {
@@ -34,10 +35,11 @@
             },
             "reauth_email_password": {
                 "title": "Volver a autenticar con correo electrónico/nombre de usuario y contraseña",
-                "description": "Introduce la dirección de correo electrónico o el nombre de usuario de SmartPlus y la contraseña para recibir un código de verificación.",
+                "description": "Introduce tu correo electrónico o nombre de usuario y contraseña de SmartPlus. Si es necesario, recibirás un código por correo. Selecciona un servidor regional solo si el inicio automático no encuentra tu cuenta.",
                 "data": {
                     "login_account": "Dirección de correo electrónico o nombre de usuario",
-                    "password": "Contraseña"
+                    "password": "Contraseña",
+                    "subdomain": "Servidor API regional"
                 }
             },
             "reauth_verify_email_code": {

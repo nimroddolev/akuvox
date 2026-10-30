@@ -254,6 +254,40 @@ class TestIntegrationLifecycleE2E(unittest.IsolatedAsyncioTestCase):
         with patch("custom_components.akuvox.async_refresh_panel", new=AsyncMock()):
             self.assertTrue(await async_unload_entry(hass, entry))
 
+    async def test_unload_cancelled_pending_refresh_without_returning_a_boolean(self) -> None:
+        """A pending cloud request did not break HA's unload callback contract."""
+        hass = _Hass()
+        hass.is_running = True
+        entry = _Entry()
+        started = asyncio.Event()
+
+        async def pending_refresh(*_args) -> None:
+            started.set()
+            await asyncio.Future()
+
+        with (
+            patch("custom_components.akuvox.async_load_and_migrate_credentials", new=AsyncMock(return_value={"auth_token": "auth", "token": "token"})),
+            patch("custom_components.akuvox.AkuvoxApiClient", _Client),
+            patch("custom_components.akuvox.AkuvoxDataUpdateCoordinator", _Coordinator),
+            patch("custom_components.akuvox.async_get_clientsession", return_value=object()),
+            patch("custom_components.akuvox.async_update_configuration", new=AsyncMock()),
+            patch("custom_components.akuvox.async_register_websocket_api"),
+            patch("custom_components.akuvox._async_start_runtime", new=AsyncMock()),
+            patch("custom_components.akuvox._async_refresh_cloud_data", new=pending_refresh),
+        ):
+            self.assertTrue(await async_setup_entry(hass, entry))
+            await asyncio.wait_for(started.wait(), timeout=1)
+
+        refresh_task, = hass._tasks
+        try:
+            # HA schedules truthy callback results as coroutines. Task.cancel()
+            # returns True for this pending request, which must not escape.
+            self.assertIsNone(entry.unload_callbacks[0]())
+        finally:
+            refresh_task.cancel()
+            await asyncio.gather(refresh_task, return_exceptions=True)
+        self.assertTrue(refresh_task.cancelled())
+
     async def test_renaming_hub_did_not_reload_or_reauthenticate(self) -> None:
         """A presentation-only config-entry update leaves the session running."""
         hass = _Hass()
