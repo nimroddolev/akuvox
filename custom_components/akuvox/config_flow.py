@@ -39,9 +39,9 @@ helpers = AkuvoxHelpers()
 
 
 def _normalise_subscriber_number(value: object) -> str:
-    """Return a local subscriber number without its trunk-prefix zero."""
-    number = str(value or "").replace("-", "").replace(" ", "")
-    return number[1:] if number.startswith("0") else number
+    """Remove formatting without changing the account's registered digits."""
+    # SmartPlus accounts can require the leading zero, even with a country code.
+    return str(value or "").strip().replace("-", "").replace(" ", "")
 
 
 def _country_select_options() -> list[dict[str, str]]:
@@ -217,6 +217,14 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         )
         return await self.async_step_reauth_sms()
 
+    def _store_sms_number(self):
+        """Retain the successful SMS identifier for verification and later login."""
+        number = self.akuvox_api_client.get_phone_number() or self.data["phone_number"]
+        self.data.update(
+            phone_number=number,
+            full_phone_number=f"(+{self.data['country_code']}) {number}",
+        )
+
     async def async_step_reauth_sms(self, user_input=None):
         """Send an SMS code after the user selected SMS reauthentication."""
         try:
@@ -230,6 +238,7 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             LOGGER.warning("Unable to send SmartPlus reauthentication SMS: %s", error)
             code_sent = False
         if code_sent:
+            self._store_sms_number()
             return await self.async_step_reauth_confirm()
         return self.async_show_form(
             step_id="reauth_sms",
@@ -363,6 +372,7 @@ class AkuvoxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                 # Request SMS code for login
                 request_sms_code = await self.akuvox_api_client.async_send_sms(self.hass, country_code, phone_number, subdomain)
                 if request_sms_code:
+                    self._store_sms_number()
                     return await self.async_step_verify_sms_code()
                 else:
                     return self.async_show_form(

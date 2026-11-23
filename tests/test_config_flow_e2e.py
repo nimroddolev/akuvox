@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import unittest
+from types import SimpleNamespace
 from urllib.parse import parse_qs, urlsplit
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -66,9 +67,9 @@ class TestConfigFlowE2E(unittest.TestCase):
         self.assertEqual(other_flow.data, {})
         self.assertEqual(other_flow.rest_server_data, {})
 
-    def test_subscriber_number_omitted_the_local_trunk_prefix(self) -> None:
-        """The country code was not followed by a leading local zero."""
-        self.assertEqual(_normalise_subscriber_number("052-532 1806"), "525321806")
+    def test_subscriber_number_preserved_registered_digits(self) -> None:
+        """Formatting is removed while the registered leading zero is retained."""
+        self.assertEqual(_normalise_subscriber_number("052-532 1806"), "0525321806")
         self.assertEqual(_normalise_subscriber_number("525321806"), "525321806")
 
     def test_config_selectors_used_explicit_visible_labels(self) -> None:
@@ -139,6 +140,30 @@ class TestSharedCredentialsFlowE2E(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(flow.async_show_form.call_args.kwargs["errors"], {"base": "cannot_reach_source"})
 
 
+class TestOptionsFlowE2E(unittest.IsolatedAsyncioTestCase):
+    """Open configuration through Home Assistant's read-only entry property."""
+
+    async def test_options_form_uses_the_entry_supplied_by_home_assistant(self) -> None:
+        """Opening Configure works and retains the account's regional override."""
+        entry = SimpleNamespace(
+            entry_id="options-entry",
+            data={"country_code": "972", "subdomain": "ecloud"},
+            options={"subdomain": "ucloud"},
+        )
+        flow = AkuvoxFlowHandler.async_get_options_flow(entry)
+        flow.hass = SimpleNamespace(
+            config=_Config(),
+            config_entries=SimpleNamespace(async_get_known_entry=lambda entry_id: entry),
+        )
+        flow.handler = entry.entry_id
+
+        result = await flow.async_step_init()
+
+        self.assertIs(flow.config_entry, entry)
+        self.assertEqual(result["step_id"], "init")
+        self.assertEqual(result["data_schema"]({})["subdomain"], "ucloud")
+
+
 class _ReauthEntry:
     """Represents an existing account which needs a new SmartPlus session."""
 
@@ -171,6 +196,10 @@ class _ReauthClient:
             "door_relay_data": [{"name": "Lobby", "relay_id": "1"}],
             "door_keys_data": [],
         }
+
+    def get_phone_number(self):
+        """No alternate identifier was selected by this test client."""
+        return ""
 
     def get_credentials(self) -> dict:
         return {"auth_token": "new-auth-token", "token": "new-session-token"}
