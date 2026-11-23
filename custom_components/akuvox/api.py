@@ -157,6 +157,10 @@ class AkuvoxApiClientAuthenticationError(AkuvoxApiClientError):
     """Exception to indicate an authentication error."""
 
 
+class AkuvoxApiClientPhoneNumberNotFoundError(AkuvoxApiClientError):
+    """The SMS endpoint explicitly rejected an unregistered mobile number."""
+
+
 class AkuvoxApiClientRateLimitError(AkuvoxApiClientError):
     """Exception to indicate SmartPlus rate limiting."""
 
@@ -543,30 +547,28 @@ class AkuvoxApiClient:
                 "Accept-Language": "en-AU;q=1, he-AU;q=0.9, ru-RU;q=0.8",
                 "x-cloud-lang": "en"
             }
-            data = {
-                "AreaCode": country_code,
-                "MobileNumber": phone_number,
-                "Type": 0
-            }
-            LOGGER.debug("📡 Requesting SMS code from subdomain %s...", subdomain)
-            response = await self._async_api_wrapper(
-                method="post",
-                url=url,
-                headers=headers,
-                data=data,
-            )
-            # The response processor unwraps a successful ``datas`` object.
-            # ``send_mobile_checkcode`` legitimately returns an empty object,
-            # so that becomes ``{}`` here rather than the original envelope.
-            if response == {} or (
-                isinstance(response, dict)
-                and (
-                    response.get("result") == 0
-                    or str(response.get("err_code", "")) == "0"
-                )
-            ):
-                LOGGER.debug("✅ SMS code request successful")
-                return True
+            candidates = [phone_number]
+            if phone_number.startswith("0") and len(phone_number) > 1:
+                candidates.append(phone_number[1:])
+            for candidate in candidates:
+                try:
+                    response = await self._async_api_wrapper(
+                        method="post", url=url, headers=headers,
+                        data={"AreaCode": country_code, "MobileNumber": candidate, "Type": 0},
+                    )
+                except AkuvoxApiClientPhoneNumberNotFoundError:
+                    # Only this explicit rejection permits trying the alternate
+                    # account identifier. Never retry an uncertain SMS delivery.
+                    continue
+                # Successful SMS responses legitimately contain empty datas.
+                if response == {} or (
+                    isinstance(response, dict)
+                    and (response.get("result") == 0 or str(response.get("err_code", "")) == "0")
+                ):
+                    self._data.phone_number = candidate
+                    LOGGER.debug("✅ SMS code request successful")
+                    return True
+                break
 
             LOGGER.error("❌ SMS code request unsuccessful")
         else:
@@ -2458,7 +2460,7 @@ class AkuvoxApiClient:
                 self._replace_request_token(headers, failed_token),
                 allow_token_refresh=False,
             )
-        except AkuvoxApiClientRateLimitError:
+        except (AkuvoxApiClientRateLimitError, AkuvoxApiClientPhoneNumberNotFoundError):
             raise
         except Exception as exception:  # Final fallback
             LOGGER.exception("❌ Unexpected error during SmartPlus API call")
@@ -2524,6 +2526,16 @@ class AkuvoxApiClient:
             if not isinstance(json_data, dict):
                 LOGGER.warning("🤨 Unexpected SmartPlus API response type")
                 return None
+
+            error_code = json_data.get("result", json_data.get("err_code"))
+            message = str(json_data.get("message", "")).strip().casefold().replace("’", "'").rstrip(".")
+            if (
+                urlsplit(url).path.endswith(API_SEND_SMS)
+                and error_code is not None
+                and str(error_code) != "0"
+                and message == "mobile number doesn't exist"
+            ):
+                raise AkuvoxApiClientPhoneNumberNotFoundError("SmartPlus mobile number does not exist")
 
             # Standard requests
             if json_data and "result" in json_data and str(json_data["result"]) == "0":
@@ -2626,6 +2638,10 @@ class AkuvoxApiClient:
     def get_devices_json(self) -> dict:
         """Device data dictionary."""
         return self._data.get_device_data()
+
+    def get_phone_number(self) -> str:
+        """Return the account number accepted by the SMS endpoint."""
+        return self._data.phone_number if self._data is not None else ""
 
     def get_credentials(self) -> dict[str, str]:
         """Return the current credentials for private persistence only."""
