@@ -349,6 +349,10 @@ class AkuvoxData:
             "%d-%m-%Y %H:%M:%S",
             "%Y/%m/%d %H:%M:%S",
             "%d/%m/%Y %H:%M:%S",
+            "%Y-%m-%d %I:%M:%S %p",
+            "%d-%m-%Y %I:%M:%S %p",
+            "%Y/%m/%d %I:%M:%S %p",
+            "%d/%m/%Y %I:%M:%S %p",
         ):
             try:
                 return datetime.strptime(text, format_string).strftime(

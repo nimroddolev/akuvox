@@ -77,7 +77,10 @@ async def async_setup_entry(
 def _parse_temp_key_time(value: object) -> datetime:
     """Parse both legacy SmartPlus and normalised temporary-key timestamps."""
     text = str(value).strip()
-    for format_string in ("%Y-%m-%d %H:%M:%S", "%d-%m-%Y %H:%M:%S"):
+    for format_string in (
+        "%Y-%m-%d %H:%M:%S", "%d-%m-%Y %H:%M:%S",
+        "%Y-%m-%d %I:%M:%S %p", "%d-%m-%Y %I:%M:%S %p",
+    ):
         try:
             return datetime.strptime(text, format_string)
         except ValueError:

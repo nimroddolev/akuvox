@@ -3,11 +3,13 @@ from __future__ import annotations
 
 import asyncio
 import unittest
+from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 from custom_components.akuvox import button, camera, sensor
 from custom_components.akuvox.const import DOMAIN
+from custom_components.akuvox.data import AkuvoxData
 from homeassistant.components.camera.const import StreamType
 
 
@@ -55,6 +57,19 @@ class _EntityClient:
 
 class TestPlatformSetupE2E(unittest.IsolatedAsyncioTestCase):
     """Verify persisted SmartPlus data became Home Assistant entities."""
+
+    async def test_legacy_temporary_keys_preserve_midnight_and_noon(self) -> None:
+        """API normalisation and cached sensors accept legacy AM/PM timestamps."""
+        for value, expected in (
+            ("19-05-2025 12:23:05 AM", datetime(2025, 5, 19, 0, 23, 5)),
+            ("19-05-2025 12:23:05 PM", datetime(2025, 5, 19, 12, 23, 5)),
+            ("2025-05-19 01:23:05 PM", datetime(2025, 5, 19, 13, 23, 5)),
+        ):
+            with self.subTest(value=value):
+                normalised = AkuvoxData._normalise_temp_key_time(value)
+                self.assertEqual(sensor._parse_temp_key_time(value), expected)
+                self.assertEqual(sensor._parse_temp_key_time(normalised), expected)
+                self.assertEqual(normalised, expected.strftime("%Y-%m-%d %H:%M:%S"))
 
     async def test_camera_button_and_sensor_platforms_created_entities(self) -> None:
         """Each platform transformed saved account data into its entity type."""
